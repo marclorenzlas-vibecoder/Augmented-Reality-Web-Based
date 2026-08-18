@@ -12,10 +12,10 @@
   </head>
   <body>
 
-    <!-- Hidden video source for dancer texture -->
-    <video id="dancer-video" loop playsinline muted crossorigin="anonymous"
+    <!-- Hidden video source for dancer texture (kept active for WebGL) -->
+    <video id="dancer-video" loop playsinline webkit-playsinline muted autoplay crossorigin="anonymous"
       src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-      style="display:none;">
+      style="position: fixed; top: -9999px; left: -9999px; width: 10px; height: 10px; opacity: 0; pointer-events: none;">
     </video>
 
     <!-- Live camera background -->
@@ -44,15 +44,26 @@
 
       <!-- Controls Positioned Cleanly Outside the Scanner -->
       <div class="qr-footer">
-        <div class="qr-camera-bar">
-          <button id="qr-switch-btn" class="btn btn--camera-switch" type="button">
-            Switch Camera
-          </button>
-        </div>
+        <button id="start-camera-btn" class="btn btn--info" style="margin-top: 10px; width: 100%; justify-content: center;">
+          Tap to Start Camera
+        </button>
 
-        <div class="status-line">
-          <span class="dot dot--active"></span>
-          <span id="qr-status-text">Scanning for QR code</span>
+        <div id="qr-controls-container" class="hidden" style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 14px;">
+          <div class="qr-camera-bar">
+            <div class="select-wrapper">
+              <select id="qr-camera-select" class="camera-select" aria-label="Select Camera">
+                <option value="">Detecting cameras...</option>
+              </select>
+            </div>
+            <button id="qr-switch-btn" class="btn btn--camera-switch" type="button">
+              Switch Camera
+            </button>
+          </div>
+
+          <div class="status-line">
+            <span class="dot dot--active"></span>
+            <span id="qr-status-text">Scanning for QR code</span>
+          </div>
         </div>
 
         <div id="camera-error-msg" class="error-block hidden"></div>

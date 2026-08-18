@@ -41,9 +41,36 @@ const qrStatusTextEl  = $('qr-status-text');
 // ── Phase 1 : Direct QR Scanner (No Injected UI Widget) ────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   dancerVideo = $('dancer-video');
+  if (dancerVideo) {
+    dancerVideo.muted = true;
+    dancerVideo.playsInline = true;
+    dancerVideo.loop = true;
+    dancerVideo.crossOrigin = 'anonymous';
 
-  // Initialize clean QR Scanner
-  await initCustomQrScanner();
+    dancerVideo.addEventListener('loadedmetadata', () => {
+      updateVideoBillboardGeometry();
+      if (videoTex) videoTex.needsUpdate = true;
+    });
+
+    dancerVideo.addEventListener('canplay', () => {
+      if (dancerVideo.paused) {
+        dancerVideo.play().catch(() => {});
+      }
+      if (videoTex) videoTex.needsUpdate = true;
+    });
+  }
+
+  const startCamBtn = $('start-camera-btn');
+  const qrControlsContainer = $('qr-controls-container');
+
+  if (startCamBtn) {
+    startCamBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      startCamBtn.classList.add('hidden');
+      if (qrControlsContainer) qrControlsContainer.classList.remove('hidden');
+      await initCustomQrScanner();
+    });
+  }
 
   // History drawer toggles
   infoToggleBtnEl?.addEventListener('click', (e) => {
@@ -209,6 +236,10 @@ async function startUniversalAR() {
   cameraFeedEl.srcObject = cameraStream;
   await cameraFeedEl.play();
 
+  if (dancerVideo) {
+    dancerVideo.play().catch(() => {});
+  }
+
   initThreeScene();
   setupTapToPlace();
   setupCapture();
@@ -258,14 +289,14 @@ function initThreeScene() {
   particleSystem.position.set(0, -0.65, -1.8);
   scene.add(particleSystem);
 
-  // Render loop
+    // Render loop
   const clock = new THREE.Clock();
 
   (function animate() {
     requestAnimationFrame(animate);
     const t = clock.getElapsedTime();
 
-    if (videoTex && dancerVideo && !dancerVideo.paused) {
+    if (videoTex) {
       videoTex.needsUpdate = true;
     }
 
@@ -299,58 +330,138 @@ function initThreeScene() {
 }
 
 
+// ── Resolve and Format Media URLs (Google Drive, Dropbox, etc.) ────────────
+function resolveMediaUrl(raw) {
+  if (!raw) return '';
+  let url = raw.trim();
+
+  // Handle Google Drive links
+  const gDriveMatch = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]+)/);
+  if (gDriveMatch && gDriveMatch[1]) {
+    return `https://drive.google.com/uc?export=download&id=${gDriveMatch[1]}`;
+  }
+
+  // Handle Dropbox links
+  if (url.includes('dropbox.com')) {
+    return url.replace('dl=0', 'raw=1').replace('?dl=0', '?raw=1');
+  }
+
+  // Handle Imgur gifv
+  if (url.includes('imgur.com') && url.endsWith('.gifv')) {
+    return url.replace('.gifv', '.mp4');
+  }
+
+  return url;
+}
+
 // ── Load GIF / Video / Image from Scanned QR Code ──────────────────────────
 function loadMediaFromQR(text) {
   if (!text) return;
-  const trimmed = text.trim();
+  const resolvedUrl = resolveMediaUrl(text);
+  if (!resolvedUrl) return;
 
-  const isUrl = /^https?:\/\//i.test(trimmed) || /^data:(image|video)\//i.test(trimmed);
-  if (!isUrl) return;
+  currentMediaUrl = resolvedUrl;
+  setToast('Loading media from QR...');
 
-  currentMediaUrl = trimmed;
-  const isVideo = /\.(mp4|webm|mov|ogg)($|\?)/i.test(trimmed);
+  const isExplicitVideo = /\.(mp4|webm|mov|ogg|m4v)($|\?)/i.test(resolvedUrl) || 
+                          resolvedUrl.includes('drive.google.com') ||
+                          resolvedUrl.includes('dropbox.com') ||
+                          resolvedUrl.includes('commondatastorage.googleapis.com');
 
-  if (isVideo) {
+  const isExplicitImage = /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl);
+
+  if (isExplicitImage) {
+    tryLoadImage(resolvedUrl);
+  } else {
+    // Default to video attempt with image fallback
     currentMediaType = 'video';
     if (dancerVideo) {
-      dancerVideo.src = trimmed;
+      dancerVideo.pause();
       dancerVideo.crossOrigin = 'anonymous';
+      dancerVideo.muted = true;
+      dancerVideo.loop = true;
+      dancerVideo.playsInline = true;
+      dancerVideo.src = resolvedUrl;
       dancerVideo.load();
-      if (videoTex) {
-        videoTex.dispose();
-        videoTex = new THREE.VideoTexture(dancerVideo);
-        videoTex.minFilter = THREE.LinearFilter;
-        videoTex.magFilter = THREE.LinearFilter;
-      }
+      
+      dancerVideo.onloadeddata = () => {
+        applyVideoToBillboard();
+        dancerVideo.play().catch(() => {});
+        setToast('Video ready! Aim and tap to place');
+      };
+
+      dancerVideo.onerror = (e) => {
+        console.warn('Video load error, attempting image fallback:', e);
+        tryLoadImage(resolvedUrl);
+      };
     }
-  } else {
-    // Treat as GIF / Image
-    currentMediaType = 'image';
-    const loader = new THREE.TextureLoader();
-    loader.setCrossOrigin('anonymous');
-    loader.load(
-      trimmed,
-      (tex) => {
-        tex.minFilter = THREE.LinearFilter;
-        tex.magFilter = THREE.LinearFilter;
-        currentTexture = tex;
-        applyTextureToBillboard(tex);
-      },
-      undefined,
-      () => {
-        if (dancerVideo) {
-          dancerVideo.src = trimmed;
-          dancerVideo.crossOrigin = 'anonymous';
-          dancerVideo.load();
-        }
-      }
-    );
   }
+}
+
+function tryLoadImage(url) {
+  currentMediaType = 'image';
+  const loader = new THREE.TextureLoader();
+  loader.setCrossOrigin('anonymous');
+  loader.load(
+    url,
+    (tex) => {
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      currentTexture = tex;
+      applyTextureToBillboard(tex);
+      setToast('Media ready! Aim and tap to place');
+    },
+    undefined,
+    (err) => {
+      console.warn('Image load error:', err);
+      setToast('QR scanned. Aim and tap to place');
+    }
+  );
 }
 
 const VIDEO_ASPECT = 9 / 16;
 const BILLBOARD_HEIGHT = 1.4;
 const BILLBOARD_WIDTH  = BILLBOARD_HEIGHT * VIDEO_ASPECT;
+
+function applyVideoToBillboard() {
+  if (!dancerVideo) return;
+
+  if (videoTex) {
+    videoTex.dispose();
+  }
+
+  videoTex = new THREE.VideoTexture(dancerVideo);
+  videoTex.minFilter = THREE.LinearFilter;
+  videoTex.magFilter = THREE.LinearFilter;
+  videoTex.generateMipmaps = false;
+  videoTex.colorSpace = THREE.SRGBColorSpace;
+
+  if (videoMesh) {
+    videoMesh.material = new THREE.MeshBasicMaterial({
+      map: videoTex,
+      side: THREE.DoubleSide,
+      transparent: false
+    });
+    videoMesh.material.needsUpdate = true;
+    updateVideoBillboardGeometry();
+  }
+}
+
+function updateVideoBillboardGeometry() {
+  if (!videoMesh || !dancerVideo) return;
+  const vw = dancerVideo.videoWidth || 720;
+  const vh = dancerVideo.videoHeight || 1280;
+  const aspect = (vw && vh) ? (vw / vh) : VIDEO_ASPECT;
+  const h = BILLBOARD_HEIGHT;
+  const w = h * aspect;
+
+  if (videoMesh.geometry) {
+    videoMesh.geometry.dispose();
+  }
+  videoMesh.geometry = new THREE.PlaneGeometry(w, h);
+  videoMesh.position.set(0, h / 2, 0);
+}
 
 function applyTextureToBillboard(tex) {
   if (!videoMesh) return;
@@ -360,6 +471,7 @@ function applyTextureToBillboard(tex) {
     transparent: true,
     side: THREE.DoubleSide
   });
+  videoMesh.material.needsUpdate = true;
 
   const aspect = (tex.image && tex.image.width && tex.image.height) 
     ? (tex.image.width / tex.image.height) 
@@ -376,7 +488,7 @@ function buildVideoBillboard() {
   const group = new THREE.Group();
 
   if (currentTexture) {
-    const aspect = (currentTexture.image && currentTexture.image.width)
+    const aspect = (currentTexture.image && currentTexture.image.width && currentTexture.image.height)
       ? (currentTexture.image.width / currentTexture.image.height)
       : VIDEO_ASPECT;
     const w = BILLBOARD_HEIGHT * aspect;
@@ -393,19 +505,28 @@ function buildVideoBillboard() {
     return group;
   }
 
+  if (videoTex) {
+    videoTex.dispose();
+  }
   videoTex = new THREE.VideoTexture(dancerVideo);
   videoTex.minFilter = THREE.LinearFilter;
   videoTex.magFilter = THREE.LinearFilter;
-  videoTex.format    = THREE.RGBAFormat;
+  videoTex.generateMipmaps = false;
+  videoTex.colorSpace = THREE.SRGBColorSpace;
 
   const mat = new THREE.MeshBasicMaterial({
     map: videoTex,
-    transparent: true,
+    transparent: false,
     side: THREE.DoubleSide
   });
 
+  const vw = (dancerVideo && dancerVideo.videoWidth) ? dancerVideo.videoWidth : 720;
+  const vh = (dancerVideo && dancerVideo.videoHeight) ? dancerVideo.videoHeight : 1280;
+  const aspect = (vw && vh) ? (vw / vh) : VIDEO_ASPECT;
+  const w = BILLBOARD_HEIGHT * aspect;
+
   videoMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(BILLBOARD_WIDTH, BILLBOARD_HEIGHT),
+    new THREE.PlaneGeometry(w, BILLBOARD_HEIGHT),
     mat
   );
 
