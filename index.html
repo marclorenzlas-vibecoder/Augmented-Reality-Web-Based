@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>MassKara AR — Bacolod City</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/src/style.css" />
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+
+    <!-- Hidden video source for dancer texture -->
+    <video id="dancer-video" loop playsinline muted crossorigin="anonymous"
+      src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+      style="display:none;">
+    </video>
+
+    <!-- Live camera background -->
+    <video id="camera-feed" autoplay playsinline muted></video>
+
+    <!-- Three.js WebGL overlay -->
+    <canvas id="ar-canvas"></canvas>
+
+    <!-- ── SCREEN 1 : Direct QR Scanner ── -->
+    <div id="qr-screen" class="screen screen--qr">
+      <header class="qr-header">
+        <p class="eyebrow">Bacolod City · Philippines</p>
+        <h1 class="headline">MassKara AR</h1>
+        <p class="subline">Align QR code inside frame to launch</p>
+      </header>
+
+      <!-- Scanner Box with Corner Guides and Scanline -->
+      <div class="scanner-frame">
+        <div id="qr-reader"></div>
+        <div class="scan-beam"></div>
+        <div class="corner corner--tl"></div>
+        <div class="corner corner--tr"></div>
+        <div class="corner corner--bl"></div>
+        <div class="corner corner--br"></div>
+      </div>
+
+      <!-- Controls Positioned Cleanly Outside the Scanner -->
+      <div class="qr-footer">
+        <div class="qr-camera-bar">
+          <div class="select-wrapper">
+            <select id="qr-camera-select" class="camera-select" aria-label="Select Camera">
+              <option value="">Detecting cameras...</option>
+            </select>
+          </div>
+          <button id="qr-switch-btn" class="btn btn--camera-switch" type="button">
+            Switch Camera
+          </button>
+        </div>
+
+        <div class="status-line">
+          <span class="dot dot--active"></span>
+          <span id="qr-status-text">Scanning for QR code</span>
+        </div>
+
+        <div id="camera-error-msg" class="error-block hidden"></div>
+      </div>
+    </div>
+
+    <!-- ── SCREEN 2 : AR Interactive Overlay (Launched Automatically on Scan) ── -->
+    <div id="ui-overlay" class="overlay hidden">
+
+      <!-- Top bar -->
+      <div class="top-bar">
+        <div class="brand-tag">
+          <span class="dot dot--live"></span>
+          <span>MassKara AR</span>
+        </div>
+        <button id="recenter-btn" class="btn btn--ghost hidden">Reposition</button>
+      </div>
+
+      <!-- Instruction toast -->
+      <div id="toast" class="toast">
+        Aim at a flat surface and tap to place the dancer
+      </div>
+
+      <!-- History drawer (slide-up from bottom, hidden by default) -->
+      <div id="history-modal" class="drawer hidden">
+        <div class="drawer-handle"></div>
+        <div class="drawer-content">
+          <div class="drawer-head">
+            <div>
+              <span class="eyebrow eyebrow--light">Historical Context</span>
+              <h3 class="drawer-title">The MassKara Festival</h3>
+              <span class="drawer-subtitle">Bacolod City, Philippines</span>
+            </div>
+            <button id="close-history-btn" class="close-btn" aria-label="Close">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="drawer-body">
+            <div class="callout">
+              <strong>Origin — 1980.</strong> The festival was born out of crisis: plummeting sugar prices and the tragedy of the MV Don Juan sinking. City leaders chose to respond not with grief, but with celebration and unity.
+            </div>
+            <p>
+              The word <em>MassKara</em> was coined by artist Ely Santiago — a portmanteau of <strong>mass</strong> (a multitude of people) and the Spanish <strong>cara</strong> (face), meaning <em>a multitude of faces</em>.
+            </p>
+            <p>
+              The smiling mask — adorned with feathers, beads, and sequins — has become the enduring symbol of Bacolod's resilience, warmth, and triumphant community spirit.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom dock -->
+      <div class="dock">
+        <button id="info-toggle-btn" class="btn btn--info hidden">
+          About This Festival
+          <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="18 15 12 9 6 15"/>
+          </svg>
+        </button>
+
+        <button id="capture-btn" class="shutter-btn hidden" title="Capture photo" aria-label="Take snapshot">
+          <span class="shutter-ring"></span>
+          <span class="shutter-disc"></span>
+        </button>
+      </div>
+
+    </div>
+  </body>
+</html>

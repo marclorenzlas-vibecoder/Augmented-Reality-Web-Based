@@ -1,0 +1,606 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap');
+
+/* ──────────────────────────────────────────
+   Design Tokens
+────────────────────────────────────────── */
+:root {
+  --c-bg:        #08080f;
+  --c-surface:   rgba(13, 13, 22, 0.92);
+  --c-surface-2: rgba(22, 22, 34, 0.88);
+  --c-border:    rgba(255, 255, 255, 0.10);
+  --c-border-md: rgba(255, 255, 255, 0.18);
+  --c-text:      #f0f0f5;
+  --c-muted:     rgba(240, 240, 245, 0.55);
+  --c-accent:    #d4b483;        /* warm gold — festival warmth */
+  --c-accent-2:  #9e7c4f;        /* deep gold tint              */
+  --c-danger:    rgba(220, 80, 80, 0.85);
+
+  --radius-sm:   10px;
+  --radius-md:   18px;
+  --radius-lg:   28px;
+  --radius-pill: 999px;
+
+  --blur-sm:  blur(12px);
+  --blur-md:  blur(20px);
+  --blur-lg:  blur(32px);
+
+  --font-body:    'Inter', system-ui, sans-serif;
+  --font-display: 'DM Serif Display', Georgia, serif;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ──────────────────────────────────────────
+   Reset & Base
+────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-body);
+  background: var(--c-bg);
+  color: var(--c-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ──────────────────────────────────────────
+   AR Layer Stack
+────────────────────────────────────────── */
+#camera-feed {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+#ar-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* ──────────────────────────────────────────
+   Shared Screen base
+────────────────────────────────────────── */
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ──────────────────────────────────────────
+   Screen 1 — QR Scanner
+────────────────────────────────────────── */
+.screen--qr {
+  background: radial-gradient(circle at 50% 20%, #151522 0%, var(--c-bg) 80%);
+  z-index: 100;
+  justify-content: space-between;
+  padding: max(env(safe-area-inset-top), 24px) 20px max(env(safe-area-inset-bottom), 24px);
+}
+
+.qr-header {
+  text-align: center;
+  padding-top: 8px;
+}
+
+.eyebrow {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--c-accent);
+  margin-bottom: 8px;
+}
+
+.eyebrow--light {
+  color: var(--c-accent);
+  margin-bottom: 4px;
+}
+
+.headline {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 400;
+  letter-spacing: -0.5px;
+  color: var(--c-text);
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+
+.subline {
+  font-size: 13.5px;
+  color: var(--c-muted);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* Scanner viewport */
+.scanner-frame {
+  position: relative;
+  width: min(72vw, 260px);
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--c-border);
+}
+
+#qr-reader {
+  width: 100% !important;
+  height: 100% !important;
+  border: none !important;
+  background: #000;
+}
+
+#qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: var(--radius-md) !important;
+}
+
+/* Hide html5-qrcode injected dashboard inside box */
+#qr-reader > div:not(#qr-reader__scan_region) {
+  display: none !important;
+}
+
+/* Scan beam animation */
+.scan-beam {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--c-accent), transparent);
+  box-shadow: 0 0 12px var(--c-accent);
+  animation: scanMove 2.4s ease-in-out infinite alternate;
+  z-index: 5;
+  pointer-events: none;
+}
+
+@keyframes scanMove {
+  0% { top: 5%; opacity: 0.2; }
+  50% { opacity: 1; }
+  100% { top: 95%; opacity: 0.2; }
+}
+
+/* Scan corner markers */
+.corner {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-color: var(--c-accent);
+  border-style: solid;
+  border-width: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+.corner--tl { top: 0; left: 0; border-top-width: 3px; border-left-width: 3px; border-top-left-radius: var(--radius-md); }
+.corner--tr { top: 0; right: 0; border-top-width: 3px; border-right-width: 3px; border-top-right-radius: var(--radius-md); }
+.corner--bl { bottom: 0; left: 0; border-bottom-width: 3px; border-left-width: 3px; border-bottom-left-radius: var(--radius-md); }
+.corner--br { bottom: 0; right: 0; border-bottom-width: 3px; border-right-width: 3px; border-bottom-right-radius: var(--radius-md); }
+
+/* QR Controls Positioned Outside the Scanner Frame */
+.qr-footer {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.qr-camera-bar {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.select-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+.camera-select {
+  width: 100%;
+  background: var(--c-surface-2);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  border: 1px solid var(--c-border-md);
+  color: var(--c-text);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 10px 14px;
+  border-radius: var(--radius-pill);
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.btn--camera-switch {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--c-border-md);
+  color: var(--c-text);
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn--camera-switch:active {
+  background: rgba(212, 180, 131, 0.2);
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-muted);
+  letter-spacing: 0.3px;
+}
+
+/* ──────────────────────────────────────────
+   Dots
+────────────────────────────────────────── */
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot--active {
+  background: var(--c-accent);
+  box-shadow: 0 0 0 3px rgba(212, 180, 131, 0.25);
+  animation: dotPulse 2s ease-in-out infinite;
+}
+
+.dot--live {
+  width: 6px;
+  height: 6px;
+  background: #5cdf8f;
+  box-shadow: 0 0 0 2px rgba(92, 223, 143, 0.3);
+  animation: dotPulse 2s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.75); }
+}
+
+.error-block {
+  width: 100%;
+  padding: 12px 14px;
+  background: rgba(220, 80, 80, 0.12);
+  border: 1px solid rgba(220, 80, 80, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  color: #ff9999;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* ──────────────────────────────────────────
+   Buttons
+────────────────────────────────────────── */
+.btn {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  outline: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.btn:active {
+  transform: scale(0.96);
+  opacity: 0.85;
+}
+
+.btn--ghost {
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  border: 1px solid var(--c-border-md);
+  color: var(--c-text);
+  padding: 7px 16px;
+  font-size: 12.5px;
+  font-weight: 500;
+  pointer-events: auto;
+}
+
+.btn--info {
+  background: var(--c-surface);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border: 1px solid var(--c-border-md);
+  color: var(--c-text);
+  padding: 11px 20px 11px 22px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.chevron-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--c-muted);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+/* ──────────────────────────────────────────
+   AR Overlay
+────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: max(env(safe-area-inset-top), 20px) 18px max(env(safe-area-inset-bottom), 28px);
+}
+
+/* Top Bar */
+.top-bar {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.brand-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--c-surface);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  border: 1px solid var(--c-border);
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--c-text);
+}
+
+/* Toast */
+.toast {
+  background: var(--c-surface);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  border: 1px solid var(--c-border-md);
+  color: var(--c-text);
+  padding: 11px 22px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 400;
+  text-align: center;
+  max-width: 88%;
+  pointer-events: auto;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* ──────────────────────────────────────────
+   History Drawer
+────────────────────────────────────────── */
+.drawer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 80;
+  pointer-events: auto;
+  transform: translateY(0);
+  transition: transform 0.38s var(--ease-out);
+}
+
+.drawer.hidden {
+  transform: translateY(100%);
+  display: block !important;
+  pointer-events: none;
+}
+
+.drawer-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--c-border-md);
+  border-radius: var(--radius-pill);
+  margin: 0 auto 14px;
+}
+
+.drawer-content {
+  background: var(--c-surface);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+  border-top: 1px solid var(--c-border-md);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 8px 22px max(env(safe-area-inset-bottom), 28px);
+}
+
+.drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 18px 0 16px;
+  border-bottom: 1px solid var(--c-border);
+  margin-bottom: 18px;
+}
+
+.drawer-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--c-text);
+  margin: 4px 0 2px;
+}
+
+.drawer-subtitle {
+  font-size: 11.5px;
+  color: var(--c-muted);
+  display: block;
+  letter-spacing: 0.2px;
+}
+
+.close-btn {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--c-border);
+  color: var(--c-muted);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 12px;
+  margin-top: 2px;
+  transition: background 0.15s ease;
+}
+
+.close-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.close-btn:active {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--c-muted);
+  line-height: 1.65;
+  max-height: 44vh;
+  overflow-y: auto;
+  padding-bottom: 4px;
+}
+
+.drawer-body strong {
+  color: var(--c-text);
+  font-weight: 600;
+}
+
+.drawer-body em {
+  font-style: italic;
+  color: var(--c-text);
+}
+
+.callout {
+  background: rgba(212, 180, 131, 0.07);
+  border-left: 2px solid var(--c-accent);
+  padding: 12px 14px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 13px;
+  color: rgba(240, 240, 245, 0.75);
+  line-height: 1.6;
+}
+
+.callout strong {
+  color: var(--c-accent);
+}
+
+/* ──────────────────────────────────────────
+   Bottom Dock
+────────────────────────────────────────── */
+.dock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  pointer-events: auto;
+}
+
+/* Shutter Button */
+.shutter-btn {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  pointer-events: auto;
+}
+
+.shutter-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255, 255, 255, 0.8);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.shutter-disc {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 0.15s ease, background 0.15s ease;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.shutter-btn:active .shutter-ring {
+  transform: scale(0.88);
+  opacity: 0.6;
+}
+
+.shutter-btn:active .shutter-disc {
+  transform: scale(0.88);
+  background: var(--c-accent);
+}
+
+/* ──────────────────────────────────────────
+   Utility
+────────────────────────────────────────── */
+.hidden {
+  display: none !important;
+}
