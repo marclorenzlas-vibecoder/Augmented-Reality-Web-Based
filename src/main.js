@@ -512,11 +512,11 @@ function setupCapture() {
     out.toBlob(async (blob) => {
       if (!blob) { setToast('Capture failed.'); return; }
 
-      const file = new File([blob], 'masskara-ar.png', { type: 'image/png' });
+      const file = new File([blob], 'tourism-ar.png', { type: 'image/png' });
 
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
         try {
-          await navigator.share({ title: 'MassKara AR — Bacolod City', files: [file] });
+          await navigator.share({ title: 'Tourism AR — Bacolod City', files: [file] });
           setToast('Saved to gallery');
         } catch (err) {
           if (err.name !== 'AbortError') downloadBlob(blob);
@@ -532,7 +532,7 @@ function downloadBlob(blob) {
   const url = URL.createObjectURL(blob);
   const a   = document.createElement('a');
   a.href     = url;
-  a.download = 'masskara-ar.png';
+  a.download = 'tourism-ar.png';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
