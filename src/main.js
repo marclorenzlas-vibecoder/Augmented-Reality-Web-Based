@@ -3,14 +3,80 @@ import * as THREE from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
 import { Html5Qrcode } from 'html5-qrcode';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { parseGIF, decompressFrames } from 'gifuct-js';
 
 // ── State ──────────────────────────────────────────────────────────────────
 let currentGlbModel  = null;
 let mixer            = null;
-let gifImage         = null;
+let gifCanvas        = null;
 let gifTexture       = null;
+let currentGifPlayer = null;
 let isGifMediaType   = false;
 const gltfLoader     = new GLTFLoader();
+
+class GifPlayer {
+  constructor(arrayBuffer, canvas, texture, onLoad) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.texture = texture;
+    this.frames = [];
+    this.currentFrameIndex = 0;
+    this.nextFrameTime = 0;
+    this.isPlaying = false;
+
+    try {
+      const parsed = parseGIF(arrayBuffer);
+      this.frames = decompressFrames(parsed, true);
+
+      if (this.frames.length > 0) {
+        this.canvas.width = parsed.lsd.width;
+        this.canvas.height = parsed.lsd.height;
+        this.isPlaying = true;
+        this.currentFrameIndex = 0;
+        this.nextFrameTime = performance.now() + (this.frames[0].delay || 100);
+        this.drawFrame(0);
+        if (onLoad) onLoad();
+      } else {
+        throw new Error("No frames found in GIF");
+      }
+    } catch (err) {
+      console.error("Error parsing GIF:", err);
+      this.isPlaying = false;
+    }
+  }
+
+  drawFrame(index) {
+    const frame = this.frames[index];
+    if (!frame) return;
+
+    if (index === 0 || this.frames[index - 1].disposalType === 2) {
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    const imgData = new ImageData(frame.patch, frame.dims.width, frame.dims.height);
+    this.ctx.putImageData(imgData, frame.dims.left, frame.dims.top);
+    this.texture.needsUpdate = true;
+  }
+
+  update(now) {
+    if (!this.isPlaying || this.frames.length <= 1) return;
+
+    if (now >= this.nextFrameTime) {
+      this.currentFrameIndex = (this.currentFrameIndex + 1) % this.frames.length;
+      this.drawFrame(this.currentFrameIndex);
+      this.nextFrameTime = now + (this.frames[this.currentFrameIndex].delay || 100);
+    }
+  }
+
+  destroy() {
+    this.isPlaying = false;
+    this.frames = [];
+    if (this.canvas) {
+      const ctx = this.canvas.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+  }
+}
 let scene, camera, renderer;
 let dancerGroup;
 let videoMesh      = null;   // The 2D video billboard
@@ -163,10 +229,11 @@ function resetCurrentTexture() {
     gifTexture = null;
   }
 
-  if (gifImage) {
-    gifImage.remove();
-    gifImage = null;
+  if (currentGifPlayer) {
+    currentGifPlayer.destroy();
+    currentGifPlayer = null;
   }
+  gifCanvas = null;
   isGifMediaType = false;
 
   if (currentGlbModel) {
@@ -661,7 +728,7 @@ async function onQrCodeSuccess(decodedText) {
     uiOverlayEl?.classList.add('hidden');
     qrScreenEl?.classList.remove('hidden');
     restartQrCameraSoon();
-    alert('Failed to launch AR: ' + err.message + '\n\nIf this persists, please fully close (swipe away) your browser app and reopen it to clear the memory.');
+    setToast('Failed to launch AR: ' + err.message, true);
   }
 }
 
@@ -744,8 +811,8 @@ function initThreeScene() {
     if (mixer) {
       mixer.update(delta);
     }
-    if (isGifMediaType && gifTexture) {
-      gifTexture.needsUpdate = true;
+    if (currentGifPlayer) {
+      currentGifPlayer.update(performance.now());
     }
 
     if (frame) {
@@ -974,7 +1041,8 @@ async function loadMediaFromQR(text) {
       if (isGlb) {
         tryLoadGlb(currentBlobUrl, loadToken);
       } else if (isGif) {
-        tryLoadGif(currentBlobUrl, loadToken);
+        const buffer = await blob.arrayBuffer();
+        tryLoadGif(buffer, loadToken);
       } else if (isImage && !isVideo) {
         tryLoadImage(currentBlobUrl, loadToken);
       } else {
@@ -1011,7 +1079,7 @@ async function loadMediaFromQR(text) {
   }
 }
 
-function tryLoadGif(url, loadToken = ++mediaLoadToken) {
+async function tryLoadGif(urlOrBuffer, loadToken = ++mediaLoadToken) {
   currentMediaType = 'image';
   isGifMediaType = true;
   setMediaReady(false);
@@ -1023,47 +1091,59 @@ function tryLoadGif(url, loadToken = ++mediaLoadToken) {
   }
   mixer = null;
 
+  if (currentGifPlayer) {
+    currentGifPlayer.destroy();
+    currentGifPlayer = null;
+  }
+  gifCanvas = null;
+
   if (videoMesh) {
     videoMesh.visible = false;
   }
 
-  gifImage = document.createElement('img');
-  gifImage.src = url;
-  gifImage.crossOrigin = 'anonymous';
-  gifImage.style.position = 'fixed';
-  gifImage.style.top = '-9999px';
-  gifImage.style.left = '-9999px';
-  gifImage.style.width = '10px';
-  gifImage.style.height = '10px';
-  gifImage.style.opacity = '0';
-  gifImage.style.pointerEvents = 'none';
-  document.body.appendChild(gifImage);
+  let buffer;
+  if (typeof urlOrBuffer === 'string') {
+    try {
+      setToast('Fetching GIF data...', true);
+      buffer = await fetch(urlOrBuffer).then(res => res.arrayBuffer());
+    } catch (err) {
+      console.warn("Failed to fetch GIF buffer directly:", err);
+      try {
+        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(urlOrBuffer);
+        buffer = await fetch(proxyUrl).then(res => res.arrayBuffer());
+      } catch (proxyErr) {
+        console.error("GIF buffer fetch failed entirely:", proxyErr);
+        setToast("Failed to load GIF.");
+        return;
+      }
+    }
+  } else {
+    buffer = urlOrBuffer;
+  }
 
-  gifImage.onload = () => {
+  if (loadToken !== mediaLoadToken) return;
+
+  // Create canvas and canvas texture
+  gifCanvas = document.createElement('canvas');
+  gifTexture = new THREE.CanvasTexture(gifCanvas);
+  gifTexture.minFilter = THREE.LinearFilter;
+  gifTexture.magFilter = THREE.LinearFilter;
+  gifTexture.colorSpace = THREE.SRGBColorSpace;
+
+  currentGifPlayer = new GifPlayer(buffer, gifCanvas, gifTexture, () => {
     if (loadToken !== mediaLoadToken) {
-      if (gifImage) gifImage.remove();
+      if (currentGifPlayer) {
+        currentGifPlayer.destroy();
+        currentGifPlayer = null;
+      }
       return;
     }
-    
-    gifTexture = new THREE.Texture(gifImage);
-    gifTexture.minFilter = THREE.LinearFilter;
-    gifTexture.magFilter = THREE.LinearFilter;
-    gifTexture.colorSpace = THREE.SRGBColorSpace;
-    gifTexture.needsUpdate = true;
-    
+
     currentTexture = gifTexture;
     applyTextureToBillboard(gifTexture);
     setMediaReady(true);
     setToast('GIF ready! Aim and tap to place');
-  };
-
-  gifImage.onerror = (err) => {
-    if (loadToken !== mediaLoadToken) return;
-    console.warn('GIF load error, trying fallback standard loader:', err);
-    isGifMediaType = false;
-    if (gifImage) gifImage.remove();
-    tryLoadImage(url, loadToken);
-  };
+  });
 }
 
 function tryLoadGlb(url, loadToken = ++mediaLoadToken) {
