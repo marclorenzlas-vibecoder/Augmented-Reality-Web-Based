@@ -5,7 +5,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 // ── State ──────────────────────────────────────────────────────────────────
 let cameraStream   = null;
 let scene, camera, renderer;
-let reticleGroup, dancerGroup, particleSystem;
+let reticleGroup, dancerGroup;
 let ringMesh, dotMesh;
 let videoMesh      = null;   // The 2D video billboard
 let videoTex       = null;   // Live VideoTexture
@@ -47,6 +47,10 @@ const ChromaShader = {
 
     void main() {
       vec4 texColor = texture2D(map, vUv);
+      if (texColor.a < 0.05) {
+        discard;
+      }
+
       if (keyMode == 1) {
         // Green Screen Chroma Key
         float Y1 = 0.299 * keyColor.r + 0.587 * keyColor.g + 0.114 * keyColor.b;
@@ -58,12 +62,20 @@ const ChromaShader = {
         float Cr2 = 0.5 * texColor.r - 0.418688 * texColor.g - 0.081312 * texColor.b;
 
         float dist = distance(vec2(Cb1, Cr1), vec2(Cb2, Cr2));
+        if (dist < similarity) {
+          discard;
+        }
         float alpha = smoothstep(similarity, similarity + smoothness, dist);
+        if (alpha < 0.05) discard;
         gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
       } else if (keyMode == 2) {
         // Black background removal (Luminance key)
         float luma = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
-        float alpha = smoothstep(0.06, 0.22, luma);
+        if (luma < 0.15) {
+          discard;
+        }
+        float alpha = smoothstep(0.15, 0.35, luma);
+        if (alpha < 0.05) discard;
         gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
       } else {
         gl_FragColor = texColor;
@@ -368,12 +380,7 @@ function initThreeScene() {
   reticleGroup.position.set(0, -0.65, -1.8);
   scene.add(reticleGroup);
 
-  // Floating ambient festival particles
-  particleSystem = buildParticles();
-  particleSystem.position.set(0, -0.65, -1.8);
-  scene.add(particleSystem);
-
-    // Render loop
+  // Render loop
   const clock = new THREE.Clock();
 
   (function animate() {
@@ -393,14 +400,6 @@ function initThreeScene() {
       dancerGroup.position.y = 0.65 + Math.abs(Math.sin(dt)) * 0.1;
       dancerGroup.rotation.y = Math.sin(t * 2) * 0.18;
       dancerGroup.rotation.z = Math.sin(dt) * 0.04;
-
-      const pos = particleSystem.geometry.attributes.position.array;
-      for (let i = 1; i < pos.length; i += 3) {
-        pos[i] += 0.001;
-        if (pos[i] > 1.8) pos[i] = -0.3;
-      }
-      particleSystem.geometry.attributes.position.needsUpdate = true;
-      particleSystem.rotation.y += 0.003;
     }
 
     renderer.render(scene, camera);
