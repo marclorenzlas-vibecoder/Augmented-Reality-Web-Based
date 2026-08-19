@@ -1,33 +1,67 @@
 import './style.css';
 import * as THREE from 'three';
+import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
 import { Html5Qrcode } from 'html5-qrcode';
 
 // ── State ──────────────────────────────────────────────────────────────────
-let cameraStream   = null;
 let scene, camera, renderer;
-let reticleGroup, dancerGroup;
-let ringMesh, dotMesh;
+let dancerGroup;
 let videoMesh      = null;   // The 2D video billboard
 let videoTex       = null;   // Live VideoTexture
 let isPlaced       = false;
+let isThreeInitialized = false;
 let dancerVideo    = null;
+let reticle;
+let hitTestSource = null;
+let hitTestSourceRequested = false;
+let controller;
 
 let currentMediaUrl  = null;
 let currentMediaType = 'default'; // 'video' | 'image' | 'default'
 let currentTexture   = null;
+let isMediaReady     = false;
+let mediaLoadToken   = 0;
+let currentBlobUrl    = null;
 
 // QR Scanner instance
 let html5QrCode      = null;
 let availableCameras = [];
 let selectedCameraIndex = 0;
+let qrCameraTask     = Promise.resolve();
+let isQrProcessing   = false;
+let activeQrCameraId = null;
+let restartQrTimer   = null;
 
 // Chroma Key / Transparency Modes (0 = Opaque, 1 = Green Screen, 2 = Black BG Key)
-let currentKeyMode = 2; // Default to Black Background Keying
+let currentKeyMode = 2;
 const chromaModes = [
   { id: 2, label: 'Key: Black BG' },
   { id: 1, label: 'Key: Green BG' },
-  { id: 0, label: 'Key: Off (Box)' }
+  { id: 0, label: 'Key: Off' }
 ];
+
+const QR_CAMERA_CONFIG = {
+  fps: 8,
+  qrbox: { width: 220, height: 220 },
+  aspectRatio: 1.0
+};
+const CAMERA_RELEASE_DELAY_MS = 450;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function resolveKnownLocalMedia(text) {
+  const normalized = text.trim().replace(/_mp4($|[?#])/i, '.mp4$1');
+
+  if (/MaxwellNB\.mp4($|[?#])/i.test(normalized) || /MaxwellNB/i.test(normalized)) {
+    return '/MaxwellNB.mp4';
+  }
+
+  if (/Maxwell\.mp4($|[?#])/i.test(normalized) || /Maxwell/i.test(normalized)) {
+    return '/Maxwell.mp4';
+  }
+
+  return null;
+}
 
 const ChromaShader = {
   vertexShader: `
@@ -71,11 +105,11 @@ const ChromaShader = {
       } else if (keyMode == 2) {
         // Black background removal (Luminance key)
         float luma = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
-        if (luma < 0.15) {
+        if (luma < 0.12) {
           discard;
         }
-        float alpha = smoothstep(0.15, 0.35, luma);
-        if (alpha < 0.05) discard;
+        float alpha = smoothstep(0.12, 0.30, luma);
+        if (alpha < 0.03) discard;
         gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
       } else {
         gl_FragColor = texColor;
@@ -85,7 +119,7 @@ const ChromaShader = {
 };
 
 function createBillboardMaterial(texture) {
-  return new THREE.ShaderMaterial({
+  const material = new THREE.ShaderMaterial({
     uniforms: {
       map: { value: texture },
       keyMode: { value: currentKeyMode },
@@ -97,26 +131,211 @@ function createBillboardMaterial(texture) {
     fragmentShader: ChromaShader.fragmentShader,
     side: THREE.DoubleSide,
     transparent: true,
-    depthWrite: false
+    depthWrite: false,
+    premultipliedAlpha: false
   });
+  material.forceSinglePass = true;
+  return material;
+}
+
+function setMediaReady(ready) {
+  isMediaReady = ready;
+  if (videoMesh) {
+    videoMesh.visible = ready;
+  }
+}
+
+function resetCurrentTexture() {
+  if (currentTexture) {
+    currentTexture.dispose();
+    currentTexture = null;
+  }
+
+  if (currentBlobUrl) {
+    URL.revokeObjectURL(currentBlobUrl);
+    currentBlobUrl = null;
+  }
 }
 
 // ── UI References ──────────────────────────────────────────────────────────
+function markVideoReady(loadToken) {
+  if (loadToken !== mediaLoadToken || isMediaReady) return;
+
+  applyVideoToBillboard();
+  setMediaReady(true);
+  dancerVideo.play().catch(() => {});
+  setToast('Video ready! Aim and tap to place');
+}
+
+function describeVideoError() {
+  const mediaError = dancerVideo?.error;
+  if (!mediaError) return 'Unknown video load error';
+
+  const messages = {
+    1: 'Video loading was aborted',
+    2: 'Network error while loading video',
+    3: 'Video decode error',
+    4: 'Video format is not supported by this browser'
+  };
+
+  return messages[mediaError.code] || `Video error ${mediaError.code}`;
+}
+
+function hasDecodedVideoFrame() {
+  return !!(
+    dancerVideo &&
+    dancerVideo.videoWidth > 0 &&
+    dancerVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+  );
+}
+
+async function loadVideoViaBlob(url, loadToken) {
+  if (loadToken !== mediaLoadToken || isMediaReady) return;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+  try {
+    setToast(`Fetching video: ${url}`, true);
+    const response = await fetch(url, {
+      cache: 'reload',
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    if (loadToken !== mediaLoadToken || isMediaReady) return;
+
+    if (!blob.type.startsWith('video/') && !/\.mp4($|\?)/i.test(url)) {
+      throw new Error(`Unexpected media type: ${blob.type || 'unknown'}`);
+    }
+
+    setToast(`Video fetched: ${Math.round(blob.size / 1024)} KB`, true);
+    currentBlobUrl = URL.createObjectURL(blob);
+    loadVideoMedia(currentBlobUrl, loadToken, { allowBlobFallback: false });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (loadToken !== mediaLoadToken || isMediaReady) return;
+    console.warn('Video blob fallback failed:', err);
+    setToast(`Direct video still loading; fetch fallback failed: ${err.name === 'AbortError' ? 'request timed out' : (err.message || err)}`, true);
+  }
+}
+
+function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
+  if (!dancerVideo) return;
+
+  let timeoutId = null;
+  let fallbackId = null;
+  const cleanup = () => {
+    clearTimeout(timeoutId);
+    clearTimeout(fallbackId);
+    dancerVideo.removeEventListener('loadedmetadata', onReady);
+    dancerVideo.removeEventListener('loadeddata', onReady);
+    dancerVideo.removeEventListener('canplay', onReady);
+    dancerVideo.removeEventListener('playing', onReady);
+    dancerVideo.removeEventListener('error', onError);
+  };
+
+  const readyStateCheck = () => {
+    if (loadToken !== mediaLoadToken) {
+      cleanup();
+      return;
+    }
+
+    if (hasDecodedVideoFrame()) {
+      cleanup();
+      markVideoReady(loadToken);
+    }
+  };
+
+  const onReady = () => {
+    if (loadToken !== mediaLoadToken) {
+      cleanup();
+      return;
+    }
+
+    if (hasDecodedVideoFrame()) {
+      cleanup();
+      markVideoReady(loadToken);
+    }
+  };
+
+  const onError = () => {
+    if (loadToken !== mediaLoadToken) {
+      cleanup();
+      return;
+    }
+
+    cleanup();
+    console.warn('Video load error:', describeVideoError());
+
+    if (allowBlobFallback) {
+      loadVideoViaBlob(url, loadToken);
+    } else {
+      setToast(`Could not decode video: ${describeVideoError()}`, true);
+    }
+  };
+
+  dancerVideo.pause();
+  dancerVideo.crossOrigin = 'anonymous';
+  dancerVideo.muted = true;
+  dancerVideo.loop = true;
+  dancerVideo.playsInline = true;
+  dancerVideo.preload = 'auto';
+
+  dancerVideo.addEventListener('loadedmetadata', onReady);
+  dancerVideo.addEventListener('loadeddata', onReady);
+  dancerVideo.addEventListener('canplay', onReady);
+  dancerVideo.addEventListener('playing', onReady);
+  dancerVideo.addEventListener('error', onError);
+
+  dancerVideo.src = url;
+  dancerVideo.load();
+  dancerVideo.play().catch(() => {});
+
+  if ('requestVideoFrameCallback' in dancerVideo) {
+    dancerVideo.requestVideoFrameCallback(() => {
+      readyStateCheck();
+    });
+  }
+
+  setTimeout(readyStateCheck, 0);
+  setTimeout(readyStateCheck, 250);
+
+  fallbackId = setTimeout(() => {
+    if (!allowBlobFallback || loadToken !== mediaLoadToken || isMediaReady) return;
+    loadVideoViaBlob(url, loadToken);
+    setTimeout(readyStateCheck, 1000);
+  }, 3000);
+
+  timeoutId = setTimeout(() => {
+    if (loadToken !== mediaLoadToken || isMediaReady) return;
+    cleanup();
+    setToast(`Video still loading: ${currentMediaUrl || url}`, true);
+  }, 8000);
+}
+
 const $ = (id) => document.getElementById(id);
-const toastEl         = $('toast');
-const historyModalEl  = $('history-modal');
-const infoToggleBtnEl = $('info-toggle-btn');
-const closeHistoryBtn = $('close-history-btn');
-const captureBtnEl    = $('capture-btn');
-const recenterBtnEl   = $('recenter-btn');
-const chromaBtnEl     = $('chroma-btn');
 const uiOverlayEl     = $('ui-overlay');
 const qrScreenEl      = $('qr-screen');
-const cameraErrorEl   = $('camera-error-msg');
-const cameraFeedEl    = $('camera-feed');
-const cameraSelectEl  = $('qr-camera-select');
-const cameraSwitchBtn = $('qr-switch-btn');
+const qrControlsEl    = $('qr-controls-container');
 const qrStatusTextEl  = $('qr-status-text');
+const toastEl         = $('toast');
+const infoToggleBtnEl = $('info-toggle-btn');
+const captureBtnEl    = $('capture-btn');
+const recenterBtnEl   = $('recenter-btn');
+const historyModalEl  = $('history-modal');
+const closeHistoryBtn = $('close-history-btn');
+const startCameraBtn  = $('start-camera-btn');
+const qrSwitchBtn     = $('qr-switch-btn');
+const cameraSelectEl  = $('qr-camera-select');
+const cameraErrorEl   = $('camera-error-msg');
+const exitArBtnEl     = $('exit-ar-btn');
+const chromaBtnEl     = $('chroma-btn');
 
 
 // ── Phase 1 : Direct QR Scanner (No Injected UI Widget) ────────────────────
@@ -184,11 +403,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     setToast(`Applied ${selected.label}`);
   });
+
+  // Exit AR
+  const exitArBtnEl = $('exit-ar-btn');
+  exitArBtnEl?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try {
+      if (renderer && renderer.xr && renderer.xr.getSession()) {
+        await renderer.xr.getSession().end();
+      }
+    } catch (err) {
+      console.warn("Session already ended or error:", err);
+    }
+    uiOverlayEl?.classList.add('hidden');
+    qrScreenEl?.classList.remove('hidden');
+    
+    // Hide the ARButton injected by Three.js
+    const arBtn = document.getElementById('ARButton');
+    if (arBtn) arBtn.style.display = 'none';
+    dancerVideo?.pause();
+
+    // Reset all buttons to hidden state
+    infoToggleBtnEl?.classList.add('hidden');
+    captureBtnEl?.classList.add('hidden');
+    recenterBtnEl?.classList.add('hidden');
+    chromaBtnEl?.classList.add('hidden');
+    toastEl?.classList.add('hidden');
+
+    restartQrCameraSoon();
+  });
+
+  setupCapture();
 });
 
 async function initCustomQrScanner() {
   try {
-    html5QrCode = new Html5Qrcode("qr-reader");
+    if (!html5QrCode) {
+      html5QrCode = new Html5Qrcode("qr-reader");
+    }
 
     // Fetch cameras
     const devices = await Html5Qrcode.getCameras();
@@ -217,11 +469,11 @@ async function initCustomQrScanner() {
     }
 
     // Camera Switch button
-    if (cameraSwitchBtn) {
+    if (qrSwitchBtn) {
       if (devices.length <= 1) {
-        cameraSwitchBtn.style.display = 'none';
+        qrSwitchBtn.style.display = 'none';
       } else {
-        cameraSwitchBtn.addEventListener('click', async (e) => {
+        qrSwitchBtn.addEventListener('click', async (e) => {
           e.preventDefault();
           selectedCameraIndex = (selectedCameraIndex + 1) % availableCameras.length;
           const nextDevId = availableCameras[selectedCameraIndex].id;
@@ -243,62 +495,126 @@ async function initCustomQrScanner() {
   } catch (err) {
     console.error('QR Scanner init error:', err);
     if (cameraErrorEl) {
-      cameraErrorEl.textContent = 'Please allow camera permissions to scan the QR code.';
+      cameraErrorEl.textContent = `Camera Error: ${err.message || err}. (Try fully closing other apps that use the camera)`;
       cameraErrorEl.classList.remove('hidden');
     }
   }
 }
 
-async function startQrCamera(cameraId) {
+function queueQrCameraTask(task) {
+  qrCameraTask = qrCameraTask.catch(() => {}).then(task);
+  return qrCameraTask;
+}
+
+function clearQrRestartTimer() {
+  if (restartQrTimer) {
+    clearTimeout(restartQrTimer);
+    restartQrTimer = null;
+  }
+}
+
+async function stopQrCameraInternal({ clear = false } = {}) {
   if (!html5QrCode) return;
 
-  const config = {
-    fps: 15,
-    qrbox: { width: 220, height: 220 },
-    aspectRatio: 1.0
-  };
+  if (html5QrCode.isScanning) {
+    try {
+      await html5QrCode.stop();
+    } catch (err) {
+      console.warn('QR camera stop skipped:', err);
+      await wait(250);
+    }
+  }
+
+  activeQrCameraId = null;
+
+  if (clear) {
+    try {
+      html5QrCode.clear();
+    } catch (err) {
+      console.warn('QR clear skipped:', err);
+    }
+  }
+}
+
+async function startQrCameraInternal(cameraId) {
+  if (!html5QrCode || isQrProcessing) return;
+  if (html5QrCode.isScanning && activeQrCameraId === cameraId) return;
+
+  clearQrRestartTimer();
+
+  if (html5QrCode.isScanning) {
+    await stopQrCameraInternal();
+    await wait(150);
+  }
 
   try {
     await html5QrCode.start(
       cameraId,
-      config,
+      QR_CAMERA_CONFIG,
       onQrCodeSuccess,
-      () => {} // silent frame scan ignore
+      () => {}
     );
+    activeQrCameraId = cameraId;
+    cameraErrorEl?.classList.add('hidden');
     if (qrStatusTextEl) qrStatusTextEl.textContent = 'Align QR code in frame';
   } catch (err) {
     console.warn('Could not start specific camera ID, trying facingMode environment fallback:', err);
+    await wait(150);
+
     try {
       await html5QrCode.start(
         { facingMode: "environment" },
-        config,
+        QR_CAMERA_CONFIG,
         onQrCodeSuccess,
         () => {}
       );
+      activeQrCameraId = 'environment';
+      cameraErrorEl?.classList.add('hidden');
+      if (qrStatusTextEl) qrStatusTextEl.textContent = 'Align QR code in frame';
     } catch (e) {
+      activeQrCameraId = null;
       console.error('Camera fallback failed:', e);
+      if (cameraErrorEl) {
+        cameraErrorEl.textContent = `Failed to start camera: ${e.message || e}`;
+        cameraErrorEl.classList.remove('hidden');
+      }
     }
   }
 }
 
+async function startQrCamera(cameraId) {
+  return queueQrCameraTask(() => startQrCameraInternal(cameraId));
+}
+
 async function switchQrCamera(cameraId) {
-  if (!html5QrCode) return;
-  try {
-    await html5QrCode.stop();
-    await startQrCamera(cameraId);
-  } catch (err) {
-    console.warn('Switch camera error:', err);
-  }
+  return queueQrCameraTask(async () => {
+    if (!html5QrCode || !cameraId) return;
+    await stopQrCameraInternal();
+    await wait(150);
+    await startQrCameraInternal(cameraId);
+  });
+}
+
+function restartQrCameraSoon() {
+  clearQrRestartTimer();
+  if (!availableCameras.length) return;
+
+  restartQrTimer = setTimeout(() => {
+    isQrProcessing = false;
+    startQrCamera(availableCameras[selectedCameraIndex].id);
+  }, 900);
 }
 
 // ── When QR Code is Scanned : Direct Instant Launch to AR ──────────────────
 async function onQrCodeSuccess(decodedText) {
+  if (isQrProcessing) return;
+  isQrProcessing = true;
+  clearQrRestartTimer();
+
   // 1. Stop QR scanner stream immediately
   try {
-    if (html5QrCode && html5QrCode.isScanning) {
-      await html5QrCode.stop();
-      html5QrCode.clear();
-    }
+    await queueQrCameraTask(() => stopQrCameraInternal({ clear: true }));
+    await wait(CAMERA_RELEASE_DELAY_MS);
   } catch (err) {
     console.warn('QR stop error:', err);
   }
@@ -317,28 +633,29 @@ async function onQrCodeSuccess(decodedText) {
     uiOverlayEl?.classList.remove('hidden');
   } catch (err) {
     console.error('AR Camera Launch Error:', err);
-    alert('Camera access was denied. Please allow camera permissions in your browser.');
+    isQrProcessing = false;
+    uiOverlayEl?.classList.add('hidden');
+    qrScreenEl?.classList.remove('hidden');
+    restartQrCameraSoon();
+    alert('Failed to launch AR: ' + err.message + '\n\nIf this persists, please fully close (swipe away) your browser app and reopen it to clear the memory.');
   }
 }
 
 
 // ── Phase 2 : Camera & Three.js AR Engine ──────────────────────────────────
 async function startUniversalAR() {
-  cameraStream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-    audio: false
-  });
-
-  cameraFeedEl.srcObject = cameraStream;
-  await cameraFeedEl.play();
-
   if (dancerVideo) {
     dancerVideo.play().catch(() => {});
   }
 
-  initThreeScene();
-  setupTapToPlace();
-  setupCapture();
+  if (!isThreeInitialized) {
+    initThreeScene();
+    isThreeInitialized = true;
+  }
+  
+  // Ensure the ARButton injected by Three.js is visible now
+  const arBtn = document.getElementById('ARButton');
+  if (arBtn) arBtn.style.display = 'block';
 }
 
 function initThreeScene() {
@@ -346,64 +663,140 @@ function initThreeScene() {
 
   scene    = new THREE.Scene();
   const aspect = window.innerWidth / window.innerHeight;
-  camera   = new THREE.PerspectiveCamera(65, aspect, 0.1, 1000);
-  renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
+  camera   = new THREE.PerspectiveCamera(70, aspect, 0.01, 20);
+  renderer = new THREE.WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: false,
+    powerPreference: 'high-performance',
+    preserveDrawingBuffer: false
+  });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+
+  // Enable WebXR
+  renderer.xr.enabled = true;
+  renderer.xr.setFramebufferScaleFactor?.(0.8);
+  renderer.xr.setFoveation?.(1);
+  
+  // Create an AR Button that triggers the WebXR session
+  const sessionInit = {
+    requiredFeatures: ['hit-test'],
+    optionalFeatures: ['dom-overlay'],
+    domOverlay: { root: document.getElementById('ui-overlay') }
+  };
+  const arButton = ARButton.createButton(renderer, sessionInit);
+  document.body.appendChild(arButton);
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.2));
   const dir = new THREE.DirectionalLight(0xffffff, 0.8);
   dir.position.set(2, 4, 3);
   scene.add(dir);
 
-  // Reticle group (Floor placement ring)
-  reticleGroup = new THREE.Group();
-
-  const ringGeo = new THREE.RingGeometry(0.36, 0.41, 64);
-  ringMesh = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
-    color: 0xd4b483, side: THREE.DoubleSide, transparent: true, opacity: 0.9
-  }));
-  ringMesh.rotation.x = -Math.PI / 2;
-  reticleGroup.add(ringMesh);
-
-  dotMesh = new THREE.Mesh(
-    new THREE.CircleGeometry(0.05, 32),
-    new THREE.MeshBasicMaterial({ color: 0xd4b483, side: THREE.DoubleSide, transparent: true, opacity: 0.7 })
+  // WebXR Hit-Test Reticle
+  reticle = new THREE.Mesh(
+    new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0xd4b483 })
   );
-  dotMesh.rotation.x = -Math.PI / 2;
-  reticleGroup.add(dotMesh);
+  reticle.matrixAutoUpdate = false;
+  reticle.visible = false;
+  scene.add(reticle);
 
-  // 2D Video / GIF Billboard
+  // Controller for select (tap to place)
+  controller = renderer.xr.getController(0);
+  controller.addEventListener('select', onSelect);
+  scene.add(controller);
+
+  // 2D Video / GIF Billboard (hidden until placed)
   dancerGroup = buildVideoBillboard();
-  reticleGroup.add(dancerGroup);
+  dancerGroup.visible = false;
+  scene.add(dancerGroup);
 
-  reticleGroup.position.set(0, -0.65, -1.8);
-  scene.add(reticleGroup);
-
-  // Render loop
+  // Render loop using setAnimationLoop for WebXR compatibility
   const clock = new THREE.Clock();
 
-  (function animate() {
-    requestAnimationFrame(animate);
-    const t = clock.getElapsedTime();
+  const renderLoop = (timestamp, frame) => {
+    if (frame) {
+      const referenceSpace = renderer.xr.getReferenceSpace();
+      const session = renderer.xr.getSession();
 
-    if (videoTex) {
-      videoTex.needsUpdate = true;
+      if (hitTestSourceRequested === false) {
+        session.requestReferenceSpace('viewer').then((referenceSpace) => {
+          session.requestHitTestSource({ space: referenceSpace }).then((source) => {
+            hitTestSource = source;
+          });
+        });
+
+        session.addEventListener('end', async () => {
+          hitTestSourceRequested = false;
+          hitTestSource = null;
+          isPlaced = false;
+          if (reticle) reticle.visible = false;
+          if (dancerGroup) dancerGroup.visible = false;
+          
+          // Reset UI
+          uiOverlayEl?.classList.add('hidden');
+          qrScreenEl?.classList.remove('hidden');
+          const arBtn = document.getElementById('ARButton');
+          if (arBtn) arBtn.style.display = 'none';
+          dancerVideo?.pause();
+          
+          // Reset all AR buttons to hidden state
+          infoToggleBtnEl?.classList.add('hidden');
+          captureBtnEl?.classList.add('hidden');
+          recenterBtnEl?.classList.add('hidden');
+          chromaBtnEl?.classList.add('hidden');
+          toastEl?.classList.add('hidden');
+
+          restartQrCameraSoon();
+        });
+
+        hitTestSourceRequested = true;
+      }
+
+      if (hitTestSource) {
+        const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+        if (hitTestResults.length > 0) {
+          const hit = hitTestResults[0];
+          const pose = hit.getPose(referenceSpace);
+
+          // Only show reticle if we haven't placed the dancer yet
+          if (!isPlaced) {
+            reticle.visible = true;
+            reticle.matrix.fromArray(pose.transform.matrix);
+          } else {
+            reticle.visible = false;
+          }
+        } else {
+          reticle.visible = false;
+        }
+      }
     }
 
-    if (!isPlaced) {
-      const s = 1 + Math.sin(t * 2.5) * 0.04;
-      ringMesh.scale.set(s, s, 1);
-      dancerGroup.position.y = 0.65 + Math.sin(t * 1.5) * 0.015;
-    } else {
+    if (isPlaced) {
+      const t = clock.getElapsedTime();
       const dt = t * 3.5;
-      dancerGroup.position.y = 0.65 + Math.abs(Math.sin(dt)) * 0.1;
-      dancerGroup.rotation.y = Math.sin(t * 2) * 0.18;
+      dancerGroup.position.y = (dancerGroup.userData.baseY || 0) + Math.abs(Math.sin(dt)) * PLACEMENT_FLOAT_AMPLITUDE;
+      dancerGroup.rotation.y = (dancerGroup.userData.baseRotY || 0) + Math.sin(t * 2) * 0.18;
       dancerGroup.rotation.z = Math.sin(dt) * 0.04;
     }
 
     renderer.render(scene, camera);
-  })();
+  };
+
+  // Safely start the animation loop, handling newer and older Three.js versions
+  if (renderer && typeof renderer.setAnimationLoop === 'function') {
+    renderer.setAnimationLoop(renderLoop);
+  } else if (renderer && renderer.xr && typeof renderer.xr.setAnimationLoop === 'function') {
+    renderer.xr.setAnimationLoop(renderLoop);
+  } else {
+    // If we get here, something is very wrong with the renderer object
+    const rendererType = typeof renderer;
+    const isRendererUndefined = renderer === undefined;
+    const hasXR = renderer ? !!renderer.xr : false;
+    throw new Error(`Renderer is broken. Type: ${rendererType}, Undefined: ${isRendererUndefined}, HasXR: ${hasXR}. setAnimationLoop is missing.`);
+  }
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -417,6 +810,23 @@ function initThreeScene() {
 function resolveMediaUrl(raw) {
   if (!raw) return '';
   let url = raw.trim();
+  const knownLocalMedia = resolveKnownLocalMedia(url);
+
+  if (knownLocalMedia) {
+    return knownLocalMedia;
+  }
+
+  try {
+    const parsedUrl = new URL(url, window.location.href);
+    const isMediaPath = /\.(mp4|webm|mov|ogg|m4v|jpg|jpeg|png|webp|gif)($|\?)/i.test(parsedUrl.pathname);
+    const isViteDevMedia = parsedUrl.port === '5173' || parsedUrl.origin === window.location.origin;
+
+    if (isViteDevMedia && isMediaPath) {
+      return parsedUrl.pathname + parsedUrl.search + parsedUrl.hash;
+    }
+  } catch {
+    // Leave non-URL QR payloads unchanged.
+  }
 
   // Handle Google Drive links
   const gDriveMatch = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]+)/);
@@ -434,6 +844,13 @@ function resolveMediaUrl(raw) {
     return url.replace('.gifv', '.mp4');
   }
 
+  // Wrap external URLs in a CORS proxy to aggressively bypass browser security blocks
+  // Do NOT wrap shortlinks (qrco.de, bit.ly) because they might redirect to local network IPs
+  const isShortlink = url.includes('qrco.de') || url.includes('bit.ly');
+  if (!isShortlink && url.startsWith('http') && !url.includes('192.168') && !url.includes('localhost')) {
+    return 'https://corsproxy.io/?' + encodeURIComponent(url);
+  }
+
   return url;
 }
 
@@ -443,8 +860,11 @@ function loadMediaFromQR(text) {
   const resolvedUrl = resolveMediaUrl(text);
   if (!resolvedUrl) return;
 
+  const loadToken = ++mediaLoadToken;
+  setMediaReady(false);
+  resetCurrentTexture();
   currentMediaUrl = resolvedUrl;
-  setToast('Loading media from QR...');
+  setToast(`Loading media: ${resolvedUrl}`, true);
 
   const isExplicitVideo = /\.(mp4|webm|mov|ogg|m4v)($|\?)/i.test(resolvedUrl) || 
                           resolvedUrl.includes('drive.google.com') ||
@@ -454,49 +874,37 @@ function loadMediaFromQR(text) {
   const isExplicitImage = /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl);
 
   if (isExplicitImage) {
-    tryLoadImage(resolvedUrl);
+    tryLoadImage(resolvedUrl, loadToken);
   } else {
     // Default to video attempt with image fallback
     currentMediaType = 'video';
-    if (dancerVideo) {
-      dancerVideo.pause();
-      dancerVideo.crossOrigin = 'anonymous';
-      dancerVideo.muted = true;
-      dancerVideo.loop = true;
-      dancerVideo.playsInline = true;
-      dancerVideo.src = resolvedUrl;
-      dancerVideo.load();
-      
-      dancerVideo.onloadeddata = () => {
-        applyVideoToBillboard();
-        dancerVideo.play().catch(() => {});
-        setToast('Video ready! Aim and tap to place');
-      };
-
-      dancerVideo.onerror = (e) => {
-        console.warn('Video load error, attempting image fallback:', e);
-        tryLoadImage(resolvedUrl);
-      };
-    }
+    loadVideoMedia(resolvedUrl, loadToken);
   }
 }
 
-function tryLoadImage(url) {
+function tryLoadImage(url, loadToken = ++mediaLoadToken) {
   currentMediaType = 'image';
+  setMediaReady(false);
   const loader = new THREE.TextureLoader();
   loader.setCrossOrigin('anonymous');
   loader.load(
     url,
     (tex) => {
+      if (loadToken !== mediaLoadToken) {
+        tex.dispose();
+        return;
+      }
       tex.minFilter = THREE.LinearFilter;
       tex.magFilter = THREE.LinearFilter;
       tex.colorSpace = THREE.SRGBColorSpace;
       currentTexture = tex;
       applyTextureToBillboard(tex);
+      setMediaReady(true);
       setToast('Media ready! Aim and tap to place');
     },
     undefined,
     (err) => {
+      if (loadToken !== mediaLoadToken) return;
       console.warn('Image load error:', err);
       setToast('QR scanned. Aim and tap to place');
     }
@@ -505,7 +913,7 @@ function tryLoadImage(url) {
 
 const VIDEO_ASPECT = 9 / 16;
 const BILLBOARD_HEIGHT = 1.4;
-const BILLBOARD_WIDTH  = BILLBOARD_HEIGHT * VIDEO_ASPECT;
+const PLACEMENT_FLOAT_AMPLITUDE = 0.04;
 
 function applyVideoToBillboard() {
   if (!dancerVideo) return;
@@ -595,6 +1003,7 @@ function buildVideoBillboard() {
     mat
   );
 
+  videoMesh.visible = isMediaReady;
   videoMesh.position.set(0, BILLBOARD_HEIGHT / 2, 0);
   group.add(videoMesh);
   return group;
@@ -630,57 +1039,71 @@ function buildParticles() {
 }
 
 
-// ── Tap to Place & Reposition ───────────────────────────────────────────────
-function setupTapToPlace() {
-  const canvas = $('ar-canvas');
+// ── WebXR Hit-Test Tap to Place & Reposition ──────────────────────────────────
+function onSelect() {
+  if (isPlaced) return;
 
-  function onTap(e) {
-    // Explicit user gesture to ensure video playback starts
-    if (dancerVideo && dancerVideo.paused) {
-      dancerVideo.play().catch(() => {});
-    }
-    if (isPlaced) return;
-    if (e.target !== canvas) return;
-    placeDancer();
+  if (!isMediaReady && hasDecodedVideoFrame()) {
+    markVideoReady(mediaLoadToken);
   }
 
-  canvas.addEventListener('click', onTap);
-  canvas.addEventListener('touchend', (e) => {
+  if (!isMediaReady) {
+    const readyState = dancerVideo ? dancerVideo.readyState : 'no video';
+    setToast(`Media is still loading (${readyState}): ${currentMediaUrl || 'no QR media'}`, true);
+    return;
+  }
+
+  if (reticle && reticle.visible) {
     if (dancerVideo && dancerVideo.paused) {
       dancerVideo.play().catch(() => {});
     }
-    if (isPlaced) return;
+    
+    dancerGroup.position.setFromMatrixPosition(reticle.matrix);
+    dancerGroup.userData.baseY = dancerGroup.position.y;
+
+    const cameraWorldPosition = new THREE.Vector3();
+    camera.getWorldPosition(cameraWorldPosition);
+
+    const angle = Math.atan2(
+      cameraWorldPosition.x - dancerGroup.position.x,
+      cameraWorldPosition.z - dancerGroup.position.z
+    );
+    dancerGroup.userData.baseRotY = angle;
+    dancerGroup.rotation.set(0, angle, 0);
+    
     placeDancer();
-  }, { passive: true });
+  } else {
+    setToast('Please point at a flat surface to place');
+  }
 }
 
 function placeDancer() {
   isPlaced = true;
+  dancerGroup.visible = true;
 
-  if (ringMesh) ringMesh.visible = false;
-  if (dotMesh)  dotMesh.visible  = false;
+  if (reticle) reticle.visible = false;
 
   dancerVideo?.play().catch(() => {});
 
-  setToast('Anchor placed');
+  setToast('Anchor placed'); // Show bottom UI
   setTimeout(() => {
     toastEl?.classList.add('hidden');
     infoToggleBtnEl?.classList.remove('hidden');
     captureBtnEl?.classList.remove('hidden');
     recenterBtnEl?.classList.remove('hidden');
+    chromaBtnEl?.classList.remove('hidden');
   }, 1500);
 }
 
 function repositionDancer() {
   isPlaced = false;
-
-  if (ringMesh) ringMesh.visible = true;
-  if (dotMesh)  dotMesh.visible  = true;
+  dancerGroup.visible = false;
 
   historyModalEl?.classList.add('hidden');
   infoToggleBtnEl?.classList.add('hidden');
   captureBtnEl?.classList.add('hidden');
   recenterBtnEl?.classList.add('hidden');
+  chromaBtnEl?.classList.add('hidden');
 
   setToast('Aim at a flat surface and tap to place the dancer');
 }
@@ -690,34 +1113,29 @@ function repositionDancer() {
 function setupCapture() {
   captureBtnEl?.addEventListener('click', async (e) => {
     e.stopPropagation();
-    setToast('Capturing...');
+    setToast('Capturing AR Scene...');
 
-    const out = document.createElement('canvas');
-    const vw  = cameraFeedEl.videoWidth  || window.innerWidth;
-    const vh  = cameraFeedEl.videoHeight || window.innerHeight;
-    out.width = vw;
-    out.height = vh;
-    const ctx = out.getContext('2d');
-
-    ctx.drawImage(cameraFeedEl,        0, 0, vw, vh);
-    ctx.drawImage(renderer.domElement, 0, 0, vw, vh);
-
-    out.toBlob(async (blob) => {
-      if (!blob) { setToast('Capture failed.'); return; }
-
+    try {
+      // In WebXR immersive-ar mode, we CANNOT capture the real-world camera feed
+      // for privacy reasons. We can ONLY capture the 3D scene (the dancer).
+      // We force a render to capture the current state.
+      renderer.render(scene, camera);
+      const dataUrl = renderer.domElement.toDataURL('image/png');
+      
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
       const file = new File([blob], 'tourism-ar.png', { type: 'image/png' });
 
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({ title: 'Tourism AR — Bacolod City', files: [file] });
-          setToast('Saved to gallery');
-        } catch (err) {
-          if (err.name !== 'AbortError') downloadBlob(blob);
-        }
+        await navigator.share({ title: 'Tourism AR — Bacolod City', files: [file] });
+        setToast('Shared!');
       } else {
         downloadBlob(blob);
       }
-    }, 'image/png');
+    } catch (err) {
+      console.error("Capture failed:", err);
+      setToast('Capture failed.');
+    }
   });
 }
 
@@ -734,12 +1152,14 @@ function downloadBlob(blob) {
 }
 
 let toastTimer = null;
-function setToast(msg) {
+function setToast(msg, persist = false) {
   if (!toastEl) return;
   toastEl.textContent = msg;
   toastEl.classList.remove('hidden');
   clearTimeout(toastTimer);
+  if (persist) return;
+
   toastTimer = setTimeout(() => {
-    if (isPlaced) toastEl.classList.add('hidden');
-  }, 2500);
+    toastEl.classList.add('hidden');
+  }, 3000);
 }

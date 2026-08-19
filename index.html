@@ -13,13 +13,10 @@
   <body>
 
     <!-- Hidden video source for dancer texture (kept active for WebGL) -->
-    <video id="dancer-video" loop playsinline webkit-playsinline muted autoplay crossorigin="anonymous"
-      src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+    <video id="dancer-video" loop playsinline webkit-playsinline muted preload="auto" crossorigin="anonymous"
       style="position: fixed; top: -9999px; left: -9999px; width: 10px; height: 10px; opacity: 0; pointer-events: none;">
     </video>
 
-    <!-- Live camera background -->
-    <video id="camera-feed" autoplay playsinline muted></video>
 
     <!-- Three.js WebGL overlay -->
     <canvas id="ar-canvas"></canvas>
@@ -80,8 +77,8 @@
           <span>Tourism AR</span>
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
-          <button id="chroma-btn" class="btn btn--ghost">Key: Black BG</button>
           <button id="recenter-btn" class="btn btn--ghost hidden">Reposition</button>
+          <button id="exit-ar-btn" class="btn btn--ghost">X</button>
         </div>
       </div>
 
@@ -123,17 +120,19 @@
 
       <!-- Bottom dock -->
       <div class="dock">
+        <button id="capture-btn" class="btn btn--camera hidden" aria-label="Capture Screen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <circle cx="12" cy="13" r="4"></circle>
+          </svg>
+        </button>
         <button id="info-toggle-btn" class="btn btn--info hidden">
           About This Festival
           <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="18 15 12 9 6 15"/>
           </svg>
         </button>
-
-        <button id="capture-btn" class="shutter-btn hidden" title="Capture photo" aria-label="Take snapshot">
-          <span class="shutter-ring"></span>
-          <span class="shutter-disc"></span>
-        </button>
+        <button id="chroma-btn" class="btn btn--ghost hidden" type="button">Key: Black BG</button>
       </div>
 
     </div>

@@ -20,9 +20,9 @@
   --radius-lg:   28px;
   --radius-pill: 999px;
 
-  --blur-sm:  blur(12px);
-  --blur-md:  blur(20px);
-  --blur-lg:  blur(32px);
+  --blur-sm:  blur(4px);
+  --blur-md:  blur(8px);
+  --blur-lg:  blur(12px);
 
   --font-body:    'Inter', system-ui, sans-serif;
   --font-display: 'DM Serif Display', Georgia, serif;
@@ -375,7 +375,7 @@ html, body {
   flex-direction: column;
   justify-content: space-between;
   align-items: center;
-  padding: max(env(safe-area-inset-top), 20px) 18px max(env(safe-area-inset-bottom), 28px);
+  padding: max(env(safe-area-inset-top), 45px) 18px max(env(safe-area-inset-bottom), 28px);
 }
 
 /* Top Bar */
@@ -602,5 +602,12 @@ html, body {
    Utility
 ────────────────────────────────────────── */
 .hidden {
-  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: scale(0.95);
+}
+
+.toast, .btn, .shutter-btn, .qr-screen, .overlay {
+  transition: opacity 0.4s ease, transform 0.4s ease, visibility 0.4s ease;
 }
