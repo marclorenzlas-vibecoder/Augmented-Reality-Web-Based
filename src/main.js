@@ -1141,6 +1141,14 @@ async function tryLoadGif(urlOrBuffer, loadToken = ++mediaLoadToken) {
 
     currentTexture = gifTexture;
     applyTextureToBillboard(gifTexture);
+
+    // Disable chroma key for GIFs — they have their own transparency;
+    // the black-BG shader would incorrectly strip dark content.
+    if (videoMesh && videoMesh.material && videoMesh.material.uniforms) {
+      videoMesh.material.uniforms.keyMode.value = 0;
+      videoMesh.material.needsUpdate = true;
+    }
+
     setMediaReady(true);
     setToast('GIF ready! Aim and tap to place');
   });
