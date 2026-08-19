@@ -21,6 +21,74 @@ let html5QrCode      = null;
 let availableCameras = [];
 let selectedCameraIndex = 0;
 
+// Chroma Key / Transparency Modes (0 = Opaque, 1 = Green Screen, 2 = Black BG Key)
+let currentKeyMode = 2; // Default to Black Background Keying
+const chromaModes = [
+  { id: 2, label: 'Key: Black BG' },
+  { id: 1, label: 'Key: Green BG' },
+  { id: 0, label: 'Key: Off (Box)' }
+];
+
+const ChromaShader = {
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D map;
+    uniform int keyMode;
+    uniform vec3 keyColor;
+    uniform float similarity;
+    uniform float smoothness;
+    varying vec2 vUv;
+
+    void main() {
+      vec4 texColor = texture2D(map, vUv);
+      if (keyMode == 1) {
+        // Green Screen Chroma Key
+        float Y1 = 0.299 * keyColor.r + 0.587 * keyColor.g + 0.114 * keyColor.b;
+        float Cb1 = -0.168736 * keyColor.r - 0.331264 * keyColor.g + 0.5 * keyColor.b;
+        float Cr1 = 0.5 * keyColor.r - 0.418688 * keyColor.g - 0.081312 * keyColor.b;
+
+        float Y2 = 0.299 * texColor.r + 0.587 * texColor.g + 0.114 * texColor.b;
+        float Cb2 = -0.168736 * texColor.r - 0.331264 * texColor.g + 0.5 * texColor.b;
+        float Cr2 = 0.5 * texColor.r - 0.418688 * texColor.g - 0.081312 * texColor.b;
+
+        float dist = distance(vec2(Cb1, Cr1), vec2(Cb2, Cr2));
+        float alpha = smoothstep(similarity, similarity + smoothness, dist);
+        gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
+      } else if (keyMode == 2) {
+        // Black background removal (Luminance key)
+        float luma = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
+        float alpha = smoothstep(0.06, 0.22, luma);
+        gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
+      } else {
+        gl_FragColor = texColor;
+      }
+    }
+  `
+};
+
+function createBillboardMaterial(texture) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      map: { value: texture },
+      keyMode: { value: currentKeyMode },
+      keyColor: { value: new THREE.Color(0x00ff00) },
+      similarity: { value: 0.38 },
+      smoothness: { value: 0.10 }
+    },
+    vertexShader: ChromaShader.vertexShader,
+    fragmentShader: ChromaShader.fragmentShader,
+    side: THREE.DoubleSide,
+    transparent: true,
+    depthWrite: false
+  });
+}
+
 // ── UI References ──────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 const toastEl         = $('toast');
@@ -29,6 +97,7 @@ const infoToggleBtnEl = $('info-toggle-btn');
 const closeHistoryBtn = $('close-history-btn');
 const captureBtnEl    = $('capture-btn');
 const recenterBtnEl   = $('recenter-btn');
+const chromaBtnEl     = $('chroma-btn');
 const uiOverlayEl     = $('ui-overlay');
 const qrScreenEl      = $('qr-screen');
 const cameraErrorEl   = $('camera-error-msg');
@@ -87,6 +156,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   recenterBtnEl?.addEventListener('click', (e) => {
     e.stopPropagation();
     repositionDancer();
+  });
+
+  // Chroma Key / Transparency toggle
+  let modeIndex = 0;
+  chromaBtnEl?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    modeIndex = (modeIndex + 1) % chromaModes.length;
+    const selected = chromaModes[modeIndex];
+    currentKeyMode = selected.id;
+    if (chromaBtnEl) chromaBtnEl.textContent = selected.label;
+    if (videoMesh && videoMesh.material && videoMesh.material.uniforms) {
+      videoMesh.material.uniforms.keyMode.value = currentKeyMode;
+      videoMesh.material.needsUpdate = true;
+    }
+    setToast(`Applied ${selected.label}`);
   });
 });
 
@@ -438,11 +522,8 @@ function applyVideoToBillboard() {
   videoTex.colorSpace = THREE.SRGBColorSpace;
 
   if (videoMesh) {
-    videoMesh.material = new THREE.MeshBasicMaterial({
-      map: videoTex,
-      side: THREE.DoubleSide,
-      transparent: false
-    });
+    if (videoMesh.material) videoMesh.material.dispose();
+    videoMesh.material = createBillboardMaterial(videoTex);
     videoMesh.material.needsUpdate = true;
     updateVideoBillboardGeometry();
   }
@@ -466,11 +547,8 @@ function updateVideoBillboardGeometry() {
 function applyTextureToBillboard(tex) {
   if (!videoMesh) return;
   
-  videoMesh.material = new THREE.MeshBasicMaterial({
-    map: tex,
-    transparent: true,
-    side: THREE.DoubleSide
-  });
+  if (videoMesh.material) videoMesh.material.dispose();
+  videoMesh.material = createBillboardMaterial(tex);
   videoMesh.material.needsUpdate = true;
 
   const aspect = (tex.image && tex.image.width && tex.image.height) 
@@ -479,7 +557,7 @@ function applyTextureToBillboard(tex) {
   const h = BILLBOARD_HEIGHT;
   const w = h * aspect;
 
-  videoMesh.geometry.dispose();
+  if (videoMesh.geometry) videoMesh.geometry.dispose();
   videoMesh.geometry = new THREE.PlaneGeometry(w, h);
   videoMesh.position.set(0, h / 2, 0);
 }
@@ -487,44 +565,32 @@ function applyTextureToBillboard(tex) {
 function buildVideoBillboard() {
   const group = new THREE.Group();
 
+  let mat;
+  let aspect = VIDEO_ASPECT;
+
   if (currentTexture) {
-    const aspect = (currentTexture.image && currentTexture.image.width && currentTexture.image.height)
-      ? (currentTexture.image.width / currentTexture.image.height)
-      : VIDEO_ASPECT;
-    const w = BILLBOARD_HEIGHT * aspect;
+    mat = createBillboardMaterial(currentTexture);
+    if (currentTexture.image && currentTexture.image.width && currentTexture.image.height) {
+      aspect = currentTexture.image.width / currentTexture.image.height;
+    }
+  } else {
+    if (videoTex) {
+      videoTex.dispose();
+    }
+    videoTex = new THREE.VideoTexture(dancerVideo);
+    videoTex.minFilter = THREE.LinearFilter;
+    videoTex.magFilter = THREE.LinearFilter;
+    videoTex.generateMipmaps = false;
+    videoTex.colorSpace = THREE.SRGBColorSpace;
 
-    const mat = new THREE.MeshBasicMaterial({
-      map: currentTexture,
-      transparent: true,
-      side: THREE.DoubleSide
-    });
+    mat = createBillboardMaterial(videoTex);
 
-    videoMesh = new THREE.Mesh(new THREE.PlaneGeometry(w, BILLBOARD_HEIGHT), mat);
-    videoMesh.position.set(0, BILLBOARD_HEIGHT / 2, 0);
-    group.add(videoMesh);
-    return group;
+    const vw = (dancerVideo && dancerVideo.videoWidth) ? dancerVideo.videoWidth : 720;
+    const vh = (dancerVideo && dancerVideo.videoHeight) ? dancerVideo.videoHeight : 1280;
+    aspect = (vw && vh) ? (vw / vh) : VIDEO_ASPECT;
   }
 
-  if (videoTex) {
-    videoTex.dispose();
-  }
-  videoTex = new THREE.VideoTexture(dancerVideo);
-  videoTex.minFilter = THREE.LinearFilter;
-  videoTex.magFilter = THREE.LinearFilter;
-  videoTex.generateMipmaps = false;
-  videoTex.colorSpace = THREE.SRGBColorSpace;
-
-  const mat = new THREE.MeshBasicMaterial({
-    map: videoTex,
-    transparent: false,
-    side: THREE.DoubleSide
-  });
-
-  const vw = (dancerVideo && dancerVideo.videoWidth) ? dancerVideo.videoWidth : 720;
-  const vh = (dancerVideo && dancerVideo.videoHeight) ? dancerVideo.videoHeight : 1280;
-  const aspect = (vw && vh) ? (vw / vh) : VIDEO_ASPECT;
   const w = BILLBOARD_HEIGHT * aspect;
-
   videoMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(w, BILLBOARD_HEIGHT),
     mat
@@ -570,6 +636,10 @@ function setupTapToPlace() {
   const canvas = $('ar-canvas');
 
   function onTap(e) {
+    // Explicit user gesture to ensure video playback starts
+    if (dancerVideo && dancerVideo.paused) {
+      dancerVideo.play().catch(() => {});
+    }
     if (isPlaced) return;
     if (e.target !== canvas) return;
     placeDancer();
@@ -577,6 +647,9 @@ function setupTapToPlace() {
 
   canvas.addEventListener('click', onTap);
   canvas.addEventListener('touchend', (e) => {
+    if (dancerVideo && dancerVideo.paused) {
+      dancerVideo.play().catch(() => {});
+    }
     if (isPlaced) return;
     placeDancer();
   }, { passive: true });
