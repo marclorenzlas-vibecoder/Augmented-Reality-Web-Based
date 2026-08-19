@@ -210,8 +210,8 @@ async function loadVideoViaBlob(url, loadToken) {
     const blob = await response.blob();
     if (loadToken !== mediaLoadToken || isMediaReady) return;
 
-    if (!blob.type.startsWith('video/') && !/\.mp4($|\?)/i.test(url)) {
-      throw new Error(`Unexpected media type: ${blob.type || 'unknown'}`);
+    if (blob.type && (blob.type.startsWith('text/') || blob.type.startsWith('application/json'))) {
+      throw new Error(`Unexpected media type: ${blob.type}`);
     }
 
     setToast(`Video fetched: ${Math.round(blob.size / 1024)} KB`, true);
@@ -810,6 +810,11 @@ function initThreeScene() {
 function resolveMediaUrl(raw) {
   if (!raw) return '';
   let url = raw.trim();
+
+  if (url.startsWith('www.')) {
+    url = 'https://' + url;
+  }
+
   const knownLocalMedia = resolveKnownLocalMedia(url);
 
   if (knownLocalMedia) {
@@ -844,18 +849,11 @@ function resolveMediaUrl(raw) {
     return url.replace('.gifv', '.mp4');
   }
 
-  // Wrap external URLs in a CORS proxy to aggressively bypass browser security blocks
-  // Do NOT wrap shortlinks (qrco.de, bit.ly) because they might redirect to local network IPs
-  const isShortlink = url.includes('qrco.de') || url.includes('bit.ly');
-  if (!isShortlink && url.startsWith('http') && !url.includes('192.168') && !url.includes('localhost')) {
-    return 'https://corsproxy.io/?' + encodeURIComponent(url);
-  }
-
   return url;
 }
 
 // ── Load GIF / Video / Image from Scanned QR Code ──────────────────────────
-function loadMediaFromQR(text) {
+async function loadMediaFromQR(text) {
   if (!text) return;
   const resolvedUrl = resolveMediaUrl(text);
   if (!resolvedUrl) return;
@@ -864,19 +862,100 @@ function loadMediaFromQR(text) {
   setMediaReady(false);
   resetCurrentTexture();
   currentMediaUrl = resolvedUrl;
-  setToast(`Loading media: ${resolvedUrl}`, true);
 
-  const isExplicitVideo = /\.(mp4|webm|mov|ogg|m4v)($|\?)/i.test(resolvedUrl) || 
-                          resolvedUrl.includes('drive.google.com') ||
-                          resolvedUrl.includes('dropbox.com') ||
-                          resolvedUrl.includes('commondatastorage.googleapis.com');
+  const isLocal = resolvedUrl.startsWith('/') || 
+                  resolvedUrl.startsWith('./') || 
+                  resolvedUrl.startsWith('../') ||
+                  resolvedUrl.startsWith(window.location.origin);
+
+  const isUrl = resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://') || isLocal;
+
+  if (!isUrl) {
+    // Non-URL raw payload
+    currentMediaType = 'video';
+    loadVideoMedia(resolvedUrl, loadToken);
+    return;
+  }
+
+  // If local, we can try direct video/image detection by file extension without fetch
+  if (isLocal) {
+    const isImage = /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl);
+    if (isImage) {
+      tryLoadImage(resolvedUrl, loadToken);
+    } else {
+      currentMediaType = 'video';
+      loadVideoMedia(resolvedUrl, loadToken);
+    }
+    return;
+  }
+
+  setToast(`Fetching media: ${resolvedUrl}`, true);
+
+  let response = null;
+  let errorMsg = '';
+
+  // Tier 1: Try fetching directly
+  try {
+    response = await fetch(resolvedUrl);
+  } catch (err) {
+    console.warn('Direct fetch failed, trying CORS proxy:', err);
+    errorMsg = err.message || err;
+  }
+
+  // Tier 2: Try fetching via corsproxy.io if direct fetch failed
+  if (!response || !response.ok) {
+    try {
+      const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(resolvedUrl);
+      response = await fetch(proxyUrl);
+    } catch (err) {
+      console.warn('CORS proxy fetch failed, trying backup proxy:', err);
+      errorMsg = err.message || err;
+    }
+  }
+
+  // Tier 3: Try fetching via allorigins as backup proxy if primary proxy failed
+  if (!response || !response.ok) {
+    try {
+      const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(resolvedUrl);
+      response = await fetch(proxyUrl);
+    } catch (err) {
+      console.warn('Backup proxy fetch failed:', err);
+      errorMsg = err.message || err;
+    }
+  }
+
+  // If response is successful, process the blob
+  if (response && response.ok) {
+    try {
+      const blob = await response.blob();
+      const contentType = blob.type || response.headers.get('Content-Type') || '';
+      
+      const isImage = contentType.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl);
+      const isVideo = contentType.startsWith('video/') || /\.(mp4|webm|mov|ogg|m4v)($|\?)/i.test(resolvedUrl);
+
+      currentBlobUrl = URL.createObjectURL(blob);
+
+      if (isImage && !isVideo) {
+        tryLoadImage(currentBlobUrl, loadToken);
+      } else {
+        currentMediaType = 'video';
+        loadVideoMedia(currentBlobUrl, loadToken, { allowBlobFallback: false });
+      }
+      return;
+    } catch (err) {
+      console.error('Failed to process media blob:', err);
+      errorMsg = err.message || err;
+    }
+  }
+
+  // Fallback to direct element loading if all fetches failed
+  console.warn('All fetch attempts failed. Trying direct loading fallback. Error:', errorMsg);
+  setToast('Fetch failed. Trying direct load fallback...', true);
 
   const isExplicitImage = /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl);
-
   if (isExplicitImage) {
     tryLoadImage(resolvedUrl, loadToken);
   } else {
-    // Default to video attempt with image fallback
     currentMediaType = 'video';
     loadVideoMedia(resolvedUrl, loadToken);
   }
