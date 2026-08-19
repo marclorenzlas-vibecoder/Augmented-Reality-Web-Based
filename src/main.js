@@ -2,8 +2,15 @@ import './style.css';
 import * as THREE from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
 import { Html5Qrcode } from 'html5-qrcode';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // ── State ──────────────────────────────────────────────────────────────────
+let currentGlbModel  = null;
+let mixer            = null;
+let gifImage         = null;
+let gifTexture       = null;
+let isGifMediaType   = false;
+const gltfLoader     = new GLTFLoader();
 let scene, camera, renderer;
 let dancerGroup;
 let videoMesh      = null;   // The 2D video billboard
@@ -150,6 +157,23 @@ function resetCurrentTexture() {
     currentTexture.dispose();
     currentTexture = null;
   }
+
+  if (gifTexture) {
+    gifTexture.dispose();
+    gifTexture = null;
+  }
+
+  if (gifImage) {
+    gifImage.remove();
+    gifImage = null;
+  }
+  isGifMediaType = false;
+
+  if (currentGlbModel) {
+    dancerGroup.remove(currentGlbModel);
+    currentGlbModel = null;
+  }
+  mixer = null;
 
   if (currentBlobUrl) {
     URL.revokeObjectURL(currentBlobUrl);
@@ -716,6 +740,14 @@ function initThreeScene() {
   const clock = new THREE.Clock();
 
   const renderLoop = (timestamp, frame) => {
+    const delta = clock.getDelta();
+    if (mixer) {
+      mixer.update(delta);
+    }
+    if (isGifMediaType && gifTexture) {
+      gifTexture.needsUpdate = true;
+    }
+
     if (frame) {
       const referenceSpace = renderer.xr.getReferenceSpace();
       const session = renderer.xr.getSession();
@@ -930,12 +962,20 @@ async function loadMediaFromQR(text) {
       const blob = await response.blob();
       const contentType = blob.type || response.headers.get('Content-Type') || '';
       
+      const isGlb = contentType.startsWith('model/') || 
+                    contentType.includes('gltf') || 
+                    /\.(glb|gltf)($|\?)/i.test(resolvedUrl);
+      const isGif = contentType.includes('gif') || /\.(gif)($|\?)/i.test(resolvedUrl);
       const isImage = contentType.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl);
       const isVideo = contentType.startsWith('video/') || /\.(mp4|webm|mov|ogg|m4v)($|\?)/i.test(resolvedUrl);
 
       currentBlobUrl = URL.createObjectURL(blob);
 
-      if (isImage && !isVideo) {
+      if (isGlb) {
+        tryLoadGlb(currentBlobUrl, loadToken);
+      } else if (isGif) {
+        tryLoadGif(currentBlobUrl, loadToken);
+      } else if (isImage && !isVideo) {
         tryLoadImage(currentBlobUrl, loadToken);
       } else {
         currentMediaType = 'video';
@@ -954,11 +994,143 @@ async function loadMediaFromQR(text) {
 
   const isExplicitImage = /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl);
   if (isExplicitImage) {
-    tryLoadImage(resolvedUrl, loadToken);
+    const isExplicitGif = /\.(gif)($|\?)/i.test(resolvedUrl);
+    if (isExplicitGif) {
+      tryLoadGif(resolvedUrl, loadToken);
+    } else {
+      tryLoadImage(resolvedUrl, loadToken);
+    }
   } else {
-    currentMediaType = 'video';
-    loadVideoMedia(resolvedUrl, loadToken);
+    const isExplicitGlb = /\.(glb|gltf)($|\?)/i.test(resolvedUrl);
+    if (isExplicitGlb) {
+      tryLoadGlb(resolvedUrl, loadToken);
+    } else {
+      currentMediaType = 'video';
+      loadVideoMedia(resolvedUrl, loadToken);
+    }
   }
+}
+
+function tryLoadGif(url, loadToken = ++mediaLoadToken) {
+  currentMediaType = 'image';
+  isGifMediaType = true;
+  setMediaReady(false);
+
+  // Clean up any existing GLB
+  if (currentGlbModel) {
+    dancerGroup.remove(currentGlbModel);
+    currentGlbModel = null;
+  }
+  mixer = null;
+
+  if (videoMesh) {
+    videoMesh.visible = false;
+  }
+
+  gifImage = document.createElement('img');
+  gifImage.src = url;
+  gifImage.crossOrigin = 'anonymous';
+  gifImage.style.position = 'fixed';
+  gifImage.style.top = '-9999px';
+  gifImage.style.left = '-9999px';
+  gifImage.style.width = '10px';
+  gifImage.style.height = '10px';
+  gifImage.style.opacity = '0';
+  gifImage.style.pointerEvents = 'none';
+  document.body.appendChild(gifImage);
+
+  gifImage.onload = () => {
+    if (loadToken !== mediaLoadToken) {
+      if (gifImage) gifImage.remove();
+      return;
+    }
+    
+    gifTexture = new THREE.Texture(gifImage);
+    gifTexture.minFilter = THREE.LinearFilter;
+    gifTexture.magFilter = THREE.LinearFilter;
+    gifTexture.colorSpace = THREE.SRGBColorSpace;
+    gifTexture.needsUpdate = true;
+    
+    currentTexture = gifTexture;
+    applyTextureToBillboard(gifTexture);
+    setMediaReady(true);
+    setToast('GIF ready! Aim and tap to place');
+  };
+
+  gifImage.onerror = (err) => {
+    if (loadToken !== mediaLoadToken) return;
+    console.warn('GIF load error, trying fallback standard loader:', err);
+    isGifMediaType = false;
+    if (gifImage) gifImage.remove();
+    tryLoadImage(url, loadToken);
+  };
+}
+
+function tryLoadGlb(url, loadToken = ++mediaLoadToken) {
+  currentMediaType = '3d';
+  setMediaReady(false);
+
+  // Clean up previous GLB
+  if (currentGlbModel) {
+    dancerGroup.remove(currentGlbModel);
+    currentGlbModel = null;
+  }
+  mixer = null;
+
+  // Hide 2D billboard
+  if (videoMesh) {
+    videoMesh.visible = false;
+  }
+
+  setToast('Loading 3D model...', true);
+
+  gltfLoader.load(
+    url,
+    (gltf) => {
+      if (loadToken !== mediaLoadToken) {
+        return;
+      }
+
+      const model = gltf.scene;
+
+      // Auto-scale and center
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const height = size.y || 1;
+
+      const targetHeight = 1.2;
+      const scale = targetHeight / height;
+      model.scale.set(scale, scale, scale);
+
+      const center = box.getCenter(new THREE.Vector3());
+      model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+
+      // Play skeletal animation if any clips are present
+      if (gltf.animations && gltf.animations.length > 0) {
+        mixer = new THREE.AnimationMixer(model);
+        const action = mixer.clipAction(gltf.animations[0]);
+        action.play();
+      }
+
+      currentGlbModel = model;
+      dancerGroup.add(model);
+
+      setMediaReady(true);
+      setToast('3D model ready! Aim and tap to place');
+    },
+    (xhr) => {
+      if (loadToken !== mediaLoadToken) return;
+      if (xhr.total) {
+        const percent = Math.round((xhr.loaded / xhr.total) * 100);
+        setToast(`Loading 3D model: ${percent}%`, true);
+      }
+    },
+    (err) => {
+      if (loadToken !== mediaLoadToken) return;
+      console.error('GLB load error:', err);
+      setToast('Failed to load 3D model. Trying direct load fallback...', true);
+    }
+  );
 }
 
 function tryLoadImage(url, loadToken = ++mediaLoadToken) {
@@ -995,6 +1167,15 @@ const BILLBOARD_HEIGHT = 1.4;
 const PLACEMENT_FLOAT_AMPLITUDE = 0.04;
 
 function applyVideoToBillboard() {
+  if (currentGlbModel) {
+    dancerGroup.remove(currentGlbModel);
+    currentGlbModel = null;
+  }
+  mixer = null;
+  if (videoMesh) {
+    videoMesh.visible = isMediaReady;
+  }
+
   if (!dancerVideo) return;
 
   if (videoTex) {
@@ -1031,6 +1212,15 @@ function updateVideoBillboardGeometry() {
 }
 
 function applyTextureToBillboard(tex) {
+  if (currentGlbModel) {
+    dancerGroup.remove(currentGlbModel);
+    currentGlbModel = null;
+  }
+  mixer = null;
+  if (videoMesh) {
+    videoMesh.visible = isMediaReady;
+  }
+
   if (!videoMesh) return;
   
   if (videoMesh.material) videoMesh.material.dispose();
