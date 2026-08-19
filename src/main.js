@@ -88,6 +88,7 @@ let reticle;
 let hitTestSource = null;
 let hitTestSourceRequested = false;
 let controller;
+let xrLastLandscape = null; // tracks overlay rotation state inside WebXR
 
 let currentMediaUrl  = null;
 let currentMediaType = 'default'; // 'video' | 'image' | 'default'
@@ -106,12 +107,7 @@ let activeQrCameraId = null;
 let restartQrTimer   = null;
 
 // Chroma Key / Transparency Modes (0 = Opaque, 1 = Green Screen, 2 = Black BG Key)
-let currentKeyMode = 2;
-const chromaModes = [
-  { id: 2, label: 'Key: Black BG' },
-  { id: 1, label: 'Key: Green BG' },
-  { id: 0, label: 'Key: Off' }
-];
+let currentKeyMode = 1;
 
 const QR_CAMERA_CONFIG = {
   fps: 8,
@@ -216,6 +212,16 @@ function setMediaReady(ready) {
   if (videoMesh) {
     videoMesh.visible = ready;
   }
+  const arBtn = document.getElementById('ARButton');
+  if (ready) {
+    hideLoadingBar();
+    // Only display ARButton if the QR scanner screen is hidden (i.e. user is in AR mode)
+    if (qrScreenEl && qrScreenEl.classList.contains('hidden')) {
+      if (arBtn) arBtn.style.display = 'block';
+    }
+  } else {
+    if (arBtn) arBtn.style.display = 'none';
+  }
 }
 
 function resetCurrentTexture() {
@@ -255,7 +261,6 @@ function markVideoReady(loadToken) {
   applyVideoToBillboard();
   setMediaReady(true);
   dancerVideo.play().catch(() => {});
-  setToast('Video ready! Aim and tap to place');
 }
 
 function describeVideoError() {
@@ -287,7 +292,7 @@ async function loadVideoViaBlob(url, loadToken) {
   const timeoutId = setTimeout(() => controller.abort(), 6000);
 
   try {
-    setToast(`Fetching video: ${url}`, true);
+    updateLoadingBar(20, true);
     const response = await fetch(url, {
       cache: 'reload',
       signal: controller.signal
@@ -305,19 +310,21 @@ async function loadVideoViaBlob(url, loadToken) {
       throw new Error(`Unexpected media type: ${blob.type}`);
     }
 
-    setToast(`Video fetched: ${Math.round(blob.size / 1024)} KB`, true);
+    updateLoadingBar(80, true);
     currentBlobUrl = URL.createObjectURL(blob);
     loadVideoMedia(currentBlobUrl, loadToken, { allowBlobFallback: false });
   } catch (err) {
     clearTimeout(timeoutId);
     if (loadToken !== mediaLoadToken || isMediaReady) return;
     console.warn('Video blob fallback failed:', err);
-    setToast(`Direct video still loading; fetch fallback failed: ${err.name === 'AbortError' ? 'request timed out' : (err.message || err)}`, true);
+    hideLoadingBar();
+    setToast('Video loading error', false);
   }
 }
 
 function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
   if (!dancerVideo) return;
+  updateLoadingBar(20, true);
 
   let timeoutId = null;
   let fallbackId = null;
@@ -406,12 +413,14 @@ function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
   timeoutId = setTimeout(() => {
     if (loadToken !== mediaLoadToken || isMediaReady) return;
     cleanup();
-    setToast(`Video still loading: ${currentMediaUrl || url}`, true);
+    hideLoadingBar();
+    setToast('Video loading timed out', false);
   }, 8000);
 }
 
 const $ = (id) => document.getElementById(id);
 const uiOverlayEl     = $('ui-overlay');
+const uiWrapperEl     = $('ui-wrapper');
 const qrScreenEl      = $('qr-screen');
 const qrControlsEl    = $('qr-controls-container');
 const qrStatusTextEl  = $('qr-status-text');
@@ -421,16 +430,22 @@ const captureBtnEl    = $('capture-btn');
 const recenterBtnEl   = $('recenter-btn');
 const historyModalEl  = $('history-modal');
 const closeHistoryBtn = $('close-history-btn');
-const startCameraBtn  = $('start-camera-btn');
 const qrSwitchBtn     = $('qr-switch-btn');
 const cameraSelectEl  = $('qr-camera-select');
 const cameraErrorEl   = $('camera-error-msg');
 const exitArBtnEl     = $('exit-ar-btn');
-const chromaBtnEl     = $('chroma-btn');
+const loadingBarContainer = $('loading-bar-container');
+const loadingBar          = $('loading-bar');
 
 
 // ── Phase 1 : Direct QR Scanner (No Injected UI Widget) ────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  updateOrientationClass();
+  window.addEventListener('resize', updateOrientationClass);
+  window.addEventListener('orientationchange', updateOrientationClass);
+  if (screen.orientation) {
+    screen.orientation.addEventListener('change', updateOrientationClass);
+  }
   dancerVideo = $('dancer-video');
   if (dancerVideo) {
     dancerVideo.muted = true;
@@ -451,15 +466,72 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  const startCamBtn = $('start-camera-btn');
   const qrControlsContainer = $('qr-controls-container');
+  if (qrControlsContainer) {
+    qrControlsContainer.classList.remove('hidden');
+  }
+  
+  initCustomQrScanner().catch(err => {
+    console.error('Auto QR scan start failed:', err);
+  });
 
-  if (startCamBtn) {
-    startCamBtn.addEventListener('click', async (e) => {
-      e.preventDefault();
-      startCamBtn.classList.add('hidden');
-      if (qrControlsContainer) qrControlsContainer.classList.remove('hidden');
-      await initCustomQrScanner();
+  // ── Gallery QR Upload ────────────────────────────────────────────────────
+  // Lets users pick a QR code image from their phone gallery.
+  // IMPORTANT: html5QrCode.scanFile() throws if the live camera is still
+  // running, so we must stop it first, then restart on failure.
+  const galleryInput = $('qr-gallery-input');
+  if (galleryInput) {
+    galleryInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file || isQrProcessing) return;
+
+      // Reset input immediately so the same photo can be re-picked later
+      galleryInput.value = '';
+
+      if (qrStatusTextEl) qrStatusTextEl.textContent = 'Reading QR from image…';
+
+      // ── Step 1: Stop the live camera scanner ──────────────────────────
+      // scanFile() will throw "Scanner is running" if camera is active
+      try {
+        await queueQrCameraTask(() => stopQrCameraInternal({ clear: false }));
+      } catch (err) {
+        console.warn('Gallery: camera stop warning:', err);
+      }
+
+      // ── Step 2: Decode the QR from the uploaded image ─────────────────
+      let decodedText = null;
+      let scanError  = null;
+
+      try {
+        // scanFile() takes the File directly — no need for objectURL
+        decodedText = await html5QrCode.scanFile(file, /* showImage= */ false);
+      } catch (err) {
+        scanError = err;
+      }
+
+      // ── Step 3: Memory cleanup — file data freed immediately ──────────
+      e.target.value = '';
+
+      // ── Step 4: Route result ──────────────────────────────────────────
+      if (decodedText) {
+        // Pipe into the same handler used by the live camera
+        await onQrCodeSuccess(decodedText);
+      } else {
+        const isNotFound = scanError?.message?.toLowerCase().includes('no qr');
+        const msg = isNotFound
+          ? 'No QR code found — try a clearer photo'
+          : 'Could not read QR — try a clearer or closer photo';
+
+        console.warn('Gallery QR scan failed:', scanError);
+        if (qrStatusTextEl) qrStatusTextEl.textContent = msg;
+
+        // Restart the live camera since we stopped it
+        setTimeout(() => {
+          if (qrStatusTextEl) qrStatusTextEl.textContent = 'Align QR code in frame';
+          isQrProcessing = false;
+          startQrCamera();
+        }, 2800);
+      }
     });
   }
 
@@ -478,21 +550,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   recenterBtnEl?.addEventListener('click', (e) => {
     e.stopPropagation();
     repositionDancer();
-  });
-
-  // Chroma Key / Transparency toggle
-  let modeIndex = 0;
-  chromaBtnEl?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    modeIndex = (modeIndex + 1) % chromaModes.length;
-    const selected = chromaModes[modeIndex];
-    currentKeyMode = selected.id;
-    if (chromaBtnEl) chromaBtnEl.textContent = selected.label;
-    if (videoMesh && videoMesh.material && videoMesh.material.uniforms) {
-      videoMesh.material.uniforms.keyMode.value = currentKeyMode;
-      videoMesh.material.needsUpdate = true;
-    }
-    setToast(`Applied ${selected.label}`);
   });
 
   // Exit AR
@@ -518,7 +575,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     infoToggleBtnEl?.classList.add('hidden');
     captureBtnEl?.classList.add('hidden');
     recenterBtnEl?.classList.add('hidden');
-    chromaBtnEl?.classList.add('hidden');
     toastEl?.classList.add('hidden');
 
     restartQrCameraSoon();
@@ -533,55 +589,8 @@ async function initCustomQrScanner() {
       html5QrCode = new Html5Qrcode("qr-reader");
     }
 
-    // Fetch cameras
-    const devices = await Html5Qrcode.getCameras();
-    if (!devices || devices.length === 0) {
-      if (qrStatusTextEl) qrStatusTextEl.textContent = 'No camera found';
-      return;
-    }
-
-    availableCameras = devices;
-
-    // Populate custom camera dropdown
-    if (cameraSelectEl) {
-      cameraSelectEl.innerHTML = '';
-      devices.forEach((dev, idx) => {
-        const opt = document.createElement('option');
-        opt.value = dev.id;
-        opt.textContent = dev.label || `Camera ${idx + 1}`;
-        cameraSelectEl.appendChild(opt);
-      });
-
-      cameraSelectEl.addEventListener('change', async (e) => {
-        const devId = e.target.value;
-        selectedCameraIndex = availableCameras.findIndex(d => d.id === devId);
-        await switchQrCamera(devId);
-      });
-    }
-
-    // Camera Switch button
-    if (qrSwitchBtn) {
-      if (devices.length <= 1) {
-        qrSwitchBtn.style.display = 'none';
-      } else {
-        qrSwitchBtn.addEventListener('click', async (e) => {
-          e.preventDefault();
-          selectedCameraIndex = (selectedCameraIndex + 1) % availableCameras.length;
-          const nextDevId = availableCameras[selectedCameraIndex].id;
-          if (cameraSelectEl) cameraSelectEl.value = nextDevId;
-          await switchQrCamera(nextDevId);
-        });
-      }
-    }
-
-    // Default to rear/environment camera
-    const backCamIndex = devices.findIndex(d => /back|rear|environment/i.test(d.label));
-    selectedCameraIndex = backCamIndex !== -1 ? backCamIndex : 0;
-    const initialCamId = devices[selectedCameraIndex].id;
-    if (cameraSelectEl) cameraSelectEl.value = initialCamId;
-
-    // Start scanner automatically
-    await startQrCamera(initialCamId);
+    // Always choose the back camera directly using facingMode constraint
+    await startQrCamera();
 
   } catch (err) {
     console.error('QR Scanner init error:', err);
@@ -627,9 +636,9 @@ async function stopQrCameraInternal({ clear = false } = {}) {
   }
 }
 
-async function startQrCameraInternal(cameraId) {
+async function startQrCameraInternal() {
   if (!html5QrCode || isQrProcessing) return;
-  if (html5QrCode.isScanning && activeQrCameraId === cameraId) return;
+  if (html5QrCode.isScanning && activeQrCameraId === 'environment') return;
 
   clearQrRestartTimer();
 
@@ -640,59 +649,35 @@ async function startQrCameraInternal(cameraId) {
 
   try {
     await html5QrCode.start(
-      cameraId,
+      { facingMode: "environment" },
       QR_CAMERA_CONFIG,
       onQrCodeSuccess,
       () => {}
     );
-    activeQrCameraId = cameraId;
+    activeQrCameraId = 'environment';
     cameraErrorEl?.classList.add('hidden');
     if (qrStatusTextEl) qrStatusTextEl.textContent = 'Align QR code in frame';
   } catch (err) {
-    console.warn('Could not start specific camera ID, trying facingMode environment fallback:', err);
-    await wait(150);
-
-    try {
-      await html5QrCode.start(
-        { facingMode: "environment" },
-        QR_CAMERA_CONFIG,
-        onQrCodeSuccess,
-        () => {}
-      );
-      activeQrCameraId = 'environment';
-      cameraErrorEl?.classList.add('hidden');
-      if (qrStatusTextEl) qrStatusTextEl.textContent = 'Align QR code in frame';
-    } catch (e) {
-      activeQrCameraId = null;
-      console.error('Camera fallback failed:', e);
-      if (cameraErrorEl) {
-        cameraErrorEl.textContent = `Failed to start camera: ${e.message || e}`;
-        cameraErrorEl.classList.remove('hidden');
-      }
+    activeQrCameraId = null;
+    console.error('Failed to start camera:', err);
+    if (cameraErrorEl) {
+      cameraErrorEl.textContent = `Failed to start camera: ${err.message || err}`;
+      cameraErrorEl.classList.remove('hidden');
     }
   }
 }
 
-async function startQrCamera(cameraId) {
-  return queueQrCameraTask(() => startQrCameraInternal(cameraId));
-}
-
-async function switchQrCamera(cameraId) {
-  return queueQrCameraTask(async () => {
-    if (!html5QrCode || !cameraId) return;
-    await stopQrCameraInternal();
-    await wait(150);
-    await startQrCameraInternal(cameraId);
-  });
+async function startQrCamera() {
+  return queueQrCameraTask(() => startQrCameraInternal());
 }
 
 function restartQrCameraSoon() {
   clearQrRestartTimer();
-  if (!availableCameras.length) return;
-
+  const arBtn = document.getElementById('ARButton');
+  if (arBtn) arBtn.style.display = 'none';
   restartQrTimer = setTimeout(() => {
     isQrProcessing = false;
-    startQrCamera(availableCameras[selectedCameraIndex].id);
+    startQrCamera();
   }, 900);
 }
 
@@ -744,9 +729,6 @@ async function startUniversalAR() {
     isThreeInitialized = true;
   }
   
-  // Ensure the ARButton injected by Three.js is visible now
-  const arBtn = document.getElementById('ARButton');
-  if (arBtn) arBtn.style.display = 'block';
 }
 
 function initThreeScene() {
@@ -760,7 +742,7 @@ function initThreeScene() {
     alpha: true,
     antialias: false,
     powerPreference: 'high-performance',
-    preserveDrawingBuffer: false
+    preserveDrawingBuffer: true
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
@@ -777,7 +759,24 @@ function initThreeScene() {
     domOverlay: { root: document.getElementById('ui-overlay') }
   };
   const arButton = ARButton.createButton(renderer, sessionInit);
+  arButton.style.display = 'none'; // Keep hidden until asset loading is successful
   document.body.appendChild(arButton);
+
+  // Inject elegant icon + label inside the circular button
+  // (ARButton sets textContent; we override it with richer HTML)
+  requestAnimationFrame(() => {
+    arButton.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.9;display:block;flex-shrink:0">
+        <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+        <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+        <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+        <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M9 9h.01M15 9h.01M9 15h.01M15 15h.01"/>
+      </svg>
+      <span style="font-size:inherit;font-weight:inherit;letter-spacing:inherit;line-height:1">Start AR</span>
+    `;
+  });
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.2));
   const dir = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -830,8 +829,29 @@ function initThreeScene() {
           hitTestSourceRequested = false;
           hitTestSource = null;
           isPlaced = false;
+          xrLastLandscape = null; // reset so next session re-evaluates
           if (reticle) reticle.visible = false;
           if (dancerGroup) dancerGroup.visible = false;
+
+          // Reset overlay rotation back to portrait
+          const uiWrapper = $('ui-wrapper');
+          if (uiWrapper) {
+            uiWrapper.style.width  = '';
+            uiWrapper.style.height = '';
+            uiWrapper.style.left   = '';
+            uiWrapper.style.top    = '';
+            uiWrapper.style.transform = '';
+            uiWrapper.style.transformOrigin = '';
+          }
+          if (uiOverlayEl) {
+            uiOverlayEl.style.width  = '';
+            uiOverlayEl.style.height = '';
+            uiOverlayEl.style.left   = '';
+            uiOverlayEl.style.top    = '';
+            uiOverlayEl.style.transform = '';
+            uiOverlayEl.style.transformOrigin = '';
+          }
+          document.body.classList.remove('landscape');
           
           // Reset UI
           uiOverlayEl?.classList.add('hidden');
@@ -844,7 +864,6 @@ function initThreeScene() {
           infoToggleBtnEl?.classList.add('hidden');
           captureBtnEl?.classList.add('hidden');
           recenterBtnEl?.classList.add('hidden');
-          chromaBtnEl?.classList.add('hidden');
           toastEl?.classList.add('hidden');
 
           restartQrCameraSoon();
@@ -881,8 +900,55 @@ function initThreeScene() {
       dancerGroup.rotation.z = Math.sin(dt) * 0.04;
     }
 
+    // ── Real-time UI & 3D Model rotation from XR camera pose ───────────
+    if (renderer.xr.isPresenting) {
+      const xrCam = renderer.xr.getCamera();
+      if (xrCam) {
+        const worldRight = new THREE.Vector3(1, 0, 0).applyQuaternion(xrCam.quaternion);
+        const isXrLandscape = Math.abs(worldRight.y) > 0.25;
+        const uiWrapper = $('ui-wrapper');
+
+        if (isXrLandscape !== xrLastLandscape) {
+          xrLastLandscape = isXrLandscape;
+
+          if (isXrLandscape) {
+            // Swap rotation angle so right-tilt displays UI right-side up
+            const deg = worldRight.y < 0 ? -90 : 90;
+            const pw = window.innerWidth;   // frozen portrait width
+            const ph = window.innerHeight;  // frozen portrait height
+            const offsetX = (pw - ph) / 2;  // negative → moves left
+            const offsetY = (ph - pw) / 2;  // positive → moves down
+
+            document.body.classList.add('landscape');
+            if (uiWrapper) {
+              uiWrapper.style.width  = ph + 'px';
+              uiWrapper.style.height = pw + 'px';
+              uiWrapper.style.left   = offsetX + 'px';
+              uiWrapper.style.top    = offsetY + 'px';
+              uiWrapper.style.transformOrigin = 'center center';
+              uiWrapper.style.transform = `rotate(${deg}deg)`;
+            }
+          } else {
+            document.body.classList.remove('landscape');
+            if (uiWrapper) {
+              uiWrapper.style.width  = '';
+              uiWrapper.style.height = '';
+              uiWrapper.style.left   = '';
+              uiWrapper.style.top    = '';
+              uiWrapper.style.transform = '';
+              uiWrapper.style.transformOrigin = '';
+            }
+          }
+        }
+      }
+    } else {
+      // Outside WebXR: use normal screen orientation class helper
+      updateOrientationClass();
+    }
+
     renderer.render(scene, camera);
   };
+
 
   // Safely start the animation loop, handling newer and older Three.js versions
   if (renderer && typeof renderer.setAnimationLoop === 'function') {
@@ -898,9 +964,27 @@ function initThreeScene() {
   }
 
   window.addEventListener('resize', () => {
+    updateOrientationClass();
+    if (renderer && renderer.xr && renderer.xr.getSession()) {
+      return; // Skip WebGL canvas resizing and camera projection update while inside WebXR
+    }
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // screen.orientation fires inside WebXR where window resize is frozen
+  if (screen?.orientation) {
+    screen.orientation.addEventListener('change', () => {
+      // Reset cache so updateOrientationClass re-evaluates the new angle
+      lastOrientationAngle = null;
+      updateOrientationClass();
+    });
+  }
+  // Legacy fallback (Safari / older Android)
+  window.addEventListener('orientationchange', () => {
+    lastOrientationAngle = null;
+    updateOrientationClass();
   });
 }
 
@@ -957,6 +1041,13 @@ async function loadMediaFromQR(text) {
   const resolvedUrl = resolveMediaUrl(text);
   if (!resolvedUrl) return;
 
+  // Dynamically determine chroma key mode: default to 1 (green screen) unless explicit black background is specified
+  if (/MaxwellNB/i.test(resolvedUrl) || /nobg/i.test(resolvedUrl) || /black/i.test(resolvedUrl)) {
+    currentKeyMode = 2; // Black background removal
+  } else {
+    currentKeyMode = 1; // Green screen chroma keying (default)
+  }
+
   const loadToken = ++mediaLoadToken;
   setMediaReady(false);
   resetCurrentTexture();
@@ -976,11 +1067,18 @@ async function loadMediaFromQR(text) {
     return;
   }
 
-  // If local, we can try direct video/image detection by file extension without fetch
+  // If local, we can try direct video/image/3D detection by file extension without fetch
   if (isLocal) {
-    const isImage = /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl);
-    if (isImage) {
+    const isGif = /\.(gif)($|\?)/i.test(resolvedUrl);
+    const isImage = /\.(jpg|jpeg|png|webp)($|\?)/i.test(resolvedUrl);
+    const isGlb = /\.(glb|gltf)($|\?)/i.test(resolvedUrl);
+    
+    if (isGif) {
+      tryLoadGif(resolvedUrl, loadToken);
+    } else if (isImage) {
       tryLoadImage(resolvedUrl, loadToken);
+    } else if (isGlb) {
+      tryLoadGlb(resolvedUrl, loadToken);
     } else {
       currentMediaType = 'video';
       loadVideoMedia(resolvedUrl, loadToken);
@@ -988,7 +1086,7 @@ async function loadMediaFromQR(text) {
     return;
   }
 
-  setToast(`Fetching media: ${resolvedUrl}`, true);
+  updateLoadingBar(25, true);
 
   let response = null;
   let errorMsg = '';
@@ -1029,11 +1127,26 @@ async function loadMediaFromQR(text) {
       const blob = await response.blob();
       const contentType = blob.type || response.headers.get('Content-Type') || '';
       
-      const isGlb = contentType.startsWith('model/') || 
-                    contentType.includes('gltf') || 
-                    /\.(glb|gltf)($|\?)/i.test(resolvedUrl);
+      let isGlb = contentType.startsWith('model/') || 
+                  contentType.includes('gltf') || 
+                  /\.(glb|gltf)($|\?)/i.test(resolvedUrl);
+      
+      // Proactively detect GLB via standard 3D binary magic header 'glTF' (0x676C5446)
+      try {
+        const headerBuffer = await blob.slice(0, 4).arrayBuffer();
+        if (headerBuffer.byteLength === 4) {
+          const headerView = new DataView(headerBuffer);
+          const magic = headerView.getUint32(0, false); // Big-endian 'glTF'
+          if (magic === 0x676C5446) {
+            isGlb = true;
+          }
+        }
+      } catch (magicErr) {
+        console.warn('Could not check magic bytes for GLB detection:', magicErr);
+      }
+
       const isGif = contentType.includes('gif') || /\.(gif)($|\?)/i.test(resolvedUrl);
-      const isImage = contentType.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl);
+      const isImage = (contentType.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl)) && !isGif;
       const isVideo = contentType.startsWith('video/') || /\.(mp4|webm|mov|ogg|m4v)($|\?)/i.test(resolvedUrl);
 
       currentBlobUrl = URL.createObjectURL(blob);
@@ -1058,7 +1171,7 @@ async function loadMediaFromQR(text) {
 
   // Fallback to direct element loading if all fetches failed
   console.warn('All fetch attempts failed. Trying direct loading fallback. Error:', errorMsg);
-  setToast('Fetch failed. Trying direct load fallback...', true);
+  updateLoadingBar(50, true);
 
   const isExplicitImage = /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl);
   if (isExplicitImage) {
@@ -1083,6 +1196,7 @@ async function tryLoadGif(urlOrBuffer, loadToken = ++mediaLoadToken) {
   currentMediaType = 'image';
   isGifMediaType = true;
   setMediaReady(false);
+  updateLoadingBar(30, true);
 
   // Clean up any existing GLB
   if (currentGlbModel) {
@@ -1104,7 +1218,7 @@ async function tryLoadGif(urlOrBuffer, loadToken = ++mediaLoadToken) {
   let buffer;
   if (typeof urlOrBuffer === 'string') {
     try {
-      setToast('Fetching GIF data...', true);
+      updateLoadingBar(30, true);
       buffer = await fetch(urlOrBuffer).then(res => res.arrayBuffer());
     } catch (err) {
       console.warn("Failed to fetch GIF buffer directly:", err);
@@ -1142,21 +1256,14 @@ async function tryLoadGif(urlOrBuffer, loadToken = ++mediaLoadToken) {
     currentTexture = gifTexture;
     applyTextureToBillboard(gifTexture);
 
-    // Disable chroma key for GIFs — they have their own transparency;
-    // the black-BG shader would incorrectly strip dark content.
-    if (videoMesh && videoMesh.material && videoMesh.material.uniforms) {
-      videoMesh.material.uniforms.keyMode.value = 0;
-      videoMesh.material.needsUpdate = true;
-    }
-
     setMediaReady(true);
-    setToast('GIF ready! Aim and tap to place');
   });
 }
 
 function tryLoadGlb(url, loadToken = ++mediaLoadToken) {
   currentMediaType = '3d';
   setMediaReady(false);
+  updateLoadingBar(10);
 
   // Clean up previous GLB
   if (currentGlbModel) {
@@ -1170,7 +1277,7 @@ function tryLoadGlb(url, loadToken = ++mediaLoadToken) {
     videoMesh.visible = false;
   }
 
-  setToast('Loading 3D model...', true);
+  updateLoadingBar(15);
 
   gltfLoader.load(
     url,
@@ -1204,19 +1311,18 @@ function tryLoadGlb(url, loadToken = ++mediaLoadToken) {
       dancerGroup.add(model);
 
       setMediaReady(true);
-      setToast('3D model ready! Aim and tap to place');
     },
     (xhr) => {
       if (loadToken !== mediaLoadToken) return;
       if (xhr.total) {
         const percent = Math.round((xhr.loaded / xhr.total) * 100);
-        setToast(`Loading 3D model: ${percent}%`, true);
+        updateLoadingBar(percent);
       }
     },
     (err) => {
       if (loadToken !== mediaLoadToken) return;
       console.error('GLB load error:', err);
-      setToast('Failed to load 3D model. Trying direct load fallback...', true);
+      updateLoadingBar(50, true);
     }
   );
 }
@@ -1224,6 +1330,7 @@ function tryLoadGlb(url, loadToken = ++mediaLoadToken) {
 function tryLoadImage(url, loadToken = ++mediaLoadToken) {
   currentMediaType = 'image';
   setMediaReady(false);
+  updateLoadingBar(40, true);
   const loader = new THREE.TextureLoader();
   loader.setCrossOrigin('anonymous');
   loader.load(
@@ -1239,12 +1346,12 @@ function tryLoadImage(url, loadToken = ++mediaLoadToken) {
       currentTexture = tex;
       applyTextureToBillboard(tex);
       setMediaReady(true);
-      setToast('Media ready! Aim and tap to place');
     },
     undefined,
     (err) => {
       if (loadToken !== mediaLoadToken) return;
       console.warn('Image load error:', err);
+      hideLoadingBar();
       setToast('QR scanned. Aim and tap to place');
     }
   );
@@ -1312,7 +1419,12 @@ function applyTextureToBillboard(tex) {
   if (!videoMesh) return;
   
   if (videoMesh.material) videoMesh.material.dispose();
-  videoMesh.material = createBillboardMaterial(tex);
+  videoMesh.material = new THREE.MeshBasicMaterial({
+    map: tex,
+    side: THREE.DoubleSide,
+    transparent: true,
+    depthWrite: false
+  });
   videoMesh.material.needsUpdate = true;
 
   const aspect = (tex.image && tex.image.width && tex.image.height) 
@@ -1333,7 +1445,12 @@ function buildVideoBillboard() {
   let aspect = VIDEO_ASPECT;
 
   if (currentTexture) {
-    mat = createBillboardMaterial(currentTexture);
+    mat = new THREE.MeshBasicMaterial({
+      map: currentTexture,
+      side: THREE.DoubleSide,
+      transparent: true,
+      depthWrite: false
+    });
     if (currentTexture.image && currentTexture.image.width && currentTexture.image.height) {
       aspect = currentTexture.image.width / currentTexture.image.height;
     }
@@ -1448,7 +1565,6 @@ function placeDancer() {
     infoToggleBtnEl?.classList.remove('hidden');
     captureBtnEl?.classList.remove('hidden');
     recenterBtnEl?.classList.remove('hidden');
-    chromaBtnEl?.classList.remove('hidden');
   }, 1500);
 }
 
@@ -1460,7 +1576,6 @@ function repositionDancer() {
   infoToggleBtnEl?.classList.add('hidden');
   captureBtnEl?.classList.add('hidden');
   recenterBtnEl?.classList.add('hidden');
-  chromaBtnEl?.classList.add('hidden');
 
   setToast('Aim at a flat surface and tap to place the dancer');
 }
@@ -1470,28 +1585,83 @@ function repositionDancer() {
 function setupCapture() {
   captureBtnEl?.addEventListener('click', async (e) => {
     e.stopPropagation();
-    setToast('Capturing AR Scene...');
+    
+    // Temporarily hide all UI overlay elements for a clean photo
+    const uiWrapper = $('ui-wrapper');
+    if (uiWrapper) uiWrapper.style.opacity = '0';
 
     try {
-      // In WebXR immersive-ar mode, we CANNOT capture the real-world camera feed
-      // for privacy reasons. We can ONLY capture the 3D scene (the dancer).
-      // We force a render to capture the current state.
-      renderer.render(scene, camera);
-      const dataUrl = renderer.domElement.toDataURL('image/png');
-      
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      const file = new File([blob], 'tourism-ar.png', { type: 'image/png' });
+      setToast('Capturing photo...');
 
-      if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ title: 'Tourism AR — Bacolod City', files: [file] });
-        setToast('Shared!');
-      } else {
-        downloadBlob(blob);
+      // 1. Try Screen Capture API if supported by browser
+      if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { displaySurface: 'browser' },
+            audio: false
+          });
+
+          const video = document.createElement('video');
+          video.srcObject = stream;
+          video.muted = true;
+          await video.play();
+
+          await new Promise(r => setTimeout(r, 120));
+
+          const W = video.videoWidth || window.innerWidth;
+          const H = video.videoHeight || window.innerHeight;
+
+          const canvas = document.createElement('canvas');
+          canvas.width  = W;
+          canvas.height = H;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, W, H);
+
+          stream.getTracks().forEach(t => t.stop());
+
+          canvas.toBlob((blob) => {
+            if (blob) downloadBlob(blob);
+          }, 'image/jpeg', 0.95);
+
+          return;
+        } catch (err) {
+          console.warn('getDisplayMedia skipped/fallback:', err);
+        }
       }
+
+      // 2. High-res 3D WebGL Snapshot fallback (UI hidden)
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+
+      const wasXrEnabled = renderer.xr.enabled;
+      renderer.xr.enabled = false;
+
+      if (renderer.xr && renderer.xr.isPresenting) {
+        const xrCam = renderer.xr.getCamera();
+        camera.position.copy(xrCam.position);
+        camera.quaternion.copy(xrCam.quaternion);
+        camera.scale.copy(xrCam.scale);
+      }
+
+      camera.aspect = W / H;
+      camera.updateProjectionMatrix();
+
+      renderer.render(scene, camera);
+      renderer.xr.enabled = wasXrEnabled;
+
+      renderer.domElement.toBlob((blob) => {
+        if (blob) {
+          downloadBlob(blob);
+        } else {
+          setToast('Capture failed.');
+        }
+      }, 'image/png');
+
     } catch (err) {
-      console.error("Capture failed:", err);
+      console.error('Capture failed:', err);
       setToast('Capture failed.');
+    } finally {
+      if (uiWrapper) uiWrapper.style.opacity = '1';
     }
   });
 }
@@ -1519,4 +1689,59 @@ function setToast(msg, persist = false) {
   toastTimer = setTimeout(() => {
     toastEl.classList.add('hidden');
   }, 3000);
+}
+
+
+let lastOrientationAngle = null;
+function updateOrientationClass() {
+  // ── Primary source: screen.orientation.angle ─────────────────────────────
+  // This is the ONLY reliable signal inside a WebXR session.
+  // Chrome freezes window.innerWidth/Height to portrait values once WebXR
+  // starts, so we CANNOT use w > h as the landscape test inside AR mode.
+  const angle =
+    (screen?.orientation?.angle !== undefined ? screen.orientation.angle : null) ??
+    window.orientation ??
+    0;
+
+  // Skip re-applying if nothing changed
+  if (angle === lastOrientationAngle) return;
+  lastOrientationAngle = angle;
+
+  // angle 90 or -90 = landscape-left, angle 270 = landscape-right
+  const isLandscape = angle === 90 || angle === -90 || angle === 270;
+
+  if (isLandscape) {
+    document.body.classList.add('landscape');
+  } else {
+    document.body.classList.remove('landscape');
+  }
+}
+
+function updateLoadingBar(percent, isIndeterminate = false) {
+  if (!loadingBarContainer || !loadingBar) return;
+  
+  loadingBarContainer.classList.remove('hidden');
+  loadingBarContainer.style.opacity = '1';
+  
+  if (isIndeterminate) {
+    loadingBar.classList.add('loading-bar--indeterminate');
+    loadingBar.style.width = '100%';
+  } else {
+    loadingBar.classList.remove('loading-bar--indeterminate');
+    const p = Math.min(Math.max(percent, 0), 100);
+    loadingBar.style.width = `${p}%`;
+  }
+}
+
+function hideLoadingBar() {
+  if (!loadingBarContainer || !loadingBar) return;
+  loadingBar.style.width = '100%';
+  setTimeout(() => {
+    loadingBarContainer.style.opacity = '0';
+    setTimeout(() => {
+      loadingBarContainer.classList.add('hidden');
+      loadingBar.style.width = '0%';
+      loadingBar.classList.remove('loading-bar--indeterminate');
+    }, 300);
+  }, 200);
 }

@@ -47,7 +47,7 @@ html, body {
   height: 100%;
   overflow: hidden;
   font-family: var(--font-body);
-  background: var(--c-bg);
+  background: radial-gradient(circle at 50% 20%, #151522 0%, var(--c-bg) 80%);
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
 }
@@ -102,7 +102,7 @@ html, body {
 
 .eyebrow {
   display: block;
-  font-size: 10.5px;
+  font-size: clamp(9px, 2.5vw, 10.5px);
   font-weight: 600;
   letter-spacing: 2.5px;
   text-transform: uppercase;
@@ -117,7 +117,7 @@ html, body {
 
 .headline {
   font-family: var(--font-display);
-  font-size: 34px;
+  font-size: clamp(24px, 7vw, 34px);
   font-weight: 400;
   letter-spacing: -0.5px;
   color: var(--c-text);
@@ -126,7 +126,7 @@ html, body {
 }
 
 .subline {
-  font-size: 13.5px;
+  font-size: clamp(12px, 3.2vw, 13.5px);
   color: var(--c-muted);
   font-weight: 400;
   line-height: 1.4;
@@ -135,7 +135,7 @@ html, body {
 /* Scanner viewport */
 .scanner-frame {
   position: relative;
-  width: min(72vw, 260px);
+  width: min(72vw, 40vh, 260px);
   aspect-ratio: 1;
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -205,7 +205,7 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: clamp(8px, 1.8vh, 14px);
   margin-top: 8px;
 }
 
@@ -327,6 +327,40 @@ html, body {
   opacity: 0.85;
 }
 
+/* Gallery QR Upload button */
+.btn--gallery {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  border: 1px solid var(--c-border-md);
+  color: var(--c-muted);
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.btn--gallery svg {
+  color: var(--c-accent);
+  flex-shrink: 0;
+}
+
+.btn--gallery:active {
+  transform: scale(0.96);
+  background: rgba(212, 180, 131, 0.1);
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+
 .btn--ghost {
   background: rgba(255, 255, 255, 0.07);
   backdrop-filter: var(--blur-sm);
@@ -371,11 +405,20 @@ html, body {
   inset: 0;
   z-index: 50;
   pointer-events: none;
+}
+
+.ui-wrapper {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   align-items: center;
   padding: max(env(safe-area-inset-top), 45px) 18px max(env(safe-area-inset-bottom), 28px);
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), width 0.12s cubic-bezier(0.16, 1, 0.3, 1), height 0.12s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Top Bar */
@@ -403,8 +446,13 @@ html, body {
   color: var(--c-text);
 }
 
-/* Toast */
+/* Toast (Positioned at top of screen below top bar) */
 .toast {
+  position: absolute;
+  top: calc(max(env(safe-area-inset-top), 20px) + 52px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
   background: var(--c-surface);
   backdrop-filter: var(--blur-sm);
   -webkit-backdrop-filter: var(--blur-sm);
@@ -418,6 +466,12 @@ html, body {
   max-width: 88%;
   pointer-events: auto;
   transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.toast.hidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translate(-50%, -10px) !important;
 }
 
 /* ──────────────────────────────────────────
@@ -610,4 +664,341 @@ html, body {
 
 .toast, .btn, .shutter-btn, .qr-screen, .overlay {
   transition: opacity 0.4s ease, transform 0.4s ease, visibility 0.4s ease;
+}
+
+/* ──────────────────────────────────────────
+   Landscape Adjustments
+   - Split screen layout for QR scanner
+   - Side dock / toolbar for WebAR camera controls
+────────────────────────────────────────── */
+/* QR Screen landscape split */
+body.landscape .screen--qr {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: space-evenly;
+  align-items: center;
+  gap: 24px;
+  padding: 20px 40px;
+}
+
+body.landscape .qr-header {
+  text-align: left;
+  max-width: 32%;
+  padding-top: 0;
+}
+
+body.landscape .headline {
+  font-size: 28px;
+}
+
+body.landscape .scanner-frame {
+  width: min(55vh, 200px);
+  margin: 0;
+}
+
+body.landscape .qr-footer {
+  max-width: 30%;
+  margin-top: 0;
+  gap: 10px;
+}
+
+/* AR Overlay landscape repositioning */
+body.landscape .overlay {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px max(env(safe-area-inset-right), 24px) 20px max(env(safe-area-inset-left), 24px);
+}
+
+body.landscape .top-bar {
+  position: absolute;
+  top: max(env(safe-area-inset-top), 16px);
+  left: max(env(safe-area-inset-left), 20px);
+  right: max(env(safe-area-inset-right), 20px);
+  width: auto;
+}
+
+body.landscape .toast {
+  position: absolute;
+  top: calc(max(env(safe-area-inset-top), 16px) + 48px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 50%;
+  font-size: 12px;
+  padding: 8px 18px;
+}
+
+body.landscape .dock {
+  position: absolute;
+  right: max(env(safe-area-inset-right), 24px);
+  bottom: max(env(safe-area-inset-bottom), 20px);
+  top: auto;
+  transform: none;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+body.landscape .btn--info {
+  padding: 9px 18px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+/* Drawer landscape sidebar adjustments (placing it in charging port location - right side) */
+body.landscape .drawer {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  left: auto;
+  width: 320px;
+  max-width: 90vw;
+  transform: translateX(0);
+}
+
+body.landscape .drawer.hidden {
+  transform: translateX(100%);
+  transform: translateY(0); /* Override portrait translate */
+}
+
+body.landscape .drawer-content {
+  height: 100%;
+  border-top: none;
+  border-left: 1px solid var(--c-border-md);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  padding: 20px 22px max(env(safe-area-inset-bottom), 20px);
+  display: flex;
+  flex-direction: column;
+}
+
+body.landscape .drawer-body {
+  max-height: none;
+  flex: 1;
+  overflow-y: auto;
+}
+
+body.landscape .drawer-handle {
+  display: none;
+}
+
+/* ── Small height screens portrait mode adjustments ── */
+@media (max-height: 580px) and (orientation: portrait) {
+  .screen--qr {
+    padding: max(env(safe-area-inset-top), 12px) 16px max(env(safe-area-inset-bottom), 12px);
+  }
+  .qr-header {
+    margin-bottom: 2px;
+  }
+  .scanner-frame {
+    width: min(65vw, 32vh, 190px);
+  }
+  .qr-footer {
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .overlay {
+    padding-top: max(env(safe-area-inset-top), 20px);
+    padding-bottom: max(env(safe-area-inset-bottom), 16px);
+  }
+  .toast {
+    font-size: 11.5px;
+    padding: 6px 14px;
+  }
+}
+
+/* ──────────────────────────────────────────
+   Premium WebXR AR Button — Large Centered Circle
+   Styled to match the QR home screen gradient aesthetic
+────────────────────────────────────────── */
+#ARButton {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  bottom: auto !important;
+  right: auto !important;
+  transform: translate(-50%, -50%) !important;
+
+  /* Circle geometry */
+  width: 200px !important;
+  height: 200px !important;
+  border-radius: 50% !important;
+  padding: 0 !important;
+
+  /* Gradient background matching the QR home screen */
+  background: radial-gradient(circle at 40% 35%, #1e1e30 0%, #08080f 70%) !important;
+
+  /* Elegant gold ring border */
+  border: 2px solid var(--c-accent) !important;
+
+  /* Text */
+  color: var(--c-accent) !important;
+  font-family: var(--font-body) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 2.5px !important;
+  text-transform: uppercase !important;
+
+  /* Layered glow shadow */
+  box-shadow:
+    0 0 0 1px rgba(212, 180, 131, 0.15),
+    0 0 40px rgba(212, 180, 131, 0.25),
+    0 24px 80px rgba(0, 0, 0, 0.7) !important;
+
+  /* Transitions */
+  transition: all 0.45s var(--ease-out) !important;
+  cursor: pointer !important;
+  z-index: 1000 !important;
+
+  /* Inner layout for icon + text */
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+
+  /* Subtle pulse */
+  animation: arButtonPulse 3s ease-in-out infinite !important;
+}
+
+/* Fake AR-style ring decoration using ::before */
+#ARButton::before {
+  content: '' !important;
+  position: absolute !important;
+  inset: -8px !important;
+  border-radius: 50% !important;
+  border: 1px solid rgba(212, 180, 131, 0.18) !important;
+  pointer-events: none !important;
+  transition: inset 0.45s var(--ease-out) !important;
+}
+
+/* Outer glow ring using ::after */
+#ARButton::after {
+  content: '' !important;
+  position: absolute !important;
+  inset: -18px !important;
+  border-radius: 50% !important;
+  border: 1px solid rgba(212, 180, 131, 0.07) !important;
+  pointer-events: none !important;
+  transition: inset 0.45s var(--ease-out) !important;
+}
+
+#ARButton:hover {
+  background: radial-gradient(circle at 40% 35%, #252538 0%, #0d0d1a 70%) !important;
+  border-color: #fff !important;
+  color: #fff !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.2),
+    0 0 60px rgba(212, 180, 131, 0.4),
+    0 24px 80px rgba(0, 0, 0, 0.8) !important;
+  transform: translate(-50%, -50%) scale(1.06) !important;
+  animation: none !important;
+}
+
+#ARButton:hover::before {
+  inset: -14px !important;
+}
+
+#ARButton:hover::after {
+  inset: -28px !important;
+}
+
+#ARButton:active {
+  transform: translate(-50%, -50%) scale(0.94) !important;
+  animation: none !important;
+}
+
+@keyframes arButtonPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(212, 180, 131, 0.15),
+      0 0 40px rgba(212, 180, 131, 0.25),
+      0 24px 80px rgba(0, 0, 0, 0.7);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(212, 180, 131, 0.25),
+      0 0 60px rgba(212, 180, 131, 0.40),
+      0 24px 80px rgba(0, 0, 0, 0.7);
+  }
+}
+
+body.landscape #ARButton {
+  top: 50% !important;
+  left: 50% !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  width: 160px !important;
+  height: 160px !important;
+  font-size: 10px !important;
+}
+
+/* ──────────────────────────────────────────
+   Premium Loading Progress Bar
+────────────────────────────────────────── */
+.loading-bar-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  z-index: 9999;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.loading-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--c-accent); /* Warm gold */
+  box-shadow: 0 0 8px var(--c-accent);
+  transition: width 0.3s ease, opacity 0.3s ease;
+}
+
+.loading-bar--indeterminate {
+  background: linear-gradient(90deg, transparent, var(--c-accent), transparent);
+  animation: loadingSweep 1.5s infinite linear;
+  width: 100% !important;
+}
+
+@keyframes loadingSweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ──────────────────────────────────────────
+   WebXR DOM Overlay Transparency
+   (Removes default dimming mask applied by the browser to the overlay root)
+────────────────────────────────────────── */
+:xr-overlay {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+#ui-overlay:xr-overlay {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* ──────────────────────────────────────────
+   WebXR UI Overlay — smooth orientation rotation
+   Applied via JS in the render loop when phone rotates in AR mode
+────────────────────────────────────────── */
+#ui-overlay {
+  transition:
+    transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    width     0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    height    0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    left      0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    top       0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Force hide WebXR ARButton whenever QR scan screen is active */
+body:has(#qr-screen:not(.hidden)) #ARButton,
+#qr-screen:not(.hidden) ~ #ARButton {
+  display: none !important;
 }
