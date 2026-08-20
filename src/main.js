@@ -1577,7 +1577,7 @@ function repositionDancer() {
   captureBtnEl?.classList.add('hidden');
   recenterBtnEl?.classList.add('hidden');
 
-  setToast('Aim at a flat surface and tap to place the dancer');
+  setToast('Aim at a flat surface, wait for the circle to appear, then tap to place the dancer');
 }
 
 
