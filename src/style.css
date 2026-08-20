@@ -449,7 +449,7 @@ html, body {
 /* Toast (Positioned at top of screen below top bar) */
 .toast {
   position: absolute;
-  top: calc(max(env(safe-area-inset-top), 20px) + 52px);
+  bottom: calc(max(env(safe-area-inset-bottom), 20px) + 120px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 60;
@@ -471,7 +471,7 @@ html, body {
 .toast.hidden {
   opacity: 0 !important;
   pointer-events: none !important;
-  transform: translate(-50%, -10px) !important;
+  transform: translate(-50%, 10px) !important;
 }
 
 /* ──────────────────────────────────────────
