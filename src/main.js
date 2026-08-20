@@ -109,6 +109,9 @@ let restartQrTimer   = null;
 // Chroma Key / Transparency Modes (0 = Opaque, 1 = Green Screen, 2 = Black BG Key)
 let currentKeyMode = 1;
 
+const RETICLE_ACCENT = 0xd4b483;
+const RETICLE_LIGHT = 0xf3d9a4;
+
 const QR_CAMERA_CONFIG = {
   fps: 8,
   qrbox: { width: 220, height: 220 },
@@ -437,6 +440,65 @@ const exitArBtnEl     = $('exit-ar-btn');
 const loadingBarContainer = $('loading-bar-container');
 const loadingBar          = $('loading-bar');
 
+const ORIENTATION_FADE_OUT_MS = 180;
+let arOrientationFadeToken = 0;
+
+function applyXrOverlayOrientation({ isLandscape, deg = 0, width = '', height = '', left = '', top = '' }) {
+  const uiWrapper = uiWrapperEl || $('ui-wrapper');
+
+  if (isLandscape) {
+    document.body.classList.add('landscape');
+    if (uiWrapper) {
+      uiWrapper.style.width = width;
+      uiWrapper.style.height = height;
+      uiWrapper.style.left = left;
+      uiWrapper.style.top = top;
+      uiWrapper.style.transformOrigin = 'center center';
+      uiWrapper.style.transform = `rotate(${deg}deg)`;
+    }
+    return;
+  }
+
+  document.body.classList.remove('landscape');
+  if (uiWrapper) {
+    uiWrapper.style.width = '';
+    uiWrapper.style.height = '';
+    uiWrapper.style.left = '';
+    uiWrapper.style.top = '';
+    uiWrapper.style.transform = '';
+    uiWrapper.style.transformOrigin = '';
+  }
+}
+
+function fadeToXrOverlayOrientation(layout) {
+  const uiWrapper = uiWrapperEl || $('ui-wrapper');
+  const shouldFade =
+    uiWrapper &&
+    uiOverlayEl &&
+    !uiOverlayEl.classList.contains('hidden');
+
+  if (!shouldFade) {
+    applyXrOverlayOrientation(layout);
+    return;
+  }
+
+  const token = ++arOrientationFadeToken;
+  uiWrapper.classList.add('ui-wrapper--orientation-fading');
+
+  window.setTimeout(() => {
+    if (token !== arOrientationFadeToken) return;
+
+    applyXrOverlayOrientation(layout);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (token !== arOrientationFadeToken) return;
+        uiWrapper.classList.remove('ui-wrapper--orientation-fading');
+      });
+    });
+  }, ORIENTATION_FADE_OUT_MS);
+}
+
 
 // ── Phase 1 : Direct QR Scanner (No Injected UI Widget) ────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -731,6 +793,70 @@ async function startUniversalAR() {
   
 }
 
+function makeReticleMaterial(color, opacity, blending = THREE.NormalBlending) {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending,
+  });
+}
+
+function makeReticleRing(innerRadius, outerRadius, color, opacity, segments = 96) {
+  const geometry = new THREE.RingGeometry(innerRadius, outerRadius, segments).rotateX(-Math.PI / 2);
+  return new THREE.Mesh(geometry, makeReticleMaterial(color, opacity, THREE.AdditiveBlending));
+}
+
+function buildPlacementReticle() {
+  const group = new THREE.Group();
+  group.matrixAutoUpdate = false;
+
+  const glow = makeReticleRing(0.12, 0.25, RETICLE_LIGHT, 0.12, 128);
+  glow.position.y = 0.003;
+  group.add(glow);
+
+  const softHalo = makeReticleRing(0.145, 0.21, RETICLE_ACCENT, 0.22, 128);
+  softHalo.position.y = 0.005;
+  group.add(softHalo);
+
+  const mainRing = makeReticleRing(0.158, 0.178, RETICLE_LIGHT, 0.84, 128);
+  mainRing.position.y = 0.009;
+  group.add(mainRing);
+
+  const innerRing = makeReticleRing(0.075, 0.082, RETICLE_ACCENT, 0.24, 96);
+  innerRing.position.y = 0.01;
+  group.add(innerRing);
+
+  const dot = new THREE.Mesh(
+    new THREE.CircleGeometry(0.012, 32).rotateX(-Math.PI / 2),
+    makeReticleMaterial(RETICLE_LIGHT, 0.62, THREE.AdditiveBlending)
+  );
+  dot.position.y = 0.016;
+  group.add(dot);
+
+  group.userData = { glow, softHalo, mainRing, innerRing, dot };
+  group.visible = false;
+  return group;
+}
+
+function updatePlacementReticle(time) {
+  if (!reticle?.visible) return;
+
+  const { glow, softHalo, mainRing, innerRing, dot } = reticle.userData || {};
+  const pulse = 1 + Math.sin(time * 2.2) * 0.026;
+
+  if (glow) {
+    glow.scale.setScalar(1.02 + Math.sin(time * 2) * 0.035);
+    glow.material.opacity = 0.1 + Math.sin(time * 2.4) * 0.025;
+  }
+  if (softHalo) softHalo.scale.setScalar(pulse);
+  if (mainRing) mainRing.material.opacity = 0.74 + Math.sin(time * 2.2) * 0.08;
+  if (innerRing) innerRing.scale.setScalar(1 + Math.sin(time * 2.2 + 0.6) * 0.018);
+  if (dot) dot.scale.setScalar(1 + Math.sin(time * 2.8 + 0.5) * 0.025);
+}
+
 function initThreeScene() {
   const canvas = $('ar-canvas');
 
@@ -740,7 +866,7 @@ function initThreeScene() {
   renderer = new THREE.WebGLRenderer({
     canvas,
     alpha: true,
-    antialias: false,
+    antialias: true,
     powerPreference: 'high-performance',
     preserveDrawingBuffer: true
   });
@@ -784,12 +910,7 @@ function initThreeScene() {
   scene.add(dir);
 
   // WebXR Hit-Test Reticle
-  reticle = new THREE.Mesh(
-    new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: 0xd4b483 })
-  );
-  reticle.matrixAutoUpdate = false;
-  reticle.visible = false;
+  reticle = buildPlacementReticle();
   scene.add(reticle);
 
   // Controller for select (tap to place)
@@ -813,6 +934,7 @@ function initThreeScene() {
     if (currentGifPlayer) {
       currentGifPlayer.update(performance.now());
     }
+    updatePlacementReticle(clock.getElapsedTime());
 
     if (frame) {
       const referenceSpace = renderer.xr.getReferenceSpace();
@@ -906,7 +1028,6 @@ function initThreeScene() {
       if (xrCam) {
         const worldRight = new THREE.Vector3(1, 0, 0).applyQuaternion(xrCam.quaternion);
         const isXrLandscape = Math.abs(worldRight.y) > 0.25;
-        const uiWrapper = $('ui-wrapper');
 
         if (isXrLandscape !== xrLastLandscape) {
           xrLastLandscape = isXrLandscape;
@@ -919,25 +1040,16 @@ function initThreeScene() {
             const offsetX = (pw - ph) / 2;  // negative → moves left
             const offsetY = (ph - pw) / 2;  // positive → moves down
 
-            document.body.classList.add('landscape');
-            if (uiWrapper) {
-              uiWrapper.style.width  = ph + 'px';
-              uiWrapper.style.height = pw + 'px';
-              uiWrapper.style.left   = offsetX + 'px';
-              uiWrapper.style.top    = offsetY + 'px';
-              uiWrapper.style.transformOrigin = 'center center';
-              uiWrapper.style.transform = `rotate(${deg}deg)`;
-            }
+            fadeToXrOverlayOrientation({
+              isLandscape: true,
+              deg,
+              width: ph + 'px',
+              height: pw + 'px',
+              left: offsetX + 'px',
+              top: offsetY + 'px',
+            });
           } else {
-            document.body.classList.remove('landscape');
-            if (uiWrapper) {
-              uiWrapper.style.width  = '';
-              uiWrapper.style.height = '';
-              uiWrapper.style.left   = '';
-              uiWrapper.style.top    = '';
-              uiWrapper.style.transform = '';
-              uiWrapper.style.transformOrigin = '';
-            }
+            fadeToXrOverlayOrientation({ isLandscape: false });
           }
         }
       }
@@ -1694,6 +1806,7 @@ function setToast(msg, persist = false) {
 
 let lastOrientationAngle = null;
 function updateOrientationClass() {
+  if (renderer?.xr?.isPresenting) return;
   // ── Primary source: screen.orientation.angle ─────────────────────────────
   // This is the ONLY reliable signal inside a WebXR session.
   // Chrome freezes window.innerWidth/Height to portrait values once WebXR

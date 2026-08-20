@@ -28,6 +28,7 @@
   --font-display: 'DM Serif Display', Georgia, serif;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --orientation-fade-duration: 0.18s;
 }
 
 /* ──────────────────────────────────────────
@@ -379,14 +380,19 @@ html, body {
   -webkit-backdrop-filter: var(--blur-md);
   border: 1px solid var(--c-border-md);
   color: var(--c-text);
-  padding: 11px 20px 11px 22px;
+  width: max-content;
+  max-width: calc(100vw - 36px);
+  min-width: 188px;
+  padding: 11px 22px 11px 24px;
   font-size: 13px;
   font-weight: 500;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   pointer-events: auto;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
 }
 
 .chevron-icon {
@@ -418,16 +424,35 @@ html, body {
   justify-content: space-between;
   align-items: center;
   padding: max(env(safe-area-inset-top), 45px) 18px max(env(safe-area-inset-bottom), 28px);
-  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), width 0.12s cubic-bezier(0.16, 1, 0.3, 1), height 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 1;
+  transition: opacity var(--orientation-fade-duration) ease;
+  will-change: opacity;
+}
+
+.ui-wrapper--orientation-fading {
+  opacity: 0;
+}
+
+.ui-wrapper--orientation-fading .top-bar,
+.ui-wrapper--orientation-fading .toast,
+.ui-wrapper--orientation-fading .drawer,
+.ui-wrapper--orientation-fading .drawer-content,
+.ui-wrapper--orientation-fading .dock,
+.ui-wrapper--orientation-fading .btn--info {
+  transition: none !important;
 }
 
 /* Top Bar */
 .top-bar {
-  width: 100%;
+  position: absolute;
+  top: max(env(safe-area-inset-top), 45px);
+  left: 18px;
+  right: 18px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   pointer-events: auto;
+  will-change: top, left, right, transform;
 }
 
 .brand-tag {
@@ -609,11 +634,16 @@ html, body {
    Bottom Dock
 ────────────────────────────────────────── */
 .dock {
+  position: absolute;
+  bottom: max(env(safe-area-inset-bottom), 28px);
+  right: 50%;
+  transform: translateX(50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
   pointer-events: auto;
+  will-change: transform, right, bottom, gap;
 }
 
 /* Shutter Button */
@@ -669,23 +699,23 @@ html, body {
   transform: scale(0.95);
 }
 
-/* Enhanced layout transitions for smooth orientation changes */
+/* Enhanced layout transitions for smooth visibility changes */
 .toast, .btn, .shutter-btn, .qr-screen, .overlay,
-.qr-header, .headline, .scanner-frame, .qr-footer, 
-.top-bar, .dock, .drawer, .drawer-content, .screen--qr {
+.qr-header, .headline, .scanner-frame, .qr-footer,
+.drawer, .drawer-content, .screen--qr {
   transition: opacity 0.4s ease, 
               visibility 0.4s ease,
-              transform 0.5s var(--ease-out),
-              top 0.5s var(--ease-out), 
-              bottom 0.5s var(--ease-out), 
-              left 0.5s var(--ease-out), 
-              right 0.5s var(--ease-out), 
-              width 0.5s var(--ease-out), 
-              height 0.5s var(--ease-out), 
-              max-width 0.5s var(--ease-out),
-              margin 0.5s var(--ease-out), 
-              padding 0.5s var(--ease-out),
-              border-radius 0.5s var(--ease-out);
+              transform 0.32s var(--ease-out);
+}
+
+.btn--info {
+  transition:
+    opacity var(--orientation-fade-duration) ease,
+    visibility var(--orientation-fade-duration) ease,
+    transform 0.18s ease,
+    background 0.24s ease,
+    border-color 0.24s ease,
+    box-shadow 0.24s ease;
 }
 
 /* ──────────────────────────────────────────
@@ -746,7 +776,7 @@ body.landscape .dock {
   right: max(env(safe-area-inset-right), 24px);
   bottom: max(env(safe-area-inset-bottom), 20px);
   top: auto;
-  transform: none;
+  transform: translateX(0);
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -754,12 +784,23 @@ body.landscape .dock {
 }
 
 body.landscape .btn--info {
-  padding: 9px 18px;
+  min-width: 186px;
+  max-width: calc(100vw - 48px);
+  padding: 10px 24px 10px 26px;
   font-size: 12.5px;
   font-weight: 500;
   border-radius: var(--radius-pill);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
   white-space: nowrap;
+}
+
+@media (max-width: 340px) {
+  .btn--info {
+    min-width: 174px;
+    padding-inline: 18px;
+    gap: 8px;
+    font-size: 12.5px;
+  }
 }
 
 /* Drawer landscape sidebar adjustments (placing it in charging port location - right side) */
@@ -775,7 +816,6 @@ body.landscape .drawer {
 
 body.landscape .drawer.hidden {
   transform: translateX(100%);
-  transform: translateY(0); /* Override portrait translate */
 }
 
 body.landscape .drawer-content {
