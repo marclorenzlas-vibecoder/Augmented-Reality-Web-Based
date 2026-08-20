@@ -449,23 +449,30 @@ html, body {
 /* Toast (Positioned at top of screen below top bar) */
 .toast {
   position: absolute;
-  bottom: calc(max(env(safe-area-inset-bottom), 20px) + 120px);
+  bottom: calc(max(env(safe-area-inset-bottom), 20px) + 75px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 60;
-  background: var(--c-surface);
-  backdrop-filter: var(--blur-sm);
-  -webkit-backdrop-filter: var(--blur-sm);
-  border: 1px solid var(--c-border-md);
+  
+  /* Premium Glassmorphism */
+  background: rgba(13, 13, 22, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  
   color: var(--c-text);
-  padding: 11px 22px;
+  padding: 14px 32px; /* Increased horizontal and vertical padding slightly */
   border-radius: var(--radius-pill);
-  font-size: 13px;
-  font-weight: 400;
+  font-size: 14px;
+  font-weight: 500;
   text-align: center;
-  max-width: 88%;
+  width: max-content; /* Make the pill wrap tightly around the wider padding/text */
+  max-width: 92%;
   pointer-events: auto;
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition: opacity 0.4s var(--ease-out), transform 0.4s var(--ease-out);
+  letter-spacing: 0.3px;
+  line-height: 1.4;
 }
 
 .toast.hidden {
@@ -662,8 +669,23 @@ html, body {
   transform: scale(0.95);
 }
 
-.toast, .btn, .shutter-btn, .qr-screen, .overlay {
-  transition: opacity 0.4s ease, transform 0.4s ease, visibility 0.4s ease;
+/* Enhanced layout transitions for smooth orientation changes */
+.toast, .btn, .shutter-btn, .qr-screen, .overlay,
+.qr-header, .headline, .scanner-frame, .qr-footer, 
+.top-bar, .dock, .drawer, .drawer-content, .screen--qr {
+  transition: opacity 0.4s ease, 
+              visibility 0.4s ease,
+              transform 0.5s var(--ease-out),
+              top 0.5s var(--ease-out), 
+              bottom 0.5s var(--ease-out), 
+              left 0.5s var(--ease-out), 
+              right 0.5s var(--ease-out), 
+              width 0.5s var(--ease-out), 
+              height 0.5s var(--ease-out), 
+              max-width 0.5s var(--ease-out),
+              margin 0.5s var(--ease-out), 
+              padding 0.5s var(--ease-out),
+              border-radius 0.5s var(--ease-out);
 }
 
 /* ──────────────────────────────────────────
@@ -718,15 +740,6 @@ body.landscape .top-bar {
   width: auto;
 }
 
-body.landscape .toast {
-  position: absolute;
-  top: calc(max(env(safe-area-inset-top), 16px) + 48px);
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 50%;
-  font-size: 12px;
-  padding: 8px 18px;
-}
 
 body.landscape .dock {
   position: absolute;
