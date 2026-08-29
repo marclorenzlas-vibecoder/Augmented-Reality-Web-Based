@@ -214,6 +214,16 @@ function createBillboardMaterial(texture) {
 let floorGridMesh = null;
 let floorGridMaterial = null;
 let lastHitPoseMatrix = null;
+let detectedPlaneGrids = new Map();
+let planeDetectionAvailable = false;
+
+const PLANE_GRID_SURFACE_OFFSET = 0.003;
+const hitTestMatrix = new THREE.Matrix4();
+const planeInverseMatrix = new THREE.Matrix4();
+const planePoseMatrix = new THREE.Matrix4();
+const localHitPoint = new THREE.Vector3();
+const planeLocalHitPoint = new THREE.Vector3();
+const planeWorldNormal = new THREE.Vector3();
 
 const FloorGridShader = {
   uniforms: {
@@ -222,12 +232,10 @@ const FloorGridShader = {
     uColorSecondary: { value: new THREE.Color(0x9e7c4f) }  // Deep gold theme accent
   },
   vertexShader: `
-    varying vec2 vUv;
-    varying vec3 vWorldPosition;
+    varying vec3 vPlanePosition;
     void main() {
-      vUv = uv;
+      vPlanePosition = position;
       vec4 worldPosition = modelMatrix * vec4(position, 1.0);
-      vWorldPosition = worldPosition.xyz;
       gl_Position = projectionMatrix * viewMatrix * worldPosition;
     }
   `,
@@ -235,26 +243,17 @@ const FloorGridShader = {
     uniform float uTime;
     uniform vec3 uColor;
     uniform vec3 uColorSecondary;
-    varying vec2 vUv;
-    varying vec3 vWorldPosition;
+    varying vec3 vPlanePosition;
 
     void main() {
-      // Distance from center of expansive floor plane for smooth radial edge fade
-      vec2 centerUv = vUv - vec2(0.5);
-      float dist = length(centerUv);
-
-      if (dist > 0.5) {
-        discard;
-      }
-
-      // Fixed World-Space small grid squares (tight 15cm x 15cm grid pattern)
-      vec2 gridWorld = vWorldPosition.xz * 6.0;
+      // Local plane coordinates keep the pattern aligned to each detected surface.
+      vec2 gridWorld = vPlanePosition.xz * 6.0;
       vec2 grid = abs(fract(gridWorld - 0.5) - 0.5) / fwidth(gridWorld);
       float line = min(grid.x, grid.y);
       float gridAlpha = 1.0 - min(line, 1.0);
 
       // Fine secondary grid lines
-      vec2 fineGridWorld = vWorldPosition.xz * 18.0;
+      vec2 fineGridWorld = vPlanePosition.xz * 18.0;
       vec2 fineGrid = abs(fract(fineGridWorld - 0.5) - 0.5) / fwidth(fineGridWorld);
       float fineLine = min(fineGrid.x, fineGrid.y);
       float fineGridAlpha = (1.0 - min(fineLine, 1.0)) * 0.3;
@@ -262,18 +261,15 @@ const FloorGridShader = {
       float totalGrid = max(gridAlpha, fineGridAlpha);
 
       // Pulsating wave animation radiating across floor plane
-      float distWorld = length(vWorldPosition.xz);
+      float distWorld = length(vPlanePosition.xz);
       float wave = sin(distWorld * 3.5 - uTime * 3.5) * 0.5 + 0.5;
       float timePulse = sin(uTime * 2.5) * 0.2 + 0.8;
-
-      // Soft vignette fade towards outer edges of floor plane
-      float radialFade = 1.0 - smoothstep(0.35, 0.5, dist);
 
       // Color composition matching warm gold theme
       vec3 gridColor = mix(uColorSecondary, uColor, wave * 0.75);
       vec3 finalColor = gridColor * (totalGrid * 1.6);
 
-      float alpha = (totalGrid * 0.95 + wave * 0.25) * radialFade * timePulse;
+      float alpha = (totalGrid * 0.95 + wave * 0.25) * timePulse;
 
       if (alpha < 0.02) discard;
 
@@ -283,9 +279,6 @@ const FloorGridShader = {
 };
 
 function buildPulsatingFloorGrid() {
-  const geometry = new THREE.PlaneGeometry(16, 16, 64, 64);
-  geometry.rotateX(-Math.PI / 2);
-
   floorGridMaterial = new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
@@ -299,9 +292,195 @@ function buildPulsatingFloorGrid() {
     depthWrite: false
   });
 
-  floorGridMesh = new THREE.Mesh(geometry, floorGridMaterial);
-  floorGridMesh.position.set(0, 0, 0);
+  floorGridMesh = new THREE.Group();
+  floorGridMesh.visible = false;
   return floorGridMesh;
+}
+
+function buildPlaneGridGeometry(polygon) {
+  if (!polygon || polygon.length < 3) return null;
+
+  const points = [];
+  for (const point of polygon) {
+    const previous = points[points.length - 1];
+    if (
+      previous &&
+      Math.abs(previous.x - point.x) < 0.0001 &&
+      Math.abs(previous.z - point.z) < 0.0001
+    ) {
+      continue;
+    }
+    points.push(point);
+  }
+
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (
+    points.length > 2 &&
+    Math.abs(first.x - last.x) < 0.0001 &&
+    Math.abs(first.z - last.z) < 0.0001
+  ) {
+    points.pop();
+  }
+
+  if (points.length < 3) return null;
+
+  const vertices = [];
+  const uvs = [];
+  const contour = [];
+
+  for (const point of points) {
+    vertices.push(point.x, point.y + PLANE_GRID_SURFACE_OFFSET, point.z);
+    uvs.push(point.x, point.z);
+    contour.push(new THREE.Vector2(point.x, point.z));
+  }
+
+  let triangles = THREE.ShapeUtils.triangulateShape(contour, []);
+  if (!triangles.length) {
+    triangles = [];
+    for (let i = 2; i < points.length; i++) {
+      triangles.push([0, i - 1, i]);
+    }
+  }
+
+  const indices = [];
+  for (const triangle of triangles) {
+    indices.push(triangle[0], triangle[1], triangle[2]);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+  geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+  geometry.setIndex(indices);
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function disposeDetectedPlaneGrid(context) {
+  if (!context) return;
+  floorGridMesh?.remove(context.mesh);
+  context.mesh.geometry?.dispose();
+}
+
+function resetDetectedPlaneGrids() {
+  detectedPlaneGrids.forEach(disposeDetectedPlaneGrid);
+  detectedPlaneGrids.clear();
+  planeDetectionAvailable = false;
+  if (floorGridMesh) floorGridMesh.visible = false;
+}
+
+function pointInDetectedPlanePolygon(point, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x;
+    const zi = polygon[i].z;
+    const xj = polygon[j].x;
+    const zj = polygon[j].z;
+    const intersects = ((zi > point.z) !== (zj > point.z)) &&
+      (point.x < ((xj - xi) * (point.z - zi)) / (zj - zi) + xi);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function planeContainsHitMatrix(context, matrixArray) {
+  if (!context || !matrixArray || !context.polygon || context.polygon.length < 3) {
+    return false;
+  }
+
+  hitTestMatrix.fromArray(matrixArray);
+  localHitPoint.setFromMatrixPosition(hitTestMatrix);
+  planeInverseMatrix.copy(context.mesh.matrix).invert();
+  planeLocalHitPoint.copy(localHitPoint).applyMatrix4(planeInverseMatrix);
+
+  return Math.abs(planeLocalHitPoint.y) <= 0.08 &&
+    pointInDetectedPlanePolygon(planeLocalHitPoint, context.polygon);
+}
+
+function isHorizontalDetectedPlane(plane, planePose) {
+  if (plane.orientation && plane.orientation !== 'horizontal') return false;
+
+  planePoseMatrix.fromArray(planePose.transform.matrix);
+  planeWorldNormal.setFromMatrixColumn(planePoseMatrix, 1).normalize();
+  return Math.abs(planeWorldNormal.y) > 0.85;
+}
+
+function updateDetectedPlaneGrids(frame, referenceSpace, hitMatrix = null) {
+  let detectedPlanes = null;
+  try {
+    detectedPlanes = frame.detectedPlanes;
+  } catch (err) {
+    detectedPlanes = null;
+  }
+  planeDetectionAvailable = !!detectedPlanes;
+
+  if (!planeDetectionAvailable) {
+    if (floorGridMesh) floorGridMesh.visible = false;
+    return false;
+  }
+
+  detectedPlaneGrids.forEach((context, plane) => {
+    if (!detectedPlanes.has(plane)) {
+      disposeDetectedPlaneGrid(context);
+      detectedPlaneGrids.delete(plane);
+    }
+  });
+
+  let visiblePlaneCount = 0;
+  let activePlaneContext = null;
+
+  detectedPlanes.forEach((plane) => {
+    const planePose = frame.getPose(plane.planeSpace, referenceSpace);
+    let context = detectedPlaneGrids.get(plane);
+
+    if (!planePose || !isHorizontalDetectedPlane(plane, planePose)) {
+      if (context) context.mesh.visible = false;
+      return;
+    }
+
+    if (!context) {
+      const geometry = buildPlaneGridGeometry(plane.polygon);
+      if (!geometry) return;
+
+      const mesh = new THREE.Mesh(geometry, floorGridMaterial);
+      mesh.matrixAutoUpdate = false;
+      mesh.renderOrder = 1;
+      floorGridMesh?.add(mesh);
+
+      context = {
+        mesh,
+        polygon: plane.polygon,
+        timestamp: plane.lastChangedTime
+      };
+      detectedPlaneGrids.set(plane, context);
+    } else if (context.timestamp < plane.lastChangedTime) {
+      const geometry = buildPlaneGridGeometry(plane.polygon);
+      if (geometry) {
+        context.mesh.geometry.dispose();
+        context.mesh.geometry = geometry;
+        context.polygon = plane.polygon;
+        context.timestamp = plane.lastChangedTime;
+      }
+    }
+
+    context.mesh.matrix.fromArray(planePose.transform.matrix);
+    context.mesh.visible = false;
+
+    if (!activePlaneContext && !isPlaced && planeContainsHitMatrix(context, hitMatrix)) {
+      activePlaneContext = context;
+    }
+  });
+
+  if (activePlaneContext) {
+    activePlaneContext.mesh.visible = true;
+    visiblePlaneCount = 1;
+  }
+
+  if (floorGridMesh) {
+    floorGridMesh.visible = !isPlaced && visiblePlaneCount > 0;
+  }
+
+  return visiblePlaneCount > 0;
 }
 
 function setMediaReady(ready) {
@@ -975,7 +1154,7 @@ function initThreeScene() {
   // Create an AR Button that triggers the WebXR session with Environmental Occlusion & Depth Sensing
   const sessionInit = {
     requiredFeatures: ['hit-test'],
-    optionalFeatures: ['dom-overlay', 'depth-sensing', 'mesh-detection'],
+    optionalFeatures: ['dom-overlay', 'depth-sensing', 'mesh-detection', 'plane-detection'],
     depthSensing: {
       usagePreference: ['gpu-optimized', 'cpu-optimized'],
       dataFormatPreference: ['luminance-alpha', 'float32']
@@ -1082,6 +1261,7 @@ function initThreeScene() {
           hitTestSource = null;
           isPlaced = false;
           lastHitPoseMatrix = null;
+          resetDetectedPlaneGrids();
           xrLastLandscape = null; // reset so next session re-evaluates
           if (floorGridMesh) floorGridMesh.visible = false;
           if (dancerGroup) dancerGroup.visible = false;
@@ -1125,6 +1305,7 @@ function initThreeScene() {
         hitTestSourceRequested = true;
       }
 
+      let currentHitMatrix = null;
       if (hitTestSource) {
         const hitTestResults = frame.getHitTestResults(hitTestSource);
 
@@ -1132,30 +1313,17 @@ function initThreeScene() {
           const hit = hitTestResults[0];
           const xrRefSpace = renderer.xr.getReferenceSpace();
           const pose = hit.getPose(xrRefSpace);
-          lastHitPoseMatrix = pose.transform.matrix;
 
-          const hitPosition = new THREE.Vector3();
-          const hitQuaternion = new THREE.Quaternion();
-          const hitScale = new THREE.Vector3();
-          const mat = new THREE.Matrix4().fromArray(pose.transform.matrix);
-          mat.decompose(hitPosition, hitQuaternion, hitScale);
-
-          // Anchor fixed floor plane grid flat at detected floor Y height
-          floorGridMesh.position.set(0, hitPosition.y, 0);
-
-          if (!isPlaced) {
-            floorGridMesh.visible = true; // Fixed grid covers detected floor plane!
-          } else {
-            floorGridMesh.visible = false; // Disappears after placement!
-          }
-        } else {
-          if (!isPlaced && lastHitPoseMatrix) {
-            floorGridMesh.visible = true;
-          } else {
-            floorGridMesh.visible = false;
+          if (pose) {
+            currentHitMatrix = Array.from(pose.transform.matrix);
           }
         }
       }
+
+      const hasActivePlaneGrid = updateDetectedPlaneGrids(frame, referenceSpace, currentHitMatrix);
+      lastHitPoseMatrix = currentHitMatrix && (!planeDetectionAvailable || hasActivePlaneGrid)
+        ? currentHitMatrix
+        : null;
     }
 
     if (isPlaced) {
@@ -1880,7 +2048,7 @@ function repositionDancer() {
 
   // Re-enable pulsating floor grid when repositioning!
   if (floorGridMesh) {
-    floorGridMesh.visible = true;
+    floorGridMesh.visible = detectedPlaneGrids.size > 0;
   }
 
   historyModalEl?.classList.add('hidden');
