@@ -207,6 +207,100 @@ function createBillboardMaterial(texture) {
   return material;
 }
 
+// ── Pulsating Grid Floor Shader & Builder ───────────────────────────────
+let floorGridMesh = null;
+let floorGridMaterial = null;
+let lastHitPoseMatrix = null;
+
+const FloorGridShader = {
+  uniforms: {
+    uTime: { value: 0 },
+    uColor: { value: new THREE.Color(0xd4b483) },          // Warm gold theme primary
+    uColorSecondary: { value: new THREE.Color(0x9e7c4f) }  // Deep gold theme accent
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    varying vec3 vWorldPosition;
+    void main() {
+      vUv = uv;
+      vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+      vWorldPosition = worldPosition.xyz;
+      gl_Position = projectionMatrix * viewMatrix * worldPosition;
+    }
+  `,
+  fragmentShader: `
+    uniform float uTime;
+    uniform vec3 uColor;
+    uniform vec3 uColorSecondary;
+    varying vec2 vUv;
+    varying vec3 vWorldPosition;
+
+    void main() {
+      // Distance from center of expansive floor plane for smooth radial edge fade
+      vec2 centerUv = vUv - vec2(0.5);
+      float dist = length(centerUv);
+
+      if (dist > 0.5) {
+        discard;
+      }
+
+      // Fixed World-Space small grid squares (tight 15cm x 15cm grid pattern)
+      vec2 gridWorld = vWorldPosition.xz * 6.0;
+      vec2 grid = abs(fract(gridWorld - 0.5) - 0.5) / fwidth(gridWorld);
+      float line = min(grid.x, grid.y);
+      float gridAlpha = 1.0 - min(line, 1.0);
+
+      // Fine secondary grid lines
+      vec2 fineGridWorld = vWorldPosition.xz * 18.0;
+      vec2 fineGrid = abs(fract(fineGridWorld - 0.5) - 0.5) / fwidth(fineGridWorld);
+      float fineLine = min(fineGrid.x, fineGrid.y);
+      float fineGridAlpha = (1.0 - min(fineLine, 1.0)) * 0.3;
+
+      float totalGrid = max(gridAlpha, fineGridAlpha);
+
+      // Pulsating wave animation radiating across floor plane
+      float distWorld = length(vWorldPosition.xz);
+      float wave = sin(distWorld * 3.5 - uTime * 3.5) * 0.5 + 0.5;
+      float timePulse = sin(uTime * 2.5) * 0.2 + 0.8;
+
+      // Soft vignette fade towards outer edges of floor plane
+      float radialFade = 1.0 - smoothstep(0.35, 0.5, dist);
+
+      // Color composition matching warm gold theme
+      vec3 gridColor = mix(uColorSecondary, uColor, wave * 0.75);
+      vec3 finalColor = gridColor * (totalGrid * 1.6);
+
+      float alpha = (totalGrid * 0.95 + wave * 0.25) * radialFade * timePulse;
+
+      if (alpha < 0.02) discard;
+
+      gl_FragColor = vec4(finalColor * 1.3, alpha);
+    }
+  `
+};
+
+function buildPulsatingFloorGrid() {
+  const geometry = new THREE.PlaneGeometry(16, 16, 64, 64);
+  geometry.rotateX(-Math.PI / 2);
+
+  floorGridMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uColor: { value: new THREE.Color(0xd4b483) },
+      uColorSecondary: { value: new THREE.Color(0x9e7c4f) }
+    },
+    vertexShader: FloorGridShader.vertexShader,
+    fragmentShader: FloorGridShader.fragmentShader,
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+
+  floorGridMesh = new THREE.Mesh(geometry, floorGridMaterial);
+  floorGridMesh.position.set(0, 0, 0);
+  return floorGridMesh;
+}
+
 function setMediaReady(ready) {
   isMediaReady = ready;
   if (videoMesh) {
@@ -752,10 +846,14 @@ function initThreeScene() {
   renderer.xr.setFramebufferScaleFactor?.(0.8);
   renderer.xr.setFoveation?.(1);
   
-  // Create an AR Button that triggers the WebXR session
+  // Create an AR Button that triggers the WebXR session with Environmental Occlusion & Depth Sensing
   const sessionInit = {
     requiredFeatures: ['hit-test'],
-    optionalFeatures: ['dom-overlay'],
+    optionalFeatures: ['dom-overlay', 'depth-sensing', 'mesh-detection'],
+    depthSensing: {
+      usagePreference: ['gpu-optimized', 'cpu-optimized'],
+      dataFormatPreference: ['luminance-alpha', 'float32']
+    },
     domOverlay: { root: document.getElementById('ui-overlay') }
   };
   const arButton = ARButton.createButton(renderer, sessionInit);
@@ -783,30 +881,57 @@ function initThreeScene() {
   dir.position.set(2, 4, 3);
   scene.add(dir);
 
-  // WebXR Hit-Test Reticle
-  reticle = new THREE.Mesh(
-    new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: 0xd4b483 })
-  );
-  reticle.matrixAutoUpdate = false;
-  reticle.visible = false;
-  scene.add(reticle);
-
   // Controller for select (tap to place)
   controller = renderer.xr.getController(0);
   controller.addEventListener('select', onSelect);
   scene.add(controller);
 
-  // 2D Video / GIF Billboard (hidden until placed)
+  // Pulsating Grid Floor (acts as plane indicator & ground plane)
+  floorGridMesh = buildPulsatingFloorGrid();
+  floorGridMesh.visible = false;
+  scene.add(floorGridMesh);
+
+  // 3D Object / Video Billboard container (hidden until user taps on the detected floor grid)
   dancerGroup = buildVideoBillboard();
   dancerGroup.visible = false;
   scene.add(dancerGroup);
+
+  // Fallback pointer down on canvas for non-XR desktop / mobile touch interaction
+  canvas.addEventListener('pointerdown', (e) => {
+    if (renderer && renderer.xr && renderer.xr.isPresenting) return;
+    if (e.target !== canvas) return;
+    if (isPlaced) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, camera);
+    const floorY = floorGridMesh ? floorGridMesh.position.y : 0;
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorY);
+    const targetPoint = new THREE.Vector3();
+
+    if (raycaster.ray.intersectPlane(groundPlane, targetPoint)) {
+      dancerGroup.position.copy(targetPoint);
+      dancerGroup.userData.baseY = targetPoint.y;
+      placeDancer();
+    }
+  });
 
   // Render loop using setAnimationLoop for WebXR compatibility
   const clock = new THREE.Clock();
 
   const renderLoop = (timestamp, frame) => {
     const delta = clock.getDelta();
+    const elapsed = clock.getElapsedTime();
+
+    if (floorGridMaterial) {
+      floorGridMaterial.uniforms.uTime.value = elapsed;
+    }
+
     if (mixer) {
       mixer.update(delta);
     }
@@ -829,8 +954,9 @@ function initThreeScene() {
           hitTestSourceRequested = false;
           hitTestSource = null;
           isPlaced = false;
+          lastHitPoseMatrix = null;
           xrLastLandscape = null; // reset so next session re-evaluates
-          if (reticle) reticle.visible = false;
+          if (floorGridMesh) floorGridMesh.visible = false;
           if (dancerGroup) dancerGroup.visible = false;
 
           // Reset overlay rotation back to portrait
@@ -877,17 +1003,30 @@ function initThreeScene() {
 
         if (hitTestResults.length > 0) {
           const hit = hitTestResults[0];
-          const pose = hit.getPose(referenceSpace);
+          const xrRefSpace = renderer.xr.getReferenceSpace();
+          const pose = hit.getPose(xrRefSpace);
+          lastHitPoseMatrix = pose.transform.matrix;
 
-          // Only show reticle if we haven't placed the dancer yet
+          const hitPosition = new THREE.Vector3();
+          const hitQuaternion = new THREE.Quaternion();
+          const hitScale = new THREE.Vector3();
+          const mat = new THREE.Matrix4().fromArray(pose.transform.matrix);
+          mat.decompose(hitPosition, hitQuaternion, hitScale);
+
+          // Anchor fixed floor plane grid flat at detected floor Y height
+          floorGridMesh.position.set(0, hitPosition.y, 0);
+
           if (!isPlaced) {
-            reticle.visible = true;
-            reticle.matrix.fromArray(pose.transform.matrix);
+            floorGridMesh.visible = true; // Fixed grid covers detected floor plane!
           } else {
-            reticle.visible = false;
+            floorGridMesh.visible = false; // Disappears after placement!
           }
         } else {
-          reticle.visible = false;
+          if (!isPlaced && lastHitPoseMatrix) {
+            floorGridMesh.visible = true;
+          } else {
+            floorGridMesh.visible = false;
+          }
         }
       }
     }
@@ -1438,8 +1577,56 @@ function applyTextureToBillboard(tex) {
   videoMesh.position.set(0, h / 2, 0);
 }
 
+function createGroundOcclusionShadow() {
+  const geo = new THREE.PlaneGeometry(1.5, 1.5);
+  geo.rotateX(-Math.PI / 2);
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(0x000000) },
+      uOpacity: { value: 0.55 }
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      varying vec2 vUv;
+
+      void main() {
+        vec2 center = vUv - vec2(0.5);
+        float dist = length(center);
+
+        if (dist > 0.5) discard;
+
+        float coreShadow = (1.0 - smoothstep(0.0, 0.16, dist)) * 0.7;
+        float outerShadow = (1.0 - smoothstep(0.1, 0.5, dist)) * 0.35;
+
+        float alpha = (coreShadow + outerShadow) * uOpacity;
+        gl_FragColor = vec4(uColor, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(0, 0.002, 0);
+  return mesh;
+}
+
 function buildVideoBillboard() {
   const group = new THREE.Group();
+
+  // Add realistic ground contact occlusion shadow plane
+  const occlusionShadow = createGroundOcclusionShadow();
+  group.add(occlusionShadow);
 
   let mat;
   let aspect = VIDEO_ASPECT;
@@ -1517,23 +1704,20 @@ function buildParticles() {
 function onSelect() {
   if (isPlaced) return;
 
-  if (!isMediaReady && hasDecodedVideoFrame()) {
-    markVideoReady(mediaLoadToken);
-  }
-
-  if (!isMediaReady) {
-    const readyState = dancerVideo ? dancerVideo.readyState : 'no video';
-    setToast(`Media is still loading (${readyState}): ${currentMediaUrl || 'no QR media'}`, true);
-    return;
-  }
-
-  if (reticle && reticle.visible) {
+  if (lastHitPoseMatrix) {
     if (dancerVideo && dancerVideo.paused) {
       dancerVideo.play().catch(() => {});
     }
     
-    dancerGroup.position.setFromMatrixPosition(reticle.matrix);
-    dancerGroup.userData.baseY = dancerGroup.position.y;
+    const hitPosition = new THREE.Vector3();
+    const hitQuaternion = new THREE.Quaternion();
+    const hitScale = new THREE.Vector3();
+
+    const mat = new THREE.Matrix4().fromArray(lastHitPoseMatrix);
+    mat.decompose(hitPosition, hitQuaternion, hitScale);
+
+    dancerGroup.position.copy(hitPosition);
+    dancerGroup.userData.baseY = hitPosition.y;
 
     const cameraWorldPosition = new THREE.Vector3();
     camera.getWorldPosition(cameraWorldPosition);
@@ -1547,19 +1731,24 @@ function onSelect() {
     
     placeDancer();
   } else {
-    setToast('Please point at a flat surface to place');
+    setToast('Point camera at floor surface to detect plane grid');
   }
 }
 
 function placeDancer() {
   isPlaced = true;
+
+  // Reveal 3D Object / Video content
   dancerGroup.visible = true;
 
-  if (reticle) reticle.visible = false;
+  // The pulsating floor grid DISAPPEARS once 3D object is placed!
+  if (floorGridMesh) {
+    floorGridMesh.visible = false;
+  }
 
   dancerVideo?.play().catch(() => {});
 
-  setToast('Anchor placed'); // Show bottom UI
+  setToast('3D Object placed on floor');
   setTimeout(() => {
     toastEl?.classList.add('hidden');
     infoToggleBtnEl?.classList.remove('hidden');
@@ -1572,12 +1761,17 @@ function repositionDancer() {
   isPlaced = false;
   dancerGroup.visible = false;
 
+  // Re-enable pulsating floor grid when repositioning!
+  if (floorGridMesh) {
+    floorGridMesh.visible = true;
+  }
+
   historyModalEl?.classList.add('hidden');
   infoToggleBtnEl?.classList.add('hidden');
   captureBtnEl?.classList.add('hidden');
   recenterBtnEl?.classList.add('hidden');
 
-  setToast('Aim at a flat surface and tap to place the dancer');
+  setToast('Point at floor plane and tap anywhere on grid to place');
 }
 
 
