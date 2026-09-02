@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Tourism AR — Bacolod City</title>
+    <title>Bacolod Tourism AR — City of Smiles</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/src/style.css" />
     <script type="module" src="/src/main.js"></script>
   </head>
   <body>
-    <!-- Sleek visual loading progress indicator -->
+    <!-- Visual loading progress indicator -->
     <div id="loading-bar-container" class="loading-bar-container hidden">
       <div id="loading-bar" class="loading-bar"></div>
     </div>
@@ -21,35 +21,44 @@
       style="position: fixed; top: -9999px; left: -9999px; width: 10px; height: 10px; opacity: 0; pointer-events: none;">
     </video>
 
-
     <!-- Three.js WebGL overlay -->
     <canvas id="ar-canvas"></canvas>
 
-    <!-- ── SCREEN 1 : Direct QR Scanner ── -->
+    <!-- ── SCREEN 1 : Bacolod Tourism QR Scanner ── -->
     <div id="qr-screen" class="screen screen--qr">
-      <header class="qr-header">
-        <p class="eyebrow">Bacolod City · Philippines</p>
-        <h1 class="headline">Tourism AR</h1>
-        <p class="subline">Align QR code inside frame to launch</p>
-      </header>
+      <!-- Top Bacolod Mosaic Ribbon -->
+      <div class="tribal-ribbon tribal-ribbon--top" aria-hidden="true"></div>
 
-      <!-- Scanner Box with Corner Guides and Scanline -->
+      <!-- Top Brand Header for Bacolod City -->
+      <header class="qr-header">
+        <div class="city-badge">
+          <span class="city-badge-dot"></span>
+          <span>Bacolod City · City of Smiles</span>
+        </div>
+        <h1 class="qr-title">Bacolod Tourism <span class="title-accent">AR</span></h1>
+        <p class="qr-desc">Scan official tourist QR codes or upload an image to explore Bacolod in Augmented Reality.</p>
+      </header>
       <div class="scanner-frame">
         <div id="qr-reader"></div>
         <div class="scan-beam"></div>
+        
+        <!-- Multi-color Corner Markers -->
         <div class="corner corner--tl"></div>
         <div class="corner corner--tr"></div>
         <div class="corner corner--bl"></div>
         <div class="corner corner--br"></div>
+
+        <!-- Inner Target Crosshair -->
+        <div class="target-crosshair"></div>
       </div>
 
       <!-- Controls Positioned Cleanly Outside the Scanner -->
       <div class="qr-footer">
-        <div id="qr-controls-container" style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 14px;">
+        <div id="qr-controls-container" style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px;">
 
-          <div class="status-line">
+          <div class="status-badge">
             <span class="dot dot--active"></span>
-            <span id="qr-status-text">Scanning for QR code</span>
+            <span id="qr-status-text">Align QR code inside frame</span>
           </div>
 
           <!-- Gallery upload: hidden file input + styled label trigger -->
@@ -61,66 +70,99 @@
             aria-label="Upload QR code from gallery"
           />
           <label for="qr-gallery-input" id="qr-gallery-btn" class="btn btn--gallery">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg class="gallery-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
               <circle cx="8.5" cy="8.5" r="1.5"/>
               <polyline points="21 15 16 10 5 21"/>
             </svg>
-            Upload QR from Gallery
+            <span>Upload QR from Gallery</span>
           </label>
         </div>
 
         <div id="camera-error-msg" class="error-block hidden"></div>
       </div>
+
+      <!-- Bottom Multi-Color Ribbon -->
+      <div class="tribal-ribbon tribal-ribbon--bottom" aria-hidden="true"></div>
     </div>
 
     <!-- ── SCREEN 2 : AR Interactive Overlay (Launched Automatically on Scan) ── -->
     <div id="ui-overlay" class="overlay hidden">
       <div id="ui-wrapper" class="ui-wrapper">
 
-        <!-- Top bar -->
+        <!-- Top bar with Bacolod Festival Styling -->
         <div class="top-bar">
           <div class="brand-tag">
+            <span class="brand-tag-text">Bacolod Tourism AR</span>
             <span class="dot dot--live"></span>
-            <span>Tourism AR</span>
           </div>
           <div style="display: flex; gap: 8px; align-items: center;">
-            <button id="recenter-btn" class="btn btn--ghost hidden">Reposition</button>
-            <button id="exit-ar-btn" class="btn btn--ghost">X</button>
+            <button id="recenter-btn" class="btn btn--ghost hidden">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
+              Reposition
+            </button>
+            <button id="exit-ar-btn" class="btn btn--ghost btn--exit" aria-label="Exit AR">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
           </div>
         </div>
 
         <!-- Instruction toast -->
         <div id="toast" class="toast">
-          Aim at a flat surface, wait for the circle to appear, then tap to place the dancer
+          <span class="toast-icon">✨</span>
+          <span>Aim at a flat surface, wait for the circle to appear, then tap to place the dancer</span>
         </div>
 
         <!-- History drawer (slide-up from bottom, hidden by default) -->
         <div id="history-modal" class="drawer hidden">
           <div class="drawer-handle"></div>
           <div class="drawer-content">
+            <!-- Multi-Color Accent Strip at top of modal -->
+            <div class="drawer-tribal-strip"></div>
+
             <div class="drawer-head">
               <div>
                 <span class="eyebrow eyebrow--light">Historical Context</span>
                 <h3 class="drawer-title">The MassKara Festival</h3>
-                <span class="drawer-subtitle">Bacolod City, Philippines</span>
+                <span class="drawer-subtitle">Bacolod City · Sugar Capital of the Philippines</span>
               </div>
               <button id="close-history-btn" class="close-btn" aria-label="Close">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
             </div>
 
             <div class="drawer-body">
-              <div class="callout">
-                <strong>Origin — 1980.</strong> The festival was born out of crisis: plummeting sugar prices and the tragedy of the MV Don Juan sinking. City leaders chose to respond not with grief, but with celebration and unity.
+              <div class="callout callout--festival">
+                <div class="callout-badge">EST. 1980</div>
+                <div>
+                  <strong>A Triumphant Community Spirit.</strong> The festival was born out of crisis: plummeting sugar prices and the tragedy of the MV Don Juan. City leaders and artists chose to respond not with sorrow, but with celebration, resilience, and unified joy.
+                </div>
               </div>
               <p>
-                The word <em>MassKara</em> was coined by artist Ely Santiago — a portmanteau of <strong>mass</strong> (a multitude of people) and the Spanish <strong>cara</strong> (face), meaning <em>a multitude of faces</em>.
+                The word <strong>MassKara</strong> was coined by artist Ely Santiago — combining <strong>mass</strong> (a multitude of people) and the Spanish <strong>cara</strong> (face), creating <em>"a multitude of smiling faces."</em>
               </p>
+              <div class="tribal-feature-grid">
+                <div class="tribal-card card--sun">
+                  <span class="card-icon">👑</span>
+                  <strong>Headdress & Feathers</strong>
+                  <span>Radiant crowns symbolizing soaring hope and artistic pride.</span>
+                </div>
+                <div class="tribal-card card--smile">
+                  <span class="card-icon">🎭</span>
+                  <strong>The Smiling Mask</strong>
+                  <span>Bacolod's iconic declaration of warmth and enduring positivity.</span>
+                </div>
+              </div>
               <p>
-                The smiling mask — adorned with feathers, beads, and sequins — has become the enduring symbol of Bacolod's resilience, warmth, and triumphant community spirit.
+                Every October, Bacolod transforms into a world-renowned spectacle of rhythmic street dancing, electric street parties, vibrant costumes, and delicious local gastronomy.
               </p>
             </div>
           </div>
@@ -130,11 +172,14 @@
         <div class="dock">
           <button id="capture-btn" class="shutter-btn hidden" aria-label="Capture Screen">
             <div class="shutter-ring"></div>
-            <div class="shutter-disc"></div>
+            <div class="shutter-disc">
+              <div class="shutter-inner-dot"></div>
+            </div>
           </button>
           <button id="info-toggle-btn" class="btn btn--info hidden">
-            About This Festival
-            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <span class="btn-festival-sparkle">🎭</span>
+            <span>About MassKara Festival</span>
+            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="18 15 12 9 6 15"/>
             </svg>
           </button>

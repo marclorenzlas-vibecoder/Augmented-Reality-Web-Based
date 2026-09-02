@@ -1,33 +1,66 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Outfit:wght@600;700;800;900&display=swap');
 
 /* ──────────────────────────────────────────
-   Design Tokens
+   Design Tokens - Bacolod City Tourism Palette
+   Source: Bacolod City Tourism Development Office Brand Identity
 ────────────────────────────────────────── */
 :root {
-  --c-bg:        #08080f;
-  --c-surface:   rgba(13, 13, 22, 0.92);
-  --c-surface-2: rgba(22, 22, 34, 0.88);
-  --c-border:    rgba(255, 255, 255, 0.10);
-  --c-border-md: rgba(255, 255, 255, 0.18);
-  --c-text:      #f0f0f5;
-  --c-muted:     rgba(240, 240, 245, 0.55);
-  --c-accent:    #d4b483;        /* warm gold — festival warmth */
-  --c-accent-2:  #9e7c4f;        /* deep gold tint              */
-  --c-danger:    rgba(220, 80, 80, 0.85);
+  /* ── Bacolod Festival Brand Colors (from official photo) ── */
+  --bacolod-yellow:   #FBB03B;   /* Radiant warm gold / yellow */
+  --bacolod-orange:   #EE6327;   /* Festival energetic orange */
+  --bacolod-purple:   #924A96;   /* Royal violet / purple */
+  --bacolod-blue:     #0C76BA;   /* Civic Bacolod azure blue */
 
-  --radius-sm:   10px;
-  --radius-md:   18px;
-  --radius-lg:   28px;
-  --radius-pill: 999px;
+  /* ── White Base & Pure Light Surfaces ── */
+  --c-bg:             #ffffff;
+  --c-bg-subtle:      #f8fafc;
+  --c-surface:        rgba(255, 255, 255, 0.94);
+  --c-surface-2:      rgba(248, 250, 252, 0.96);
+  --c-surface-card:   #ffffff;
+  --c-border:         rgba(15, 23, 42, 0.08);
+  --c-border-md:      rgba(15, 23, 42, 0.14);
+  --c-border-brand:   rgba(12, 118, 186, 0.25);
+  
+  /* ── High-Contrast Modern Typography ── */
+  --c-text:           #0f172a;   /* Rich Slate 900 */
+  --c-text-sub:       #334155;   /* Slate 700 */
+  --c-muted:          #64748b;   /* Slate 500 */
+  --c-danger:         #ef4444;
 
-  --blur-sm:  blur(4px);
-  --blur-md:  blur(8px);
-  --blur-lg:  blur(12px);
+  /* ── Semantic Accent Variables ── */
+  --c-accent:         var(--bacolod-orange);
+  --c-accent-yellow:  var(--bacolod-yellow);
+  --c-accent-orange:  var(--bacolod-orange);
+  --c-accent-purple:  var(--bacolod-purple);
+  --c-accent-blue:    var(--bacolod-blue);
 
-  --font-body:    'Inter', system-ui, sans-serif;
-  --font-display: 'DM Serif Display', Georgia, serif;
+  /* ── Multi-Color Gradient Stripes ── */
+  --tribal-gradient:  linear-gradient(90deg, 
+    var(--bacolod-purple) 0%, 
+    var(--bacolod-blue) 33%, 
+    var(--bacolod-orange) 66%, 
+    var(--bacolod-yellow) 100%
+  );
 
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* ── Elevation Shadows ── */
+  --shadow-sm:        0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-md:        0 8px 24px rgba(12, 118, 186, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --shadow-lg:        0 16px 40px rgba(0, 0, 0, 0.09), 0 4px 12px rgba(238, 99, 39, 0.06);
+
+  /* ── Geometry & Layout ── */
+  --radius-sm:        10px;
+  --radius-md:        20px;
+  --radius-lg:        28px;
+  --radius-pill:      999px;
+
+  --blur-sm:          blur(6px);
+  --blur-md:          blur(12px);
+  --blur-lg:          blur(20px);
+
+  --font-body:        'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-heading:     'Outfit', 'Plus Jakarta Sans', sans-serif;
+
+  --ease-out:         cubic-bezier(0.16, 1, 0.3, 1);
   --orientation-fade-duration: 0.18s;
 }
 
@@ -48,9 +81,36 @@ html, body {
   height: 100%;
   overflow: hidden;
   font-family: var(--font-body);
-  background: radial-gradient(circle at 50% 20%, #151522 0%, var(--c-bg) 80%);
+  background: var(--c-bg);
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
+}
+
+/* ──────────────────────────────────────────
+/* ──────────────────────────────────────────
+   Bacolod Tourism Mosaic Ribbon (Love the Philippines Theme)
+────────────────────────────────────────── */
+.tribal-ribbon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background-image: url('/bacolod-mosaic-ribbon.svg');
+  background-repeat: repeat-x;
+  background-size: 360px 30px;
+  background-position: left center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.tribal-ribbon--top {
+  top: 0;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+}
+
+.tribal-ribbon--bottom {
+  bottom: 0;
+  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.12);
 }
 
 /* ──────────────────────────────────────────
@@ -81,74 +141,122 @@ html, body {
 .screen {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
 /* ──────────────────────────────────────────
-   Screen 1 — QR Scanner
+   Screen 1 — Bacolod Tourism QR Scanner
 ────────────────────────────────────────── */
 .screen--qr {
-  background: radial-gradient(circle at 50% 20%, #151522 0%, var(--c-bg) 80%);
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(251, 176, 59, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 90% 18%, rgba(146, 74, 150, 0.10) 0%, transparent 40%),
+    radial-gradient(circle at 50% 95%, rgba(12, 118, 186, 0.10) 0%, transparent 50%),
+    #ffffff;
   z-index: 100;
   justify-content: space-between;
-  padding: max(env(safe-area-inset-top), 24px) 20px max(env(safe-area-inset-bottom), 24px);
+  padding: max(env(safe-area-inset-top), 38px) 20px max(env(safe-area-inset-bottom), 42px);
+  overflow: hidden;
 }
 
+/* ──────────────────────────────────────────
+   Bacolod Brand Header
+────────────────────────────────────────── */
 .qr-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  padding-top: 8px;
+  gap: 6px;
+  max-width: 330px;
+  margin: 0 auto;
+  z-index: 2;
+  padding-top: 4px;
 }
 
-.eyebrow {
-  display: block;
-  font-size: clamp(9px, 2.5vw, 10.5px);
-  font-weight: 600;
-  letter-spacing: 2.5px;
+.city-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(12, 118, 186, 0.08);
+  border: 1px solid rgba(12, 118, 186, 0.22);
+  color: var(--bacolod-blue);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
-  color: var(--c-accent);
-  margin-bottom: 8px;
 }
 
-.eyebrow--light {
-  color: var(--c-accent);
-  margin-bottom: 4px;
+.city-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bacolod-orange);
+  box-shadow: 0 0 0 2px rgba(238, 99, 39, 0.25);
+  animation: dotPulse 2s ease-in-out infinite;
 }
 
-.headline {
-  font-family: var(--font-display);
-  font-size: clamp(24px, 7vw, 34px);
-  font-weight: 400;
-  letter-spacing: -0.5px;
+.qr-title {
+  font-family: var(--font-heading);
+  font-size: clamp(20px, 4.8vw, 24px);
+  font-weight: 800;
   color: var(--c-text);
-  line-height: 1.1;
-  margin-bottom: 6px;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+  margin-top: 2px;
 }
 
-.subline {
-  font-size: clamp(12px, 3.2vw, 13.5px);
+.title-accent {
+  background: linear-gradient(135deg, var(--bacolod-orange) 0%, var(--bacolod-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.qr-desc {
+  font-family: var(--font-body);
+  font-size: clamp(11px, 2.7vw, 12px);
   color: var(--c-muted);
-  font-weight: 400;
-  line-height: 1.4;
+  line-height: 1.45;
+  font-weight: 500;
+  max-width: 290px;
 }
 
-/* Scanner viewport */
+
+/* ──────────────────────────────────────────
+   Scanner Viewport
+────────────────────────────────────────── */
 .scanner-frame {
   position: relative;
-  width: min(72vw, 40vh, 260px);
+  width: min(70vw, 34vh, 230px);
   aspect-ratio: 1;
   border-radius: var(--radius-md);
   overflow: hidden;
-  background: #000;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--c-border);
+  background: #000000;
+  box-shadow: 
+    0 16px 40px rgba(12, 118, 186, 0.16),
+    0 0 0 1px var(--c-border-md),
+    0 0 0 4px rgba(255, 255, 255, 0.95);
+  z-index: 2;
 }
 
 #qr-reader {
   width: 100% !important;
   height: 100% !important;
   border: none !important;
-  background: #000;
+  background: #000000;
 }
 
 #qr-reader video {
@@ -163,159 +271,214 @@ html, body {
   display: none !important;
 }
 
-/* Scan beam animation */
+/* Scan beam with vibrant festival gradient */
 .scan-beam {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--c-accent), transparent);
-  box-shadow: 0 0 12px var(--c-accent);
+  height: 3.5px;
+  background: var(--tribal-gradient);
+  box-shadow: 0 0 16px var(--bacolod-orange), 0 0 8px var(--bacolod-yellow);
   animation: scanMove 2.4s ease-in-out infinite alternate;
   z-index: 5;
   pointer-events: none;
 }
 
 @keyframes scanMove {
-  0% { top: 5%; opacity: 0.2; }
+  0% { top: 5%; opacity: 0.3; }
   50% { opacity: 1; }
-  100% { top: 95%; opacity: 0.2; }
+  100% { top: 95%; opacity: 0.3; }
 }
 
-/* Scan corner markers */
+/* Multi-color Corner Markers */
 .corner {
   position: absolute;
-  width: 20px;
-  height: 20px;
-  border-color: var(--c-accent);
+  width: 24px;
+  height: 24px;
+  border-color: var(--bacolod-blue);
   border-style: solid;
   border-width: 0;
   z-index: 6;
   pointer-events: none;
 }
-.corner--tl { top: 0; left: 0; border-top-width: 3px; border-left-width: 3px; border-top-left-radius: var(--radius-md); }
-.corner--tr { top: 0; right: 0; border-top-width: 3px; border-right-width: 3px; border-top-right-radius: var(--radius-md); }
-.corner--bl { bottom: 0; left: 0; border-bottom-width: 3px; border-left-width: 3px; border-bottom-left-radius: var(--radius-md); }
-.corner--br { bottom: 0; right: 0; border-bottom-width: 3px; border-right-width: 3px; border-bottom-right-radius: var(--radius-md); }
 
-/* QR Controls Positioned Outside the Scanner Frame */
+.corner--tl { 
+  top: 0; left: 0; 
+  border-top-width: 3.5px; border-left-width: 3.5px; 
+  border-top-left-radius: var(--radius-md); 
+  border-color: var(--bacolod-purple);
+}
+.corner--tr { 
+  top: 0; right: 0; 
+  border-top-width: 3.5px; border-right-width: 3.5px; 
+  border-top-right-radius: var(--radius-md); 
+  border-color: var(--bacolod-yellow);
+}
+.corner--bl { 
+  bottom: 0; left: 0; 
+  border-bottom-width: 3.5px; border-left-width: 3.5px; 
+  border-bottom-left-radius: var(--radius-md); 
+  border-color: var(--bacolod-blue);
+}
+.corner--br { 
+  bottom: 0; right: 0; 
+  border-bottom-width: 3.5px; border-right-width: 3.5px; 
+  border-bottom-right-radius: var(--radius-md); 
+  border-color: var(--bacolod-orange);
+}
+
+/* Inner Target Crosshair */
+.target-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0.35;
+}
+
+.target-crosshair::before,
+.target-crosshair::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.target-crosshair::before {
+  top: 19px; left: 0; right: 0; height: 2px;
+}
+.target-crosshair::after {
+  left: 19px; top: 0; bottom: 0; width: 2px;
+}
+
+/* ──────────────────────────────────────────
+   QR Footer & Action Controls
+────────────────────────────────────────── */
 .qr-footer {
   width: 100%;
   max-width: 340px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(8px, 1.8vh, 14px);
-  margin-top: 8px;
+  gap: clamp(8px, 1.8vh, 12px);
+  margin-top: 4px;
+  z-index: 2;
 }
 
-.qr-camera-bar {
-  width: 100%;
-  display: flex;
-  gap: 8px;
+/* Status Badge */
+.status-badge {
+  display: inline-flex;
   align-items: center;
-}
-
-.select-wrapper {
-  flex: 1;
-  position: relative;
-}
-
-.camera-select {
-  width: 100%;
-  background: var(--c-surface-2);
+  gap: 8px;
+  background: var(--c-surface);
   backdrop-filter: var(--blur-sm);
   -webkit-backdrop-filter: var(--blur-sm);
   border: 1px solid var(--c-border-md);
-  color: var(--c-text);
-  font-family: var(--font-body);
-  font-size: 12.5px;
-  font-weight: 500;
-  padding: 10px 14px;
+  padding: 6px 16px;
   border-radius: var(--radius-pill);
-  outline: none;
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-}
-
-.btn--camera-switch {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--c-border-md);
-  color: var(--c-text);
-  padding: 10px 16px;
   font-size: 12px;
   font-weight: 600;
+  color: var(--c-text-sub);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Gallery QR Upload button */
+.btn--gallery {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 280px;
+  background: #ffffff;
+  border: 2px solid var(--bacolod-yellow);
+  color: #c98800;
+  padding: 12px 24px;
+  font-family: var(--font-heading);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
   border-radius: var(--radius-pill);
   cursor: pointer;
-  white-space: nowrap;
+  pointer-events: auto;
+  box-shadow: 0 4px 16px rgba(251, 176, 59, 0.18);
+  transition: all 0.2s var(--ease-out);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.btn--camera-switch:active {
-  background: rgba(212, 180, 131, 0.2);
+.btn--gallery:hover {
+  background: var(--bacolod-yellow);
+  color: #ffffff;
+  box-shadow: 0 6px 22px rgba(251, 176, 59, 0.30);
+  transform: translateY(-1px);
 }
 
-.status-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--c-muted);
-  letter-spacing: 0.3px;
+.btn--gallery:hover .gallery-icon {
+  color: #ffffff;
 }
 
-/* ──────────────────────────────────────────
-   Dots
-────────────────────────────────────────── */
+.btn--gallery:active {
+  transform: scale(0.97) translateY(0);
+}
+
+.gallery-icon {
+  color: var(--bacolod-yellow);
+  flex-shrink: 0;
+  transition: color 0.2s ease;
+}
+
+/* Dots */
 .dot {
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .dot--active {
-  background: var(--c-accent);
-  box-shadow: 0 0 0 3px rgba(212, 180, 131, 0.25);
+  background: var(--bacolod-orange);
+  box-shadow: 0 0 0 3px rgba(238, 99, 39, 0.25);
   animation: dotPulse 2s ease-in-out infinite;
 }
 
 .dot--live {
-  width: 6px;
-  height: 6px;
-  background: #5cdf8f;
-  box-shadow: 0 0 0 2px rgba(92, 223, 143, 0.3);
+  width: 7px;
+  height: 7px;
+  background: #10b981;
+  box-shadow: 0 0 0 2.5px rgba(16, 185, 129, 0.3);
   animation: dotPulse 2s ease-in-out infinite;
 }
 
 @keyframes dotPulse {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.75); }
+  50% { opacity: 0.4; transform: scale(0.75); }
 }
 
 .error-block {
   width: 100%;
-  padding: 12px 14px;
-  background: rgba(220, 80, 80, 0.12);
-  border: 1px solid rgba(220, 80, 80, 0.3);
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
-  color: #ff9999;
-  line-height: 1.5;
+  font-size: 12px;
+  color: #dc2626;
+  line-height: 1.45;
   text-align: center;
 }
 
 /* ──────────────────────────────────────────
-   Buttons
+   Buttons Base
 ────────────────────────────────────────── */
 .btn {
   font-family: var(--font-body);
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.2px;
   border: none;
   border-radius: var(--radius-pill);
   cursor: pointer;
@@ -323,84 +486,90 @@ html, body {
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
-.btn:active {
-  transform: scale(0.96);
-  opacity: 0.85;
-}
-
-/* Gallery QR Upload button */
-.btn--gallery {
+/* Ghost Buttons (Reposition & Exit) */
+.btn--ghost {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: var(--blur-sm);
-  -webkit-backdrop-filter: var(--blur-sm);
-  border: 1px solid var(--c-border-md);
-  color: var(--c-muted);
-  padding: 10px 20px;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.3px;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  pointer-events: auto;
-  transition: all 0.2s ease;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.btn--gallery svg {
-  color: var(--c-accent);
-  flex-shrink: 0;
-}
-
-.btn--gallery:active {
-  transform: scale(0.96);
-  background: rgba(212, 180, 131, 0.1);
-  border-color: var(--c-accent);
-  color: var(--c-accent);
-}
-
-.btn--ghost {
-  background: rgba(255, 255, 255, 0.07);
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.90);
   backdrop-filter: var(--blur-sm);
   -webkit-backdrop-filter: var(--blur-sm);
   border: 1px solid var(--c-border-md);
   color: var(--c-text);
-  padding: 7px 16px;
+  padding: 8px 16px;
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 700;
   pointer-events: auto;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn--ghost:hover {
+  background: #ffffff;
+  border-color: var(--bacolod-blue);
+  color: var(--bacolod-blue);
+}
+
+.btn--ghost:active {
+  transform: scale(0.96);
+}
+
+.btn--exit {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
 }
 
 .btn--info {
-  background: var(--c-surface);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: var(--blur-md);
   -webkit-backdrop-filter: var(--blur-md);
-  border: 1px solid var(--c-border-md);
-  color: var(--c-text);
+  border: 2px solid var(--bacolod-yellow);
+  color: #9f6c00;
   width: max-content;
   max-width: calc(100vw - 36px);
-  min-width: 188px;
-  padding: 11px 22px 11px 24px;
-  font-size: 13px;
-  font-weight: 500;
+  min-width: 200px;
+  padding: 12px 24px;
+  font-family: var(--font-heading);
+  font-size: 13.5px;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   pointer-events: auto;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 24px rgba(251, 176, 59, 0.18);
   white-space: nowrap;
+  transition: all 0.2s var(--ease-out);
+}
+
+.btn-festival-sparkle {
+  font-size: 16px;
+}
+
+.btn--info:hover {
+  background: var(--bacolod-yellow);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.btn--info:hover .chevron-icon {
+  color: #ffffff;
+}
+
+.btn--info:active {
+  transform: scale(0.97) translateY(0);
 }
 
 .chevron-icon {
-  width: 14px;
-  height: 14px;
-  color: var(--c-muted);
+  width: 15px;
+  height: 15px;
+  color: var(--bacolod-yellow);
   flex-shrink: 0;
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, color 0.2s ease;
 }
 
 /* ──────────────────────────────────────────
@@ -459,45 +628,56 @@ html, body {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--c-surface);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: var(--blur-sm);
   -webkit-backdrop-filter: var(--blur-sm);
-  border: 1px solid var(--c-border);
-  padding: 7px 14px;
+  border: 1.5px solid var(--c-border-md);
+  padding: 7px 16px;
   border-radius: var(--radius-pill);
-  font-size: 12px;
-  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.brand-tag-text {
+  font-family: var(--font-heading);
+  font-size: 12.5px;
+  font-weight: 800;
   letter-spacing: 0.3px;
   color: var(--c-text);
 }
 
-/* Toast (Positioned at top of screen below top bar) */
+/* Toast */
 .toast {
   position: absolute;
-  bottom: calc(max(env(safe-area-inset-bottom), 20px) + 75px);
+  bottom: calc(max(env(safe-area-inset-bottom), 20px) + 78px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 60;
   
-  /* Premium Glassmorphism */
-  background: rgba(13, 13, 22, 0.55);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
   
   color: var(--c-text);
-  padding: 14px 32px; /* Increased horizontal and vertical padding slightly */
+  padding: 12px 26px;
   border-radius: var(--radius-pill);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   text-align: center;
-  width: max-content; /* Make the pill wrap tightly around the wider padding/text */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
   max-width: 92%;
   pointer-events: auto;
   transition: opacity 0.4s var(--ease-out), transform 0.4s var(--ease-out);
-  letter-spacing: 0.3px;
+  letter-spacing: 0.1px;
   line-height: 1.4;
+}
+
+.toast-icon {
+  font-size: 15px;
 }
 
 .toast.hidden {
@@ -527,48 +707,73 @@ html, body {
 }
 
 .drawer-handle {
-  width: 36px;
+  width: 40px;
   height: 4px;
   background: var(--c-border-md);
   border-radius: var(--radius-pill);
-  margin: 0 auto 14px;
+  margin: 0 auto 12px;
 }
 
 .drawer-content {
-  background: var(--c-surface);
+  background: rgba(255, 255, 255, 0.98);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
   border-top: 1px solid var(--c-border-md);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 8px 22px max(env(safe-area-inset-bottom), 28px);
+  padding: 10px 24px max(env(safe-area-inset-bottom), 28px);
+  box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.10);
+  position: relative;
+  overflow: hidden;
+}
+
+.drawer-tribal-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background-image: url('/bacolod-mosaic-ribbon.svg');
+  background-repeat: repeat-x;
+  background-size: auto 12px;
+  background-position: left center;
 }
 
 .drawer-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 18px 0 16px;
+  padding: 16px 0 14px;
   border-bottom: 1px solid var(--c-border);
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+}
+
+.eyebrow--light {
+  color: var(--bacolod-orange);
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
 }
 
 .drawer-title {
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 400;
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 800;
   color: var(--c-text);
-  margin: 4px 0 2px;
+  margin: 2px 0 1px;
 }
 
 .drawer-subtitle {
   font-size: 11.5px;
   color: var(--c-muted);
+  font-weight: 500;
   display: block;
   letter-spacing: 0.2px;
 }
 
 .close-btn {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.05);
   border: 1px solid var(--c-border);
   color: var(--c-muted);
   width: 34px;
@@ -584,50 +789,103 @@ html, body {
   transition: background 0.15s ease;
 }
 
-.close-btn svg {
-  width: 15px;
-  height: 15px;
+.close-btn:hover {
+  background: rgba(0, 0, 0, 0.10);
+  color: var(--c-text);
 }
 
 .close-btn:active {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.16);
 }
 
 .drawer-body {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 400;
-  color: var(--c-muted);
+  color: var(--c-text-sub);
   line-height: 1.65;
   max-height: 44vh;
   overflow-y: auto;
-  padding-bottom: 4px;
+  padding-bottom: 6px;
 }
 
 .drawer-body strong {
   color: var(--c-text);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .drawer-body em {
   font-style: italic;
+  color: var(--bacolod-orange);
+}
+
+.callout--festival {
+  background: linear-gradient(135deg, rgba(251, 176, 59, 0.12) 0%, rgba(238, 99, 39, 0.08) 100%);
+  border-left: 4px solid var(--bacolod-orange);
+  padding: 14px 16px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 13px;
+  color: var(--c-text-sub);
+  line-height: 1.6;
+  position: relative;
+}
+
+.callout-badge {
+  display: inline-block;
+  background: var(--bacolod-orange);
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+/* Feature Grid in Drawer */
+.tribal-feature-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 4px 0;
+}
+
+.tribal-card {
+  background: #ffffff;
+  border: 1px solid var(--c-border-md);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: var(--shadow-sm);
+}
+
+.tribal-card strong {
+  font-size: 12.5px;
+  font-weight: 700;
   color: var(--c-text);
 }
 
-.callout {
-  background: rgba(212, 180, 131, 0.07);
-  border-left: 2px solid var(--c-accent);
-  padding: 12px 14px;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  font-size: 13px;
-  color: rgba(240, 240, 245, 0.75);
-  line-height: 1.6;
+.tribal-card span {
+  font-size: 11.5px;
+  color: var(--c-muted);
+  line-height: 1.4;
 }
 
-.callout strong {
-  color: var(--c-accent);
+.card--sun {
+  border-top: 3px solid var(--bacolod-yellow);
+}
+
+.card--smile {
+  border-top: 3px solid var(--bacolod-purple);
+}
+
+.card-icon {
+  font-size: 16px;
+  margin-bottom: 2px;
 }
 
 /* ──────────────────────────────────────────
@@ -641,7 +899,7 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   pointer-events: auto;
   will-change: transform, right, bottom, gap;
 }
@@ -649,8 +907,8 @@ html, body {
 /* Shutter Button */
 .shutter-btn {
   position: relative;
-  width: 72px;
-  height: 72px;
+  width: 74px;
+  height: 74px;
   background: none;
   border: none;
   cursor: pointer;
@@ -666,27 +924,43 @@ html, body {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 2.5px solid rgba(255, 255, 255, 0.8);
+  border: 3px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
 .shutter-disc {
-  width: 54px;
-  height: 54px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: transform 0.15s ease, background 0.15s ease;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.20);
+}
+
+.shutter-inner-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bacolod-orange);
+  transition: transform 0.15s ease;
 }
 
 .shutter-btn:active .shutter-ring {
-  transform: scale(0.88);
+  transform: scale(0.90);
   opacity: 0.6;
 }
 
 .shutter-btn:active .shutter-disc {
-  transform: scale(0.88);
-  background: var(--c-accent);
+  transform: scale(0.90);
+  background: var(--bacolod-orange);
+}
+
+.shutter-btn:active .shutter-inner-dot {
+  background: #ffffff;
 }
 
 /* ──────────────────────────────────────────
@@ -699,12 +973,12 @@ html, body {
   transform: scale(0.95);
 }
 
-/* Enhanced layout transitions for smooth visibility changes */
+/* Smooth visibility transitions */
 .toast, .btn, .shutter-btn, .qr-screen, .overlay,
 .qr-header, .headline, .scanner-frame, .qr-footer,
 .drawer, .drawer-content, .screen--qr {
-  transition: opacity 0.4s ease, 
-              visibility 0.4s ease,
+  transition: opacity 0.38s ease, 
+              visibility 0.38s ease,
               transform 0.32s var(--ease-out);
 }
 
@@ -720,28 +994,24 @@ html, body {
 
 /* ──────────────────────────────────────────
    Landscape Adjustments
-   - Split screen layout for QR scanner
-   - Side dock / toolbar for WebAR camera controls
 ────────────────────────────────────────── */
-/* QR Screen landscape split */
 body.landscape .screen--qr {
   flex-direction: row;
   flex-wrap: nowrap;
   justify-content: space-evenly;
   align-items: center;
   gap: 24px;
-  padding: 20px 40px;
+  padding: 36px 40px;
 }
+
 
 body.landscape .qr-header {
   text-align: left;
+  align-items: flex-start;
   max-width: 32%;
   padding-top: 0;
 }
 
-body.landscape .headline {
-  font-size: 28px;
-}
 
 body.landscape .scanner-frame {
   width: min(55vh, 200px);
@@ -770,7 +1040,6 @@ body.landscape .top-bar {
   width: auto;
 }
 
-
 body.landscape .dock {
   position: absolute;
   right: max(env(safe-area-inset-right), 24px);
@@ -784,32 +1053,31 @@ body.landscape .dock {
 }
 
 body.landscape .btn--info {
-  min-width: 186px;
+  min-width: 190px;
   max-width: calc(100vw - 48px);
-  padding: 10px 24px 10px 26px;
-  font-size: 12.5px;
-  font-weight: 500;
+  padding: 10px 22px;
+  font-size: 13px;
   border-radius: var(--radius-pill);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 20px rgba(12, 118, 186, 0.16);
   white-space: nowrap;
 }
 
 @media (max-width: 340px) {
   .btn--info {
     min-width: 174px;
-    padding-inline: 18px;
+    padding-inline: 16px;
     gap: 8px;
-    font-size: 12.5px;
+    font-size: 12px;
   }
 }
 
-/* Drawer landscape sidebar adjustments (placing it in charging port location - right side) */
+/* Drawer landscape sidebar adjustments */
 body.landscape .drawer {
   top: 0;
   bottom: 0;
   right: 0;
   left: auto;
-  width: 320px;
+  width: 340px;
   max-width: 90vw;
   transform: translateX(0);
 }
@@ -828,6 +1096,15 @@ body.landscape .drawer-content {
   flex-direction: column;
 }
 
+body.landscape .drawer-tribal-strip {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: auto;
+  width: 4px;
+  height: 100%;
+}
+
 body.landscape .drawer-body {
   max-height: none;
   flex: 1;
@@ -838,34 +1115,38 @@ body.landscape .drawer-handle {
   display: none;
 }
 
-/* ── Small height screens portrait mode adjustments ── */
-@media (max-height: 580px) and (orientation: portrait) {
+/* ──────────────────────────────────────────
+   Small height screens portrait mode adjustments
+────────────────────────────────────────── */
+@media (max-height: 600px) and (orientation: portrait) {
   .screen--qr {
-    padding: max(env(safe-area-inset-top), 12px) 16px max(env(safe-area-inset-bottom), 12px);
+    padding: max(env(safe-area-inset-top), 32px) 16px max(env(safe-area-inset-bottom), 34px);
   }
-  .qr-header {
-    margin-bottom: 2px;
+  .qr-desc {
+    display: none;
+  }
+  .qr-title {
+    font-size: 18px;
   }
   .scanner-frame {
-    width: min(65vw, 32vh, 190px);
+    width: min(62vw, 28vh, 175px);
   }
   .qr-footer {
-    gap: 8px;
-    margin-top: 4px;
+    gap: 6px;
+    margin-top: 2px;
   }
   .overlay {
     padding-top: max(env(safe-area-inset-top), 20px);
     padding-bottom: max(env(safe-area-inset-bottom), 16px);
   }
   .toast {
-    font-size: 11.5px;
-    padding: 6px 14px;
+    font-size: 12px;
+    padding: 8px 16px;
   }
 }
 
 /* ──────────────────────────────────────────
-   Premium WebXR AR Button — Large Centered Circle
-   Styled to match the QR home screen gradient aesthetic
+   Premium WebXR AR Button (Sunburst Theme)
 ────────────────────────────────────────── */
 #ARButton {
   position: fixed !important;
@@ -875,107 +1156,96 @@ body.landscape .drawer-handle {
   right: auto !important;
   transform: translate(-50%, -50%) !important;
 
-  /* Circle geometry */
   width: 200px !important;
   height: 200px !important;
   border-radius: 50% !important;
   padding: 0 !important;
 
-  /* Gradient background matching the QR home screen */
-  background: radial-gradient(circle at 40% 35%, #1e1e30 0%, #08080f 70%) !important;
+  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #f8fafc 80%) !important;
+  border: 3.5px solid var(--bacolod-yellow) !important;
 
-  /* Elegant gold ring border */
-  border: 2px solid var(--c-accent) !important;
-
-  /* Text */
-  color: var(--c-accent) !important;
-  font-family: var(--font-body) !important;
-  font-size: 12px !important;
-  font-weight: 700 !important;
-  letter-spacing: 2.5px !important;
+  color: var(--bacolod-orange) !important;
+  font-family: var(--font-heading) !important;
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: 2px !important;
   text-transform: uppercase !important;
 
-  /* Layered glow shadow */
   box-shadow:
-    0 0 0 1px rgba(212, 180, 131, 0.15),
-    0 0 40px rgba(212, 180, 131, 0.25),
-    0 24px 80px rgba(0, 0, 0, 0.7) !important;
+    0 0 0 1px rgba(251, 176, 59, 0.30),
+    0 0 45px rgba(238, 99, 39, 0.22),
+    0 20px 50px rgba(0, 0, 0, 0.12) !important;
 
-  /* Transitions */
   transition: all 0.45s var(--ease-out) !important;
   cursor: pointer !important;
   z-index: 1000 !important;
 
-  /* Inner layout for icon + text */
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
   gap: 10px !important;
 
-  /* Subtle pulse */
   animation: arButtonPulse 3s ease-in-out infinite !important;
 }
 
-/* Fake AR-style ring decoration using ::before */
 #ARButton::before {
   content: '' !important;
   position: absolute !important;
-  inset: -8px !important;
+  inset: -9px !important;
   border-radius: 50% !important;
-  border: 1px solid rgba(212, 180, 131, 0.18) !important;
+  border: 1.5px solid rgba(238, 99, 39, 0.35) !important;
   pointer-events: none !important;
   transition: inset 0.45s var(--ease-out) !important;
 }
 
-/* Outer glow ring using ::after */
 #ARButton::after {
   content: '' !important;
   position: absolute !important;
   inset: -18px !important;
   border-radius: 50% !important;
-  border: 1px solid rgba(212, 180, 131, 0.07) !important;
+  border: 1px solid rgba(12, 118, 186, 0.25) !important;
   pointer-events: none !important;
   transition: inset 0.45s var(--ease-out) !important;
 }
 
 #ARButton:hover {
-  background: radial-gradient(circle at 40% 35%, #252538 0%, #0d0d1a 70%) !important;
-  border-color: #fff !important;
-  color: #fff !important;
+  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #f1f5f9 80%) !important;
+  border-color: var(--bacolod-orange) !important;
+  color: var(--bacolod-orange) !important;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.2),
-    0 0 60px rgba(212, 180, 131, 0.4),
-    0 24px 80px rgba(0, 0, 0, 0.8) !important;
-  transform: translate(-50%, -50%) scale(1.06) !important;
+    0 0 0 2px rgba(238, 99, 39, 0.4),
+    0 0 55px rgba(251, 176, 59, 0.40),
+    0 24px 60px rgba(0, 0, 0, 0.16) !important;
+  transform: translate(-50%, -50%) scale(1.05) !important;
   animation: none !important;
 }
 
 #ARButton:hover::before {
-  inset: -14px !important;
+  inset: -13px !important;
 }
 
 #ARButton:hover::after {
-  inset: -28px !important;
+  inset: -25px !important;
 }
 
 #ARButton:active {
-  transform: translate(-50%, -50%) scale(0.94) !important;
+  transform: translate(-50%, -50%) scale(0.95) !important;
   animation: none !important;
 }
 
 @keyframes arButtonPulse {
   0%, 100% {
     box-shadow:
-      0 0 0 1px rgba(212, 180, 131, 0.15),
-      0 0 40px rgba(212, 180, 131, 0.25),
-      0 24px 80px rgba(0, 0, 0, 0.7);
+      0 0 0 1px rgba(251, 176, 59, 0.25),
+      0 0 35px rgba(238, 99, 39, 0.20),
+      0 20px 50px rgba(0, 0, 0, 0.10);
   }
   50% {
     box-shadow:
-      0 0 0 1px rgba(212, 180, 131, 0.25),
-      0 0 60px rgba(212, 180, 131, 0.40),
-      0 24px 80px rgba(0, 0, 0, 0.7);
+      0 0 0 2.5px rgba(251, 176, 59, 0.40),
+      0 0 58px rgba(238, 99, 39, 0.35),
+      0 20px 50px rgba(0, 0, 0, 0.14);
   }
 }
 
@@ -990,15 +1260,15 @@ body.landscape #ARButton {
 }
 
 /* ──────────────────────────────────────────
-   Premium Loading Progress Bar
+   Loading Progress Bar
 ────────────────────────────────────────── */
 .loading-bar-container {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 5px;
+  background: rgba(0, 0, 0, 0.06);
   z-index: 9999;
   pointer-events: none;
   transition: opacity 0.3s ease;
@@ -1007,13 +1277,13 @@ body.landscape #ARButton {
 .loading-bar {
   height: 100%;
   width: 0%;
-  background: var(--c-accent); /* Warm gold */
-  box-shadow: 0 0 8px var(--c-accent);
+  background: var(--tribal-gradient);
+  box-shadow: 0 0 12px var(--bacolod-yellow);
   transition: width 0.3s ease, opacity 0.3s ease;
 }
 
 .loading-bar--indeterminate {
-  background: linear-gradient(90deg, transparent, var(--c-accent), transparent);
+  background: linear-gradient(90deg, transparent, var(--bacolod-orange), var(--bacolod-yellow), transparent);
   animation: loadingSweep 1.5s infinite linear;
   width: 100% !important;
 }
@@ -1025,7 +1295,6 @@ body.landscape #ARButton {
 
 /* ──────────────────────────────────────────
    WebXR DOM Overlay Transparency
-   (Removes default dimming mask applied by the browser to the overlay root)
 ────────────────────────────────────────── */
 :xr-overlay {
   background: transparent !important;
@@ -1039,7 +1308,6 @@ body.landscape #ARButton {
 
 /* ──────────────────────────────────────────
    WebXR UI Overlay — smooth orientation rotation
-   Applied via JS in the render loop when phone rotates in AR mode
 ────────────────────────────────────────── */
 #ui-overlay {
   transition:

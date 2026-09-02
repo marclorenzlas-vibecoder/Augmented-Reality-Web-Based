@@ -109,8 +109,8 @@ let restartQrTimer   = null;
 // Chroma Key / Transparency Modes (0 = Opaque, 1 = Green Screen, 2 = Black BG Key)
 let currentKeyMode = 1;
 
-const RETICLE_ACCENT = 0xd4b483;
-const RETICLE_LIGHT = 0xf3d9a4;
+const RETICLE_ACCENT = 0xee6327; // Bacolod Orange
+const RETICLE_LIGHT  = 0xfbb03b; // Bacolod Yellow
 
 const QR_CAMERA_CONFIG = {
   fps: 8,
@@ -228,8 +228,8 @@ const planeWorldNormal = new THREE.Vector3();
 const FloorGridShader = {
   uniforms: {
     uTime: { value: 0 },
-    uColor: { value: new THREE.Color(0xd4b483) },          // Warm gold theme primary
-    uColorSecondary: { value: new THREE.Color(0x9e7c4f) }  // Deep gold theme accent
+    uColor: { value: new THREE.Color(0xee6327) },          // Bacolod Orange
+    uColorSecondary: { value: new THREE.Color(0xfbb03b) }  // Bacolod Yellow
   },
   vertexShader: `
     varying vec3 vPlanePosition;
@@ -265,7 +265,7 @@ const FloorGridShader = {
       float wave = sin(distWorld * 3.5 - uTime * 3.5) * 0.5 + 0.5;
       float timePulse = sin(uTime * 2.5) * 0.2 + 0.8;
 
-      // Color composition matching warm gold theme
+      // Color composition matching Bacolod theme
       vec3 gridColor = mix(uColorSecondary, uColor, wave * 0.75);
       vec3 finalColor = gridColor * (totalGrid * 1.6);
 
@@ -282,8 +282,8 @@ function buildPulsatingFloorGrid() {
   floorGridMaterial = new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
-      uColor: { value: new THREE.Color(0xd4b483) },
-      uColorSecondary: { value: new THREE.Color(0x9e7c4f) }
+      uColor: { value: new THREE.Color(0xee6327) },
+      uColorSecondary: { value: new THREE.Color(0xfbb03b) }
     },
     vertexShader: FloorGridShader.vertexShader,
     fragmentShader: FloorGridShader.fragmentShader,
