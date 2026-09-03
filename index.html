@@ -11,6 +11,10 @@
     <script type="module" src="/src/main.js"></script>
   </head>
   <body>
+    <!-- Persistent Top and Bottom Bacolod Mosaic Ribbon Strips -->
+    <div class="tribal-ribbon tribal-ribbon--top" aria-hidden="true"></div>
+    <div class="tribal-ribbon tribal-ribbon--bottom" aria-hidden="true"></div>
+
     <!-- Visual loading progress indicator -->
     <div id="loading-bar-container" class="loading-bar-container hidden">
       <div id="loading-bar" class="loading-bar"></div>
@@ -31,8 +35,8 @@
 
       <!-- Top Brand Header for Bacolod City -->
       <header class="qr-header">
+        <img src="/src/assets/masskara2.png" alt="MassKara Festival Mask" class="qr-header-emblem" />
         <div class="city-badge">
-          <span class="city-badge-dot"></span>
           <span>Bacolod City · City of Smiles</span>
         </div>
         <h1 class="qr-title">Bacolod Tourism <span class="title-accent">AR</span></h1>
@@ -57,7 +61,6 @@
         <div id="qr-controls-container" style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px;">
 
           <div class="status-badge">
-            <span class="dot dot--active"></span>
             <span id="qr-status-text">Align QR code inside frame</span>
           </div>
 
@@ -88,15 +91,14 @@
 
     <!-- ── SCREEN 2 : AR Interactive Overlay (Launched Automatically on Scan) ── -->
     <div id="ui-overlay" class="overlay hidden">
+      <!-- Top and Bottom Bacolod Mosaic Ribbon Strips -->
+      <div class="tribal-ribbon tribal-ribbon--top" aria-hidden="true"></div>
+
       <div id="ui-wrapper" class="ui-wrapper">
 
-        <!-- Top bar with Bacolod Festival Styling -->
+        <!-- Top bar with Controls -->
         <div class="top-bar">
-          <div class="brand-tag">
-            <span class="brand-tag-text">Bacolod Tourism AR</span>
-            <span class="dot dot--live"></span>
-          </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
+          <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
             <button id="recenter-btn" class="btn btn--ghost hidden">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
@@ -116,16 +118,13 @@
         <!-- Instruction toast -->
         <div id="toast" class="toast">
           <span class="toast-icon">✨</span>
-          <span>Aim at a flat surface, wait for the circle to appear, then tap to place the dancer</span>
+          <span>Point at the floor to detect flat surface, then tap anywhere on the grid to place</span>
         </div>
 
         <!-- History drawer (slide-up from bottom, hidden by default) -->
         <div id="history-modal" class="drawer hidden">
           <div class="drawer-handle"></div>
           <div class="drawer-content">
-            <!-- Multi-Color Accent Strip at top of modal -->
-            <div class="drawer-tribal-strip"></div>
-
             <div class="drawer-head">
               <div>
                 <span class="eyebrow eyebrow--light">Historical Context</span>
@@ -186,6 +185,9 @@
         </div>
 
       </div>
+
+      <!-- Bottom Mosaic Ribbon -->
+      <div class="tribal-ribbon tribal-ribbon--bottom" aria-hidden="true"></div>
     </div>
   </body>
 </html>

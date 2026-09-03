@@ -1,7 +1,7 @@
 import './style.css';
 import * as THREE from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { parseGIF, decompressFrames } from 'gifuct-js';
 
@@ -84,12 +84,10 @@ let videoTex       = null;   // Live VideoTexture
 let isPlaced       = false;
 let isThreeInitialized = false;
 let dancerVideo    = null;
-let reticle;
 let hitTestSource = null;
 let hitTestSourceRequested = false;
 let controller;
 let xrLastLandscape = null; // tracks overlay rotation state inside WebXR
-
 let currentMediaUrl  = null;
 let currentMediaType = 'default'; // 'video' | 'image' | 'default'
 let currentTexture   = null;
@@ -113,11 +111,19 @@ const RETICLE_ACCENT = 0xee6327; // Bacolod Orange
 const RETICLE_LIGHT  = 0xfbb03b; // Bacolod Yellow
 
 const QR_CAMERA_CONFIG = {
-  fps: 8,
-  qrbox: { width: 220, height: 220 },
-  aspectRatio: 1.0
+  fps: 25,
+  qrbox: (viewfinderWidth, viewfinderHeight) => {
+    const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+    const size = Math.floor(minEdge * 0.88);
+    return {
+      width: Math.max(size, 200),
+      height: Math.max(size, 200)
+    };
+  },
+  aspectRatio: 1.0,
+  disableFlip: false
 };
-const CAMERA_RELEASE_DELAY_MS = 450;
+const CAMERA_RELEASE_DELAY_MS = 100;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -213,6 +219,9 @@ function createBillboardMaterial(texture) {
 // ── Pulsating Grid Floor Shader & Builder ───────────────────────────────
 let floorGridMesh = null;
 let floorGridMaterial = null;
+let fallbackFloorGridMesh = null;
+let detectedFloorHeight = null;
+const lastHitPosition = new THREE.Vector3();
 let lastHitPoseMatrix = null;
 let detectedPlaneGrids = new Map();
 let planeDetectionAvailable = false;
@@ -366,6 +375,12 @@ function resetDetectedPlaneGrids() {
   detectedPlaneGrids.forEach(disposeDetectedPlaneGrid);
   detectedPlaneGrids.clear();
   planeDetectionAvailable = false;
+  detectedFloorHeight = null;
+  if (fallbackFloorGridMesh) {
+    floorGridMesh?.remove(fallbackFloorGridMesh);
+    fallbackFloorGridMesh.geometry?.dispose();
+    fallbackFloorGridMesh = null;
+  }
   if (floorGridMesh) floorGridMesh.visible = false;
 }
 
@@ -383,20 +398,6 @@ function pointInDetectedPlanePolygon(point, polygon) {
   return inside;
 }
 
-function planeContainsHitMatrix(context, matrixArray) {
-  if (!context || !matrixArray || !context.polygon || context.polygon.length < 3) {
-    return false;
-  }
-
-  hitTestMatrix.fromArray(matrixArray);
-  localHitPoint.setFromMatrixPosition(hitTestMatrix);
-  planeInverseMatrix.copy(context.mesh.matrix).invert();
-  planeLocalHitPoint.copy(localHitPoint).applyMatrix4(planeInverseMatrix);
-
-  return Math.abs(planeLocalHitPoint.y) <= 0.08 &&
-    pointInDetectedPlanePolygon(planeLocalHitPoint, context.polygon);
-}
-
 function isHorizontalDetectedPlane(plane, planePose) {
   if (plane.orientation && plane.orientation !== 'horizontal') return false;
 
@@ -412,75 +413,93 @@ function updateDetectedPlaneGrids(frame, referenceSpace, hitMatrix = null) {
   } catch (err) {
     detectedPlanes = null;
   }
-  planeDetectionAvailable = !!detectedPlanes;
 
-  if (!planeDetectionAvailable) {
-    if (floorGridMesh) floorGridMesh.visible = false;
-    return false;
-  }
-
-  detectedPlaneGrids.forEach((context, plane) => {
-    if (!detectedPlanes.has(plane)) {
-      disposeDetectedPlaneGrid(context);
-      detectedPlaneGrids.delete(plane);
-    }
-  });
-
-  let visiblePlaneCount = 0;
-  let activePlaneContext = null;
-
-  detectedPlanes.forEach((plane) => {
-    const planePose = frame.getPose(plane.planeSpace, referenceSpace);
-    let context = detectedPlaneGrids.get(plane);
-
-    if (!planePose || !isHorizontalDetectedPlane(plane, planePose)) {
-      if (context) context.mesh.visible = false;
-      return;
-    }
-
-    if (!context) {
-      const geometry = buildPlaneGridGeometry(plane.polygon);
-      if (!geometry) return;
-
-      const mesh = new THREE.Mesh(geometry, floorGridMaterial);
-      mesh.matrixAutoUpdate = false;
-      mesh.renderOrder = 1;
-      floorGridMesh?.add(mesh);
-
-      context = {
-        mesh,
-        polygon: plane.polygon,
-        timestamp: plane.lastChangedTime
-      };
-      detectedPlaneGrids.set(plane, context);
-    } else if (context.timestamp < plane.lastChangedTime) {
-      const geometry = buildPlaneGridGeometry(plane.polygon);
-      if (geometry) {
-        context.mesh.geometry.dispose();
-        context.mesh.geometry = geometry;
-        context.polygon = plane.polygon;
-        context.timestamp = plane.lastChangedTime;
+  if (detectedPlanes && detectedPlanes.size > 0) {
+    planeDetectionAvailable = true;
+    detectedPlaneGrids.forEach((context, plane) => {
+      if (!detectedPlanes.has(plane)) {
+        disposeDetectedPlaneGrid(context);
+        detectedPlaneGrids.delete(plane);
       }
+    });
+
+    let visiblePlaneCount = 0;
+
+    detectedPlanes.forEach((plane) => {
+      const planePose = frame.getPose(plane.planeSpace, referenceSpace);
+      let context = detectedPlaneGrids.get(plane);
+
+      if (!planePose || !isHorizontalDetectedPlane(plane, planePose)) {
+        if (context) context.mesh.visible = false;
+        return;
+      }
+
+      if (!context) {
+        const geometry = buildPlaneGridGeometry(plane.polygon);
+        if (!geometry) return;
+
+        const mesh = new THREE.Mesh(geometry, floorGridMaterial);
+        mesh.matrixAutoUpdate = false;
+        mesh.renderOrder = 1;
+        floorGridMesh?.add(mesh);
+
+        context = {
+          mesh,
+          polygon: plane.polygon,
+          timestamp: plane.lastChangedTime
+        };
+        detectedPlaneGrids.set(plane, context);
+      } else if (context.timestamp < plane.lastChangedTime) {
+        const geometry = buildPlaneGridGeometry(plane.polygon);
+        if (geometry) {
+          context.mesh.geometry.dispose();
+          context.mesh.geometry = geometry;
+          context.polygon = plane.polygon;
+          context.timestamp = plane.lastChangedTime;
+        }
+      }
+
+      context.mesh.matrix.fromArray(planePose.transform.matrix);
+      // Floor grid sticks directly to all detected horizontal floor surfaces!
+      context.mesh.visible = !isPlaced;
+      visiblePlaneCount++;
+
+      planePoseMatrix.fromArray(planePose.transform.matrix);
+      detectedFloorHeight = planePoseMatrix.elements[13];
+    });
+
+    if (floorGridMesh) {
+      floorGridMesh.visible = !isPlaced && visiblePlaneCount > 0;
     }
 
-    context.mesh.matrix.fromArray(planePose.transform.matrix);
-    context.mesh.visible = false;
+    return visiblePlaneCount > 0;
+  }
 
-    if (!activePlaneContext && !isPlaced && planeContainsHitMatrix(context, hitMatrix)) {
-      activePlaneContext = context;
+  // Anchor floor grid on hit-test detected surface
+  if (hitMatrix && !isPlaced) {
+    hitTestMatrix.fromArray(hitMatrix);
+    const hitPos = new THREE.Vector3().setFromMatrixPosition(hitTestMatrix);
+    detectedFloorHeight = hitPos.y;
+    lastHitPosition.copy(hitPos);
+
+    if (!fallbackFloorGridMesh) {
+      const gridGeo = new THREE.PlaneGeometry(6, 6, 1, 1);
+      gridGeo.rotateX(-Math.PI / 2);
+      fallbackFloorGridMesh = new THREE.Mesh(gridGeo, floorGridMaterial);
+      fallbackFloorGridMesh.renderOrder = 1;
+      floorGridMesh?.add(fallbackFloorGridMesh);
     }
-  });
 
-  if (activePlaneContext) {
-    activePlaneContext.mesh.visible = true;
-    visiblePlaneCount = 1;
+    fallbackFloorGridMesh.position.set(hitPos.x, hitPos.y + PLANE_GRID_SURFACE_OFFSET, hitPos.z);
+    fallbackFloorGridMesh.visible = !isPlaced;
+
+    if (floorGridMesh) {
+      floorGridMesh.visible = !isPlaced;
+    }
+    return true;
   }
 
-  if (floorGridMesh) {
-    floorGridMesh.visible = !isPlaced && visiblePlaneCount > 0;
-  }
-
-  return visiblePlaneCount > 0;
+  return false;
 }
 
 function setMediaReady(ready) {
@@ -921,7 +940,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function initCustomQrScanner() {
   try {
     if (!html5QrCode) {
-      html5QrCode = new Html5Qrcode("qr-reader");
+      try {
+        html5QrCode = new Html5Qrcode("qr-reader", {
+          formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true
+          },
+          verbose: false
+        });
+      } catch (err) {
+        console.warn('Fallback standard Html5Qrcode init:', err);
+        html5QrCode = new Html5Qrcode("qr-reader");
+      }
     }
 
     // Always choose the back camera directly using facingMode constraint
@@ -956,7 +986,7 @@ async function stopQrCameraInternal({ clear = false } = {}) {
       await html5QrCode.stop();
     } catch (err) {
       console.warn('QR camera stop skipped:', err);
-      await wait(250);
+      await wait(150);
     }
   }
 
@@ -979,7 +1009,7 @@ async function startQrCameraInternal() {
 
   if (html5QrCode.isScanning) {
     await stopQrCameraInternal();
-    await wait(150);
+    await wait(100);
   }
 
   try {
@@ -1066,69 +1096,7 @@ async function startUniversalAR() {
   
 }
 
-function makeReticleMaterial(color, opacity, blending = THREE.NormalBlending) {
-  return new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    blending,
-  });
-}
 
-function makeReticleRing(innerRadius, outerRadius, color, opacity, segments = 96) {
-  const geometry = new THREE.RingGeometry(innerRadius, outerRadius, segments).rotateX(-Math.PI / 2);
-  return new THREE.Mesh(geometry, makeReticleMaterial(color, opacity, THREE.AdditiveBlending));
-}
-
-function buildPlacementReticle() {
-  const group = new THREE.Group();
-  group.matrixAutoUpdate = false;
-
-  const glow = makeReticleRing(0.12, 0.25, RETICLE_LIGHT, 0.12, 128);
-  glow.position.y = 0.003;
-  group.add(glow);
-
-  const softHalo = makeReticleRing(0.145, 0.21, RETICLE_ACCENT, 0.22, 128);
-  softHalo.position.y = 0.005;
-  group.add(softHalo);
-
-  const mainRing = makeReticleRing(0.158, 0.178, RETICLE_LIGHT, 0.84, 128);
-  mainRing.position.y = 0.009;
-  group.add(mainRing);
-
-  const innerRing = makeReticleRing(0.075, 0.082, RETICLE_ACCENT, 0.24, 96);
-  innerRing.position.y = 0.01;
-  group.add(innerRing);
-
-  const dot = new THREE.Mesh(
-    new THREE.CircleGeometry(0.012, 32).rotateX(-Math.PI / 2),
-    makeReticleMaterial(RETICLE_LIGHT, 0.62, THREE.AdditiveBlending)
-  );
-  dot.position.y = 0.016;
-  group.add(dot);
-
-  group.userData = { glow, softHalo, mainRing, innerRing, dot };
-  group.visible = false;
-  return group;
-}
-
-function updatePlacementReticle(time) {
-  if (!reticle?.visible) return;
-
-  const { glow, softHalo, mainRing, innerRing, dot } = reticle.userData || {};
-  const pulse = 1 + Math.sin(time * 2.2) * 0.026;
-
-  if (glow) {
-    glow.scale.setScalar(1.02 + Math.sin(time * 2) * 0.035);
-    glow.material.opacity = 0.1 + Math.sin(time * 2.4) * 0.025;
-  }
-  if (softHalo) softHalo.scale.setScalar(pulse);
-  if (mainRing) mainRing.material.opacity = 0.74 + Math.sin(time * 2.2) * 0.08;
-  if (innerRing) innerRing.scale.setScalar(1 + Math.sin(time * 2.2 + 0.6) * 0.018);
-  if (dot) dot.scale.setScalar(1 + Math.sin(time * 2.8 + 0.5) * 0.025);
-}
 
 function initThreeScene() {
   const canvas = $('ar-canvas');
@@ -1201,30 +1169,16 @@ function initThreeScene() {
   dancerGroup.visible = false;
   scene.add(dancerGroup);
 
-  // Fallback pointer down on canvas for non-XR desktop / mobile touch interaction
-  canvas.addEventListener('pointerdown', (e) => {
-    if (renderer && renderer.xr && renderer.xr.isPresenting) return;
-    if (e.target !== canvas) return;
+  // Fallback pointer down on canvas & window for touch / tap placement
+  const handlePlacementTap = (e) => {
     if (isPlaced) return;
+    if (e.target && e.target.closest && e.target.closest('button, .drawer, .top-bar-controls, input, label')) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const mouse = new THREE.Vector2(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      -((e.clientY - rect.top) / rect.height) * 2 + 1
-    );
+    handleFloorTap(e.clientX, e.clientY);
+  };
 
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, camera);
-    const floorY = floorGridMesh ? floorGridMesh.position.y : 0;
-    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorY);
-    const targetPoint = new THREE.Vector3();
-
-    if (raycaster.ray.intersectPlane(groundPlane, targetPoint)) {
-      dancerGroup.position.copy(targetPoint);
-      dancerGroup.userData.baseY = targetPoint.y;
-      placeDancer();
-    }
-  });
+  canvas.addEventListener('pointerdown', handlePlacementTap);
+  window.addEventListener('pointerdown', handlePlacementTap);
 
   // Render loop using setAnimationLoop for WebXR compatibility
   const clock = new THREE.Clock();
@@ -1243,7 +1197,6 @@ function initThreeScene() {
     if (currentGifPlayer) {
       currentGifPlayer.update(performance.now());
     }
-    updatePlacementReticle(clock.getElapsedTime());
 
     if (frame) {
       const referenceSpace = renderer.xr.getReferenceSpace();
@@ -1985,38 +1938,85 @@ function buildParticles() {
 }
 
 
-// ── WebXR Hit-Test Tap to Place & Reposition ──────────────────────────────────
+// ── Tap Anywhere on Floor Grid to Place & Reposition ────────────────────────
 function onSelect() {
   if (isPlaced) return;
+  handleFloorTap(null, null);
+}
 
-  if (lastHitPoseMatrix) {
+function handleFloorTap(screenX = null, screenY = null) {
+  if (isPlaced) return;
+
+  const targetPoint = new THREE.Vector3();
+  let foundIntersection = false;
+
+  const currentCamera = (renderer && renderer.xr && renderer.xr.isPresenting)
+    ? renderer.xr.getCamera()
+    : camera;
+
+  const raycaster = new THREE.Raycaster();
+  if (typeof screenX === 'number' && typeof screenY === 'number' && screenX > 0 && screenY > 0) {
+    const mouse = new THREE.Vector2(
+      (screenX / window.innerWidth) * 2 - 1,
+      -(screenY / window.innerHeight) * 2 + 1
+    );
+    raycaster.setFromCamera(mouse, currentCamera);
+  } else {
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), currentCamera);
+  }
+
+  // 1. Test intersection with detected floor grid meshes
+  if (floorGridMesh && floorGridMesh.children.length > 0) {
+    const planeMeshes = [];
+    floorGridMesh.traverse((child) => {
+      if (child.isMesh && child.visible) planeMeshes.push(child);
+    });
+
+    if (planeMeshes.length > 0) {
+      const intersects = raycaster.intersectObjects(planeMeshes, false);
+      if (intersects.length > 0) {
+        targetPoint.copy(intersects[0].point);
+        foundIntersection = true;
+      }
+    }
+  }
+
+  // 2. Intersect with horizontal ground plane at detected floor height
+  if (!foundIntersection) {
+    const floorY = detectedFloorHeight !== null ? detectedFloorHeight : (lastHitPosition ? lastHitPosition.y : 0);
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorY);
+    if (raycaster.ray.intersectPlane(groundPlane, targetPoint)) {
+      foundIntersection = true;
+    }
+  }
+
+  // 3. Fallback to last hit-test matrix position
+  if (!foundIntersection && lastHitPoseMatrix) {
+    const mat = new THREE.Matrix4().fromArray(lastHitPoseMatrix);
+    targetPoint.setFromMatrixPosition(mat);
+    foundIntersection = true;
+  }
+
+  if (foundIntersection) {
     if (dancerVideo && dancerVideo.paused) {
       dancerVideo.play().catch(() => {});
     }
-    
-    const hitPosition = new THREE.Vector3();
-    const hitQuaternion = new THREE.Quaternion();
-    const hitScale = new THREE.Vector3();
 
-    const mat = new THREE.Matrix4().fromArray(lastHitPoseMatrix);
-    mat.decompose(hitPosition, hitQuaternion, hitScale);
+    dancerGroup.position.copy(targetPoint);
+    dancerGroup.userData.baseY = targetPoint.y;
 
-    dancerGroup.position.copy(hitPosition);
-    dancerGroup.userData.baseY = hitPosition.y;
-
-    const cameraWorldPosition = new THREE.Vector3();
-    camera.getWorldPosition(cameraWorldPosition);
-
+    const cameraPos = new THREE.Vector3();
+    currentCamera.getWorldPosition(cameraPos);
     const angle = Math.atan2(
-      cameraWorldPosition.x - dancerGroup.position.x,
-      cameraWorldPosition.z - dancerGroup.position.z
+      cameraPos.x - dancerGroup.position.x,
+      cameraPos.z - dancerGroup.position.z
     );
     dancerGroup.userData.baseRotY = angle;
     dancerGroup.rotation.set(0, angle, 0);
-    
+
     placeDancer();
   } else {
-    setToast('Point camera at floor surface to detect plane grid');
+    setToast('Point at floor to detect flat surface, then tap anywhere on grid');
   }
 }
 
@@ -2026,7 +2026,7 @@ function placeDancer() {
   // Reveal 3D Object / Video content
   dancerGroup.visible = true;
 
-  // The pulsating floor grid DISAPPEARS once 3D object is placed!
+  // The pulsating floor grid disappears once placed!
   if (floorGridMesh) {
     floorGridMesh.visible = false;
   }
@@ -2046,9 +2046,12 @@ function repositionDancer() {
   isPlaced = false;
   dancerGroup.visible = false;
 
-  // Re-enable pulsating floor grid when repositioning!
+  // Re-enable pulsating floor grid on detected floor surfaces
   if (floorGridMesh) {
-    floorGridMesh.visible = detectedPlaneGrids.size > 0;
+    floorGridMesh.visible = true;
+    floorGridMesh.traverse((child) => {
+      if (child.isMesh) child.visible = true;
+    });
   }
 
   historyModalEl?.classList.add('hidden');
