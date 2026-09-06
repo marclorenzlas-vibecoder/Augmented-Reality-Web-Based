@@ -6,13 +6,13 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { parseGIF, decompressFrames } from 'gifuct-js';
 
 // ── State ──────────────────────────────────────────────────────────────────
-let currentGlbModel  = null;
-let mixer            = null;
-let gifCanvas        = null;
-let gifTexture       = null;
+let currentGlbModel = null;
+let mixer = null;
+let gifCanvas = null;
+let gifTexture = null;
 let currentGifPlayer = null;
-let isGifMediaType   = false;
-const gltfLoader     = new GLTFLoader();
+let isGifMediaType = false;
+const gltfLoader = new GLTFLoader();
 
 class GifPlayer {
   constructor(arrayBuffer, canvas, texture, onLoad) {
@@ -79,30 +79,34 @@ class GifPlayer {
 }
 let scene, camera, renderer;
 let dancerGroup;
-let videoMesh      = null;   // The 2D video billboard
-let videoTex       = null;   // Live VideoTexture
-let isPlaced       = false;
+let videoMesh = null;   // The 2D video billboard
+let videoTex = null;   // Live VideoTexture
+let isPlaced = false;
+let arStarted = false; // Only true after user explicitly taps "Start AR"
+let ignorePlacementUntil = 0;
+let placementListenerAttached = false;
+let handlePlacementTap = null;
 let isThreeInitialized = false;
-let dancerVideo    = null;
+let dancerVideo = null;
 let hitTestSource = null;
 let hitTestSourceRequested = false;
 let controller;
 let xrLastLandscape = null; // tracks overlay rotation state inside WebXR
-let currentMediaUrl  = null;
+let currentMediaUrl = null;
 let currentMediaType = 'default'; // 'video' | 'image' | 'default'
-let currentTexture   = null;
-let isMediaReady     = false;
-let mediaLoadToken   = 0;
-let currentBlobUrl    = null;
+let currentTexture = null;
+let isMediaReady = false;
+let mediaLoadToken = 0;
+let currentBlobUrl = null;
 
 // QR Scanner instance
-let html5QrCode      = null;
+let html5QrCode = null;
 let availableCameras = [];
 let selectedCameraIndex = 0;
-let qrCameraTask     = Promise.resolve();
-let isQrProcessing   = false;
+let qrCameraTask = Promise.resolve();
+let isQrProcessing = false;
 let activeQrCameraId = null;
-let restartQrTimer   = null;
+let restartQrTimer = null;
 
 // ── Spatial Audio State (Three.js PositionalAudio) ───────────────────────────
 let audioListener     = null;
@@ -368,7 +372,7 @@ function autoDetectKeyModeFromVideo() {
 }
 
 const RETICLE_ACCENT = 0xee6327; // Bacolod Orange
-const RETICLE_LIGHT  = 0xfbb03b; // Bacolod Yellow
+const RETICLE_LIGHT = 0xfbb03b; // Bacolod Yellow
 
 const QR_CAMERA_CONFIG = {
   fps: 25,
@@ -524,30 +528,31 @@ const FloorGridShader = {
       vec2 gridWorld = vPlanePosition.xz * 6.0;
       vec2 grid = abs(fract(gridWorld - 0.5) - 0.5) / fwidth(gridWorld);
       float line = min(grid.x, grid.y);
-      float gridAlpha = 1.0 - min(line, 1.0);
+      float gridAlpha = clamp(1.0 - min(line, 1.0), 0.0, 1.0);
 
       // Fine secondary grid lines
       vec2 fineGridWorld = vPlanePosition.xz * 18.0;
       vec2 fineGrid = abs(fract(fineGridWorld - 0.5) - 0.5) / fwidth(fineGridWorld);
       float fineLine = min(fineGrid.x, fineGrid.y);
-      float fineGridAlpha = (1.0 - min(fineLine, 1.0)) * 0.3;
+      float fineGridAlpha = clamp((1.0 - min(fineLine, 1.0)) * 0.35, 0.0, 1.0);
 
       float totalGrid = max(gridAlpha, fineGridAlpha);
 
-      // Pulsating wave animation radiating across floor plane
+      // Completely discard fragments between grid lines: zero dark fill, 100% transparent plane body
+      if (totalGrid <= 0.02) discard;
+
+      // Pulsating wave animation radiating across floor plane grid lines
       float distWorld = length(vPlanePosition.xz);
       float wave = sin(distWorld * 3.5 - uTime * 3.5) * 0.5 + 0.5;
-      float timePulse = sin(uTime * 2.5) * 0.2 + 0.8;
+      float timePulse = sin(uTime * 2.5) * 0.15 + 0.85;
 
       // Color composition matching Bacolod theme
       vec3 gridColor = mix(uColorSecondary, uColor, wave * 0.75);
-      vec3 finalColor = gridColor * (totalGrid * 1.6);
 
-      float alpha = (totalGrid * 0.95 + wave * 0.25) * timePulse;
+      // Only the wireframe grid lines render with vivid color and opacity
+      float alpha = clamp(totalGrid * timePulse, 0.0, 1.0);
 
-      if (alpha < 0.02) discard;
-
-      gl_FragColor = vec4(finalColor * 1.3, alpha);
+      gl_FragColor = vec4(gridColor, alpha);
     }
   `
 };
@@ -820,7 +825,7 @@ function markVideoReady(loadToken) {
 
   applyVideoToBillboard();
   setMediaReady(true);
-  dancerVideo.play().catch(() => {});
+  dancerVideo.play().catch(() => { });
 }
 
 function describeVideoError() {
@@ -953,7 +958,7 @@ function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
 
   dancerVideo.src = url;
   dancerVideo.load();
-  dancerVideo.play().catch(() => {});
+  dancerVideo.play().catch(() => { });
 
   if ('requestVideoFrameCallback' in dancerVideo) {
     dancerVideo.requestVideoFrameCallback(() => {
@@ -979,12 +984,12 @@ function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
 }
 
 const $ = (id) => document.getElementById(id);
-const uiOverlayEl     = $('ui-overlay');
-const uiWrapperEl     = $('ui-wrapper');
-const qrScreenEl      = $('qr-screen');
-const qrControlsEl    = $('qr-controls-container');
-const qrStatusTextEl  = $('qr-status-text');
-const toastEl         = $('toast');
+const uiOverlayEl = $('ui-overlay');
+const uiWrapperEl = $('ui-wrapper');
+const qrScreenEl = $('qr-screen');
+const qrControlsEl = $('qr-controls-container');
+const qrStatusTextEl = $('qr-status-text');
+const toastEl = $('toast');
 const infoToggleBtnEl = $('info-toggle-btn');
 const captureBtnEl    = $('capture-btn');
 const recenterBtnEl   = $('recenter-btn');
@@ -992,14 +997,14 @@ const keyModeBtnEl    = $('key-mode-btn');
 const soundBtnEl      = $('sound-btn');
 const historyModalEl  = $('history-modal');
 const closeHistoryBtn = $('close-history-btn');
-const qrSwitchBtn     = $('qr-switch-btn');
-const cameraSelectEl  = $('qr-camera-select');
-const cameraErrorEl   = $('camera-error-msg');
-const exitArBtnEl     = $('exit-ar-btn');
+const qrSwitchBtn = $('qr-switch-btn');
+const cameraSelectEl = $('qr-camera-select');
+const cameraErrorEl = $('camera-error-msg');
+const exitArBtnEl = $('exit-ar-btn');
 const loadingBarContainer = $('loading-bar-container');
-const loadingBar          = $('loading-bar');
+const loadingBar = $('loading-bar');
 
-const ORIENTATION_FADE_OUT_MS = 180;
+const ORIENTATION_FADE_OUT_MS = 50;
 let arOrientationFadeToken = 0;
 
 function applyXrOverlayOrientation({ isLandscape, deg = 0, width = '', height = '', left = '', top = '' }) {
@@ -1007,6 +1012,11 @@ function applyXrOverlayOrientation({ isLandscape, deg = 0, width = '', height = 
 
   if (isLandscape) {
     document.body.classList.add('landscape');
+    if (deg === -90) {
+      document.body.classList.add('landscape--reverse');
+    } else {
+      document.body.classList.remove('landscape--reverse');
+    }
     if (uiWrapper) {
       uiWrapper.style.width = width;
       uiWrapper.style.height = height;
@@ -1019,6 +1029,7 @@ function applyXrOverlayOrientation({ isLandscape, deg = 0, width = '', height = 
   }
 
   document.body.classList.remove('landscape');
+  document.body.classList.remove('landscape--reverse');
   if (uiWrapper) {
     uiWrapper.style.width = '';
     uiWrapper.style.height = '';
@@ -1082,7 +1093,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     dancerVideo.addEventListener('canplay', () => {
       if (dancerVideo.paused) {
-        dancerVideo.play().catch(() => {});
+        dancerVideo.play().catch(() => { });
       }
       autoDetectKeyModeFromVideo();
       if (videoTex) videoTex.needsUpdate = true;
@@ -1097,7 +1108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (qrControlsContainer) {
     qrControlsContainer.classList.remove('hidden');
   }
-  
+
   initCustomQrScanner().catch(err => {
     console.error('Auto QR scan start failed:', err);
   });
@@ -1127,7 +1138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // ── Step 2: Decode the QR from the uploaded image ─────────────────
       let decodedText = null;
-      let scanError  = null;
+      let scanError = null;
 
       try {
         // scanFile() takes the File directly — no need for objectURL
@@ -1195,9 +1206,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Reposition
-  recenterBtnEl?.addEventListener('click', (e) => {
+  const onRecenterTrigger = (e) => {
     e.stopPropagation();
+    ignorePlacementUntil = performance.now() + 800;
     repositionDancer();
+  };
+  recenterBtnEl?.addEventListener('click', onRecenterTrigger);
+  recenterBtnEl?.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    ignorePlacementUntil = performance.now() + 800;
+  });
+  recenterBtnEl?.addEventListener('touchstart', (e) => {
+    e.stopPropagation();
+    ignorePlacementUntil = performance.now() + 800;
   });
 
   // Exit AR
@@ -1211,9 +1232,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       console.warn("Session already ended or error:", err);
     }
+    resetArSessionState();
     uiOverlayEl?.classList.add('hidden');
     qrScreenEl?.classList.remove('hidden');
-    
+
     // Hide the ARButton injected by Three.js
     const arBtn = document.getElementById('ARButton');
     if (arBtn) arBtn.style.display = 'none';
@@ -1239,7 +1261,7 @@ async function initCustomQrScanner() {
     if (!html5QrCode) {
       try {
         html5QrCode = new Html5Qrcode("qr-reader", {
-          formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
           experimentalFeatures: {
             useBarCodeDetectorIfSupported: true
           },
@@ -1264,7 +1286,7 @@ async function initCustomQrScanner() {
 }
 
 function queueQrCameraTask(task) {
-  qrCameraTask = qrCameraTask.catch(() => {}).then(task);
+  qrCameraTask = qrCameraTask.catch(() => { }).then(task);
   return qrCameraTask;
 }
 
@@ -1314,7 +1336,7 @@ async function startQrCameraInternal() {
       { facingMode: "environment" },
       QR_CAMERA_CONFIG,
       onQrCodeSuccess,
-      () => {}
+      () => { }
     );
     activeQrCameraId = 'environment';
     cameraErrorEl?.classList.add('hidden');
@@ -1382,15 +1404,16 @@ async function onQrCodeSuccess(decodedText) {
 
 // ── Phase 2 : Camera & Three.js AR Engine ──────────────────────────────────
 async function startUniversalAR() {
+  resetArSessionState();
   if (dancerVideo) {
-    dancerVideo.play().catch(() => {});
+    dancerVideo.play().catch(() => { });
   }
 
   if (!isThreeInitialized) {
     initThreeScene();
     isThreeInitialized = true;
   }
-  
+
 }
 
 
@@ -1398,9 +1421,9 @@ async function startUniversalAR() {
 function initThreeScene() {
   const canvas = $('ar-canvas');
 
-  scene    = new THREE.Scene();
+  scene = new THREE.Scene();
   const aspect = window.innerWidth / window.innerHeight;
-  camera   = new THREE.PerspectiveCamera(70, aspect, 0.01, 20);
+  camera = new THREE.PerspectiveCamera(70, aspect, 0.01, 20);
   renderer = new THREE.WebGLRenderer({
     canvas,
     alpha: true,
@@ -1415,7 +1438,7 @@ function initThreeScene() {
   renderer.xr.enabled = true;
   renderer.xr.setFramebufferScaleFactor?.(0.8);
   renderer.xr.setFoveation?.(1);
-  
+
   // Create an AR Button that triggers the WebXR session with Environmental Occlusion & Depth Sensing
   const sessionInit = {
     requiredFeatures: ['hit-test'],
@@ -1444,6 +1467,71 @@ function initThreeScene() {
       </svg>
       <span style="font-size:inherit;font-weight:inherit;letter-spacing:inherit;line-height:1">Start AR</span>
     `;
+  });
+
+  // Enhanced Start AR button click handler: ensures domOverlay is active, launches WebXR, and provides graceful fallback
+  const originalOnClick = arButton.onclick;
+  arButton.onclick = async function (e) {
+    if (uiOverlayEl) {
+      uiOverlayEl.classList.remove('hidden');
+      uiOverlayEl.style.display = '';
+    }
+
+    arStarted = true;
+    const toast = toastEl || $('toast');
+    if (toast && !isPlaced) {
+      toast.classList.remove('hidden');
+    }
+
+    try {
+      if (typeof originalOnClick === 'function') {
+        await originalOnClick.call(this, e);
+      } else if (navigator.xr) {
+        const session = await navigator.xr.requestSession('immersive-ar', sessionInit);
+        await renderer.xr.setSession(session);
+      }
+    } catch (err) {
+      console.warn('Primary WebXR session request failed, trying minimal features:', err);
+      try {
+        const fallbackInit = {
+          requiredFeatures: ['hit-test'],
+          optionalFeatures: ['dom-overlay'],
+          domOverlay: { root: document.getElementById('ui-overlay') }
+        };
+        const session = await navigator.xr.requestSession('immersive-ar', fallbackInit);
+        await renderer.xr.setSession(session);
+      } catch (fallbackErr) {
+        console.error('AR session start failed completely:', fallbackErr);
+        setToast('Failed to start AR: ' + (fallbackErr.message || fallbackErr), true);
+        arStarted = false;
+        if (toast) toast.classList.add('hidden');
+        return;
+      }
+    }
+
+    // Hide Start AR button once session starts
+    arButton.style.display = 'none';
+
+    setTimeout(() => {
+      if (arStarted && !isPlaced) {
+        enablePlacementListener();
+      }
+    }, 400);
+  };
+
+  renderer.xr.addEventListener('sessionstart', () => {
+    arStarted = true;
+    const arBtn = document.getElementById('ARButton');
+    if (arBtn) arBtn.style.display = 'none';
+    const toast = toastEl || $('toast');
+    if (toast && !isPlaced) {
+      toast.classList.remove('hidden');
+    }
+    setTimeout(() => {
+      if (arStarted && !isPlaced) {
+        enablePlacementListener();
+      }
+    }, 400);
   });
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.2));
@@ -1492,16 +1580,17 @@ function initThreeScene() {
     }
   }
 
-  // Fallback pointer down on canvas & window for touch / tap placement
-  const handlePlacementTap = (e) => {
-    if (isPlaced) return;
-    if (e.target && e.target.closest && e.target.closest('button, .drawer, .top-bar-controls, input, label')) return;
+  // Touch / pointer placement handler on canvas (strictly inactive until user starts AR)
+  handlePlacementTap = (e) => {
+    if (!arStarted || isPlaced) return;
+    if (performance.now() < ignorePlacementUntil) return;
+    if (e.target && e.target.closest && e.target.closest('button, .drawer, .top-bar-controls, .top-bar, .dock, input, label, #ARButton')) return;
 
     handleFloorTap(e.clientX, e.clientY);
   };
 
-  canvas.addEventListener('pointerdown', handlePlacementTap);
-  window.addEventListener('pointerdown', handlePlacementTap);
+  // Ensure placement listener is inactive until user explicitly taps "Start AR"
+  disablePlacementListener();
 
   // Render loop using setAnimationLoop for WebXR compatibility
   const clock = new THREE.Clock();
@@ -1535,33 +1624,29 @@ function initThreeScene() {
         session.addEventListener('end', async () => {
           hitTestSourceRequested = false;
           hitTestSource = null;
-          isPlaced = false;
-          lastHitPoseMatrix = null;
-          resetDetectedPlaneGrids();
+          resetArSessionState();
           xrLastLandscape = null; // reset so next session re-evaluates
-          if (floorGridMesh) floorGridMesh.visible = false;
-          if (dancerGroup) dancerGroup.visible = false;
 
           // Reset overlay rotation back to portrait
           const uiWrapper = $('ui-wrapper');
           if (uiWrapper) {
-            uiWrapper.style.width  = '';
+            uiWrapper.style.width = '';
             uiWrapper.style.height = '';
-            uiWrapper.style.left   = '';
-            uiWrapper.style.top    = '';
+            uiWrapper.style.left = '';
+            uiWrapper.style.top = '';
             uiWrapper.style.transform = '';
             uiWrapper.style.transformOrigin = '';
           }
           if (uiOverlayEl) {
-            uiOverlayEl.style.width  = '';
+            uiOverlayEl.style.width = '';
             uiOverlayEl.style.height = '';
-            uiOverlayEl.style.left   = '';
-            uiOverlayEl.style.top    = '';
+            uiOverlayEl.style.left = '';
+            uiOverlayEl.style.top = '';
             uiOverlayEl.style.transform = '';
             uiOverlayEl.style.transformOrigin = '';
           }
           document.body.classList.remove('landscape');
-          
+
           // Reset UI
           uiOverlayEl?.classList.add('hidden');
           qrScreenEl?.classList.remove('hidden');
@@ -1569,7 +1654,6 @@ function initThreeScene() {
           if (arBtn) arBtn.style.display = 'none';
           dancerVideo?.pause();
           stopPositionalAudio();
-          
           // Reset all AR buttons to hidden state
           infoToggleBtnEl?.classList.add('hidden');
           captureBtnEl?.classList.add('hidden');
@@ -1621,14 +1705,22 @@ function initThreeScene() {
       const xrCam = renderer.xr.getCamera();
       if (xrCam) {
         const worldRight = new THREE.Vector3(1, 0, 0).applyQuaternion(xrCam.quaternion);
-        const isXrLandscape = Math.abs(worldRight.y) > 0.25;
+        const tilt = Math.abs(worldRight.y);
+        const screenAngle = (screen?.orientation?.angle !== undefined ? screen.orientation.angle : null) ?? window.orientation;
+        const screenIsLandscape = screenAngle === 90 || screenAngle === -90 || screenAngle === 270;
+
+        // Quick responsive landscape detection:
+        // Uses both device orientation sensor and 3D camera roll (>0.58 / ~35°) for instant response
+        const isXrLandscape = screenIsLandscape || (xrLastLandscape ? tilt > 0.40 : tilt > 0.58);
 
         if (isXrLandscape !== xrLastLandscape) {
           xrLastLandscape = isXrLandscape;
 
           if (isXrLandscape) {
-            // Swap rotation angle so right-tilt displays UI right-side up
-            const deg = worldRight.y < 0 ? -90 : 90;
+            let deg = worldRight.y < 0 ? -90 : 90;
+            if (screenAngle === 90) deg = 90;
+            else if (screenAngle === 270 || screenAngle === -90) deg = -90;
+
             const pw = window.innerWidth;   // frozen portrait width
             const ph = window.innerHeight;  // frozen portrait height
             const offsetX = (pw - ph) / 2;  // negative → moves left
@@ -1792,10 +1884,10 @@ async function loadMediaFromQR(text) {
   resetCurrentTexture();
   currentMediaUrl = resolvedUrl;
 
-  const isLocal = resolvedUrl.startsWith('/') || 
-                  resolvedUrl.startsWith('./') || 
-                  resolvedUrl.startsWith('../') ||
-                  resolvedUrl.startsWith(window.location.origin);
+  const isLocal = resolvedUrl.startsWith('/') ||
+    resolvedUrl.startsWith('./') ||
+    resolvedUrl.startsWith('../') ||
+    resolvedUrl.startsWith(window.location.origin);
 
   const isUrl = resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://') || isLocal;
 
@@ -1811,7 +1903,7 @@ async function loadMediaFromQR(text) {
     const isGif = /\.(gif)($|\?)/i.test(resolvedUrl);
     const isImage = /\.(jpg|jpeg|png|webp)($|\?)/i.test(resolvedUrl);
     const isGlb = /\.(glb|gltf)($|\?)/i.test(resolvedUrl);
-    
+
     if (isGif) {
       tryLoadGif(resolvedUrl, loadToken);
     } else if (isImage) {
@@ -1865,11 +1957,11 @@ async function loadMediaFromQR(text) {
     try {
       const blob = await response.blob();
       const contentType = blob.type || response.headers.get('Content-Type') || '';
-      
-      let isGlb = contentType.startsWith('model/') || 
-                  contentType.includes('gltf') || 
-                  /\.(glb|gltf)($|\?)/i.test(resolvedUrl);
-      
+
+      let isGlb = contentType.startsWith('model/') ||
+        contentType.includes('gltf') ||
+        /\.(glb|gltf)($|\?)/i.test(resolvedUrl);
+
       // Proactively detect GLB via standard 3D binary magic header 'glTF' (0x676C5446)
       try {
         const headerBuffer = await blob.slice(0, 4).arrayBuffer();
@@ -2091,7 +2183,9 @@ function tryLoadImage(url, loadToken = ++mediaLoadToken) {
       if (loadToken !== mediaLoadToken) return;
       console.warn('Image load error:', err);
       hideLoadingBar();
-      setToast('QR scanned. Aim and tap to place');
+      if (arStarted) {
+        setToast('QR scanned. Aim and tap to place');
+      }
     }
   );
 }
@@ -2156,7 +2250,7 @@ function applyTextureToBillboard(tex) {
   }
 
   if (!videoMesh) return;
-  
+
   if (videoMesh.material) videoMesh.material.dispose();
   videoMesh.material = new THREE.MeshBasicMaterial({
     map: tex,
@@ -2166,8 +2260,8 @@ function applyTextureToBillboard(tex) {
   });
   videoMesh.material.needsUpdate = true;
 
-  const aspect = (tex.image && tex.image.width && tex.image.height) 
-    ? (tex.image.width / tex.image.height) 
+  const aspect = (tex.image && tex.image.width && tex.image.height)
+    ? (tex.image.width / tex.image.height)
     : VIDEO_ASPECT;
   const h = BILLBOARD_HEIGHT;
   const w = h * aspect;
@@ -2271,7 +2365,7 @@ function buildVideoBillboard() {
 }
 
 function buildParticles() {
-  const N   = 36;
+  const N = 36;
   const geo = new THREE.BufferGeometry();
   const pos = new Float32Array(N * 3);
   const col = new Float32Array(N * 3);
@@ -2284,15 +2378,15 @@ function buildParticles() {
   ];
 
   for (let i = 0; i < N; i++) {
-    pos[i*3]     = (Math.random() - 0.5) * 2.2;
-    pos[i*3 + 1] = Math.random() * 1.6 - 0.3;
-    pos[i*3 + 2] = (Math.random() - 0.5) * 2.2;
+    pos[i * 3] = (Math.random() - 0.5) * 2.2;
+    pos[i * 3 + 1] = Math.random() * 1.6 - 0.3;
+    pos[i * 3 + 2] = (Math.random() - 0.5) * 2.2;
     const c = palette[i % palette.length];
-    col[i*3] = c.r; col[i*3+1] = c.g; col[i*3+2] = c.b;
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
 
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
 
   return new THREE.Points(geo, new THREE.PointsMaterial({
     size: 0.035, vertexColors: true, transparent: true, opacity: 0.6
@@ -2300,14 +2394,48 @@ function buildParticles() {
 }
 
 
+function resetArSessionState() {
+  arStarted = false;
+  isPlaced = false;
+  disablePlacementListener();
+  lastHitPoseMatrix = null;
+  detectedFloorHeight = null;
+  resetDetectedPlaneGrids();
+  if (floorGridMesh) floorGridMesh.visible = false;
+  if (dancerGroup) dancerGroup.visible = false;
+  const toast = toastEl || $('toast');
+  if (toast) toast.classList.add('hidden');
+}
+
+function enablePlacementListener() {
+  if (!arStarted || isPlaced) return;
+  const canvas = $('ar-canvas');
+  if (placementListenerAttached || !canvas || typeof handlePlacementTap !== 'function') return;
+  canvas.addEventListener('pointerdown', handlePlacementTap);
+  placementListenerAttached = true;
+}
+
+function disablePlacementListener() {
+  const canvas = $('ar-canvas');
+  if (canvas && typeof handlePlacementTap === 'function') {
+    canvas.removeEventListener('pointerdown', handlePlacementTap);
+  }
+  if (typeof handlePlacementTap === 'function') {
+    window.removeEventListener('pointerdown', handlePlacementTap);
+  }
+  placementListenerAttached = false;
+}
+
 // ── Tap Anywhere on Floor Grid to Place & Reposition ────────────────────────
 function onSelect() {
-  if (isPlaced) return;
+  if (!arStarted || isPlaced) return;
+  if (performance.now() < ignorePlacementUntil) return;
   handleFloorTap(null, null);
 }
 
 function handleFloorTap(screenX = null, screenY = null) {
-  if (isPlaced) return;
+  if (!arStarted || isPlaced) return;
+  if (performance.now() < ignorePlacementUntil) return;
 
   const targetPoint = new THREE.Vector3();
   let foundIntersection = false;
@@ -2361,7 +2489,7 @@ function handleFloorTap(screenX = null, screenY = null) {
 
   if (foundIntersection) {
     if (dancerVideo && dancerVideo.paused) {
-      dancerVideo.play().catch(() => {});
+      dancerVideo.play().catch(() => { });
     }
 
     dancerGroup.position.copy(targetPoint);
@@ -2384,6 +2512,7 @@ function handleFloorTap(screenX = null, screenY = null) {
 
 function placeDancer() {
   isPlaced = true;
+  disablePlacementListener();
 
   // Reveal 3D Object / Video content
   dancerGroup.visible = true;
@@ -2393,7 +2522,7 @@ function placeDancer() {
     floorGridMesh.visible = false;
   }
 
-  dancerVideo?.play().catch(() => {});
+  dancerVideo?.play().catch(() => { });
 
   // Spatial Positional 3D Audio : resume AudioContext and play from dancer!
   resumeAudioContext();
@@ -2419,8 +2548,10 @@ function placeDancer() {
 }
 
 function repositionDancer() {
+  ignorePlacementUntil = performance.now() + 800;
   isPlaced = false;
   dancerGroup.visible = false;
+  disablePlacementListener();
 
   // Pause positional audio while repositioning
   pausePositionalAudio();
@@ -2441,6 +2572,12 @@ function repositionDancer() {
   soundBtnEl?.classList.add('hidden');
 
   setToast('Point at floor plane and tap anywhere on grid to place');
+
+  setTimeout(() => {
+    if (arStarted && !isPlaced) {
+      enablePlacementListener();
+    }
+  }, 600);
 }
 
 
@@ -2448,7 +2585,7 @@ function repositionDancer() {
 function setupCapture() {
   captureBtnEl?.addEventListener('click', async (e) => {
     e.stopPropagation();
-    
+
     // Temporarily hide all UI overlay elements for a clean photo
     const uiWrapper = $('ui-wrapper');
     if (uiWrapper) uiWrapper.style.opacity = '0';
@@ -2475,7 +2612,7 @@ function setupCapture() {
           const H = video.videoHeight || window.innerHeight;
 
           const canvas = document.createElement('canvas');
-          canvas.width  = W;
+          canvas.width = W;
           canvas.height = H;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(video, 0, 0, W, H);
@@ -2531,8 +2668,8 @@ function setupCapture() {
 
 function downloadBlob(blob) {
   const url = URL.createObjectURL(blob);
-  const a   = document.createElement('a');
-  a.href     = url;
+  const a = document.createElement('a');
+  a.href = url;
   a.download = 'tourism-ar.png';
   document.body.appendChild(a);
   a.click();
@@ -2544,7 +2681,16 @@ function downloadBlob(blob) {
 let toastTimer = null;
 function setToast(msg, persist = false) {
   if (!toastEl) return;
-  toastEl.textContent = msg;
+  // If AR has not started yet, do not display surface detection/placement instruction toasts
+  if (!arStarted && /tap|aim|point|grid|floor|place/i.test(msg)) {
+    return;
+  }
+  const textSpan = toastEl.querySelector('#toast-text');
+  if (textSpan) {
+    textSpan.textContent = msg;
+  } else {
+    toastEl.textContent = msg;
+  }
   toastEl.classList.remove('hidden');
   clearTimeout(toastTimer);
   if (persist) return;
@@ -2583,10 +2729,10 @@ function updateOrientationClass() {
 
 function updateLoadingBar(percent, isIndeterminate = false) {
   if (!loadingBarContainer || !loadingBar) return;
-  
+
   loadingBarContainer.classList.remove('hidden');
   loadingBarContainer.style.opacity = '1';
-  
+
   if (isIndeterminate) {
     loadingBar.classList.add('loading-bar--indeterminate');
     loadingBar.style.width = '100%';

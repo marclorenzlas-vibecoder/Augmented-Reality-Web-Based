@@ -1,4 +1,6 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Outfit:wght@600;700;800;900&display=swap');
+
 
 /* ──────────────────────────────────────────
    Design Tokens - Bacolod City Tourism Palette
@@ -6,68 +8,76 @@
 ────────────────────────────────────────── */
 :root {
   /* ── Bacolod Festival Brand Colors (from official photo) ── */
-  --bacolod-yellow:   #FBB03B;   /* Radiant warm gold / yellow */
-  --bacolod-orange:   #EE6327;   /* Festival energetic orange */
-  --bacolod-purple:   #924A96;   /* Royal violet / purple */
-  --bacolod-blue:     #0C76BA;   /* Civic Bacolod azure blue */
+  --bacolod-yellow: #FBB03B;
+  /* Radiant warm gold / yellow */
+  --bacolod-orange: #EE6327;
+  /* Festival energetic orange */
+  --bacolod-purple: #924A96;
+  /* Royal violet / purple */
+  --bacolod-blue: #0C76BA;
+  /* Civic Bacolod azure blue */
 
   /* ── White Base & Pure Light Surfaces ── */
-  --c-bg:             #ffffff;
-  --c-bg-subtle:      #f8fafc;
-  --c-surface:        rgba(255, 255, 255, 0.94);
-  --c-surface-2:      rgba(248, 250, 252, 0.96);
-  --c-surface-card:   #ffffff;
-  --c-border:         rgba(15, 23, 42, 0.08);
-  --c-border-md:      rgba(15, 23, 42, 0.14);
-  --c-border-brand:   rgba(12, 118, 186, 0.25);
-  
+  --c-bg: #ffffff;
+  --c-bg-subtle: #f8fafc;
+  --c-surface: rgba(255, 255, 255, 0.94);
+  --c-surface-2: rgba(248, 250, 252, 0.96);
+  --c-surface-card: #ffffff;
+  --c-border: rgba(15, 23, 42, 0.08);
+  --c-border-md: rgba(15, 23, 42, 0.14);
+  --c-border-brand: rgba(12, 118, 186, 0.25);
+
   /* ── High-Contrast Modern Typography ── */
-  --c-text:           #0f172a;   /* Rich Slate 900 */
-  --c-text-sub:       #334155;   /* Slate 700 */
-  --c-muted:          #64748b;   /* Slate 500 */
-  --c-danger:         #ef4444;
+  --c-text: #0f172a;
+  /* Rich Slate 900 */
+  --c-text-sub: #334155;
+  /* Slate 700 */
+  --c-muted: #64748b;
+  /* Slate 500 */
+  --c-danger: #ef4444;
 
   /* ── Semantic Accent Variables ── */
-  --c-accent:         var(--bacolod-orange);
-  --c-accent-yellow:  var(--bacolod-yellow);
-  --c-accent-orange:  var(--bacolod-orange);
-  --c-accent-purple:  var(--bacolod-purple);
-  --c-accent-blue:    var(--bacolod-blue);
+  --c-accent: var(--bacolod-orange);
+  --c-accent-yellow: var(--bacolod-yellow);
+  --c-accent-orange: var(--bacolod-orange);
+  --c-accent-purple: var(--bacolod-purple);
+  --c-accent-blue: var(--bacolod-blue);
 
   /* ── Multi-Color Gradient Stripes ── */
-  --tribal-gradient:  linear-gradient(90deg, 
-    var(--bacolod-purple) 0%, 
-    var(--bacolod-blue) 33%, 
-    var(--bacolod-orange) 66%, 
-    var(--bacolod-yellow) 100%
-  );
+  --tribal-gradient: linear-gradient(90deg,
+      var(--bacolod-purple) 0%,
+      var(--bacolod-blue) 33%,
+      var(--bacolod-orange) 66%,
+      var(--bacolod-yellow) 100%);
 
   /* ── Elevation Shadows ── */
-  --shadow-sm:        0 2px 8px rgba(0, 0, 0, 0.04);
-  --shadow-md:        0 8px 24px rgba(12, 118, 186, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
-  --shadow-lg:        0 16px 40px rgba(0, 0, 0, 0.09), 0 4px 12px rgba(238, 99, 39, 0.06);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 8px 24px rgba(12, 118, 186, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.09), 0 4px 12px rgba(238, 99, 39, 0.06);
 
   /* ── Geometry & Layout ── */
-  --radius-sm:        10px;
-  --radius-md:        20px;
-  --radius-lg:        28px;
-  --radius-pill:      999px;
+  --radius-sm: 10px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
 
-  --blur-sm:          blur(6px);
-  --blur-md:          blur(12px);
-  --blur-lg:          blur(20px);
+  --blur-sm: blur(6px);
+  --blur-md: blur(12px);
+  --blur-lg: blur(20px);
 
-  --font-body:        'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --font-heading:     'Outfit', 'Plus Jakarta Sans', sans-serif;
+  --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Outfit', 'Plus Jakarta Sans', sans-serif;
 
-  --ease-out:         cubic-bezier(0.16, 1, 0.3, 1);
-  --orientation-fade-duration: 0.18s;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --orientation-fade-duration: 0.08s;
 }
 
 /* ──────────────────────────────────────────
    Reset & Base
 ────────────────────────────────────────── */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -76,7 +86,8 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-html, body {
+html,
+body {
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -178,7 +189,8 @@ html, body {
   align-items: center;
   text-align: center;
   gap: 6px;
-  max-width: 330px;
+  max-width: 380px;
+  width: 100%;
   margin: 0 auto;
   z-index: 2;
   padding-top: 4px;
@@ -218,25 +230,48 @@ html, body {
   0% {
     transform: translateY(0);
   }
+
   100% {
     transform: translateY(-3px);
   }
 }
 
 .qr-title {
-  font-family: var(--font-heading);
-  font-size: clamp(20px, 4.8vw, 24px);
-  font-weight: 800;
-  color: var(--c-text);
-  line-height: 1.2;
-  letter-spacing: -0.3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
   margin-top: 2px;
+  line-height: 1.1;
+  text-align: center;
 }
 
+.qr-title-text {
+  font-family: 'Baloo 2', cursive, sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: #993C1D;
+  line-height: 1.1;
+}
+
+.ar-badge,
 .title-accent {
-  background: linear-gradient(135deg, var(--bacolod-orange) 0%, var(--bacolod-purple) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-family: 'Baloo 2', cursive, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #412402;
+  background-color: #FAC775;
+  padding: 4px 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.15;
+  letter-spacing: 0.3px;
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
 .qr-desc {
@@ -259,7 +294,7 @@ html, body {
   border-radius: var(--radius-md);
   overflow: hidden;
   background: #000000;
-  box-shadow: 
+  box-shadow:
     0 16px 40px rgba(12, 118, 186, 0.16),
     0 0 0 1px var(--c-border-md),
     0 0 0 4px rgba(255, 255, 255, 0.95);
@@ -281,7 +316,7 @@ html, body {
 }
 
 /* Hide html5-qrcode injected dashboard inside box */
-#qr-reader > div:not(#qr-reader__scan_region) {
+#qr-reader>div:not(#qr-reader__scan_region) {
   display: none !important;
 }
 
@@ -300,9 +335,19 @@ html, body {
 }
 
 @keyframes scanMove {
-  0% { top: 5%; opacity: 0.3; }
-  50% { opacity: 1; }
-  100% { top: 95%; opacity: 0.3; }
+  0% {
+    top: 5%;
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    top: 95%;
+    opacity: 0.3;
+  }
 }
 
 /* Multi-color Corner Markers */
@@ -317,28 +362,39 @@ html, body {
   pointer-events: none;
 }
 
-.corner--tl { 
-  top: 0; left: 0; 
-  border-top-width: 3.5px; border-left-width: 3.5px; 
-  border-top-left-radius: var(--radius-md); 
+.corner--tl {
+  top: 0;
+  left: 0;
+  border-top-width: 3.5px;
+  border-left-width: 3.5px;
+  border-top-left-radius: var(--radius-md);
   border-color: var(--bacolod-purple);
 }
-.corner--tr { 
-  top: 0; right: 0; 
-  border-top-width: 3.5px; border-right-width: 3.5px; 
-  border-top-right-radius: var(--radius-md); 
+
+.corner--tr {
+  top: 0;
+  right: 0;
+  border-top-width: 3.5px;
+  border-right-width: 3.5px;
+  border-top-right-radius: var(--radius-md);
   border-color: var(--bacolod-yellow);
 }
-.corner--bl { 
-  bottom: 0; left: 0; 
-  border-bottom-width: 3.5px; border-left-width: 3.5px; 
-  border-bottom-left-radius: var(--radius-md); 
+
+.corner--bl {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 3.5px;
+  border-left-width: 3.5px;
+  border-bottom-left-radius: var(--radius-md);
   border-color: var(--bacolod-blue);
 }
-.corner--br { 
-  bottom: 0; right: 0; 
-  border-bottom-width: 3.5px; border-right-width: 3.5px; 
-  border-bottom-right-radius: var(--radius-md); 
+
+.corner--br {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 3.5px;
+  border-right-width: 3.5px;
+  border-bottom-right-radius: var(--radius-md);
   border-color: var(--bacolod-orange);
 }
 
@@ -363,10 +419,17 @@ html, body {
 }
 
 .target-crosshair::before {
-  top: 19px; left: 0; right: 0; height: 2px;
+  top: 19px;
+  left: 0;
+  right: 0;
+  height: 2px;
 }
+
 .target-crosshair::after {
-  left: 19px; top: 0; bottom: 0; width: 2px;
+  left: 19px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
 }
 
 /* ──────────────────────────────────────────
@@ -471,8 +534,17 @@ html, body {
 }
 
 @keyframes dotPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.75); }
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.4;
+    transform: scale(0.75);
+  }
 }
 
 .error-block {
@@ -559,6 +631,8 @@ html, body {
   box-shadow: 0 8px 24px rgba(251, 176, 59, 0.18);
   white-space: nowrap;
   transition: all 0.2s var(--ease-out);
+  align-self: center;
+  margin: 0 auto;
 }
 
 .btn-festival-sparkle {
@@ -667,13 +741,13 @@ html, body {
   left: 50%;
   transform: translateX(-50%);
   z-index: 60;
-  
+
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
-  
+
   color: var(--c-text);
   padding: 12px 26px;
   border-radius: var(--radius-pill);
@@ -693,6 +767,13 @@ html, body {
 
 .toast-icon {
   font-size: 15px;
+}
+
+.toast-icon-svg {
+  width: 16px;
+  height: 16px;
+  color: var(--bacolod-orange);
+  flex-shrink: 0;
 }
 
 .toast.hidden {
@@ -896,19 +977,24 @@ html, body {
 ────────────────────────────────────────── */
 .dock {
   position: absolute;
-  bottom: max(env(safe-area-inset-bottom), 28px);
-  right: 50%;
-  transform: translateX(50%);
+  bottom: calc(max(env(safe-area-inset-bottom), 0px) + 52px);
+  left: 0;
+  right: 0;
+  width: 100%;
+  transform: none;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  padding: 0;
   gap: 14px;
-  pointer-events: auto;
+  pointer-events: none;
   will-change: transform, right, bottom, gap;
 }
 
 /* Shutter Button */
 .shutter-btn {
+  align-self: center;
   position: relative;
   width: 74px;
   height: 74px;
@@ -977,12 +1063,21 @@ html, body {
 }
 
 /* Smooth visibility transitions */
-.toast, .btn, .shutter-btn, .qr-screen, .overlay,
-.qr-header, .headline, .scanner-frame, .qr-footer,
-.drawer, .drawer-content, .screen--qr {
-  transition: opacity 0.38s ease, 
-              visibility 0.38s ease,
-              transform 0.32s var(--ease-out);
+.toast,
+.btn,
+.shutter-btn,
+.qr-screen,
+.overlay,
+.qr-header,
+.headline,
+.scanner-frame,
+.qr-footer,
+.drawer,
+.drawer-content,
+.screen--qr {
+  transition: opacity 0.38s ease,
+    visibility 0.38s ease,
+    transform 0.32s var(--ease-out);
 }
 
 .btn--info {
@@ -1015,6 +1110,11 @@ body.landscape .qr-header {
   padding-top: 0;
 }
 
+body.landscape .qr-title {
+  justify-content: flex-start;
+  text-align: left;
+}
+
 
 body.landscape .scanner-frame {
   width: min(55vh, 200px);
@@ -1028,50 +1128,107 @@ body.landscape .qr-footer {
 }
 
 /* AR Overlay landscape repositioning */
-body.landscape .overlay {
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px max(env(safe-area-inset-right), 24px) 20px max(env(safe-area-inset-left), 24px);
+body.landscape .overlay,
+.overlay.landscape {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
 }
 
-body.landscape .top-bar {
+body.landscape .ui-wrapper,
+.overlay.landscape .ui-wrapper {
   position: absolute;
-  top: max(env(safe-area-inset-top), 16px);
-  left: max(env(safe-area-inset-left), 20px);
-  right: max(env(safe-area-inset-right), 20px);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: block;
+  padding: 0;
+}
+
+body.landscape .top-bar,
+.overlay.landscape .top-bar {
+  position: absolute;
+  top: max(env(safe-area-inset-top), 20px);
+  right: max(env(safe-area-inset-right), 32px);
+  left: auto;
+  bottom: auto;
   width: auto;
-}
-
-body.landscape .dock {
-  position: absolute;
-  right: max(env(safe-area-inset-right), 24px);
-  bottom: max(env(safe-area-inset-bottom), 20px);
-  top: auto;
-  transform: translateX(0);
   display: flex;
-  flex-direction: row;
+  justify-content: flex-end;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  margin: 0;
+  z-index: 70;
+  pointer-events: auto;
 }
 
-body.landscape .btn--info {
-  min-width: 190px;
-  max-width: calc(100vw - 48px);
-  padding: 10px 22px;
-  font-size: 13px;
+body.landscape .dock,
+.overlay.landscape .dock {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: block;
+  transform: none;
+  bottom: 0;
+  right: 0;
+  left: 0;
+  top: 0;
+  margin: 0;
+}
+
+body.landscape .shutter-btn,
+.overlay.landscape .shutter-btn {
+  position: absolute;
+  top: 50%;
+  right: calc(max(env(safe-area-inset-right), 0px) + 45px);
+  bottom: auto;
+  left: auto;
+  transform: translateY(-50%);
+  margin: 0;
+  pointer-events: auto;
+  z-index: 60;
+}
+
+body.landscape--reverse .shutter-btn,
+.overlay.landscape--reverse .shutter-btn {
+  right: auto;
+  left: calc(max(env(safe-area-inset-left), 0px) + 45px);
+}
+
+body.landscape .btn--info,
+.overlay.landscape .btn--info {
+  position: absolute;
+  right: calc(max(env(safe-area-inset-right), 0px) + 40px);
+  left: auto;
+  bottom: calc(max(env(safe-area-inset-bottom), 0px) + 38px);
+  top: auto;
+  transform: none;
+  margin: 0;
+  pointer-events: auto;
+  width: max-content;
+  min-width: 290px;
+  max-width: min(440px, 46vw);
+  padding: 13px 32px;
+  font-size: 13.5px;
+  letter-spacing: 0.3px;
   border-radius: var(--radius-pill);
   box-shadow: 0 4px 20px rgba(12, 118, 186, 0.16);
   white-space: nowrap;
+  z-index: 60;
 }
 
-@media (max-width: 340px) {
-  .btn--info {
-    min-width: 174px;
-    padding-inline: 16px;
-    gap: 8px;
-    font-size: 12px;
-  }
+body.landscape .toast,
+.overlay.landscape .toast {
+  position: absolute;
+  bottom: calc(max(env(safe-area-inset-bottom), 0px) + 130px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(540px, 80vw);
+  z-index: 65;
 }
 
 /* Drawer landscape sidebar adjustments */
@@ -1124,26 +1281,37 @@ body:has(#history-modal:not(.hidden)) .tribal-ribbon--bottom,
   .screen--qr {
     padding: max(env(safe-area-inset-top), 32px) 16px max(env(safe-area-inset-bottom), 34px);
   }
+
   .qr-desc {
     display: none;
   }
-  .qr-title {
-    font-size: 18px;
+
+  .qr-title-text {
+    font-size: 24px;
   }
+
   .scanner-frame {
     width: min(62vw, 28vh, 175px);
   }
+
   .qr-footer {
     gap: 6px;
     margin-top: 2px;
   }
+
   .overlay {
     padding-top: max(env(safe-area-inset-top), 20px);
     padding-bottom: max(env(safe-area-inset-bottom), 16px);
   }
+
   .toast {
     font-size: 12px;
     padding: 8px 16px;
+  }
+
+  .dock {
+    bottom: calc(max(env(safe-area-inset-bottom), 0px) + 40px);
+    gap: 10px;
   }
 }
 
@@ -1237,12 +1405,15 @@ body:has(#history-modal:not(.hidden)) .tribal-ribbon--bottom,
 }
 
 @keyframes arButtonPulse {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow:
       0 0 0 1px rgba(251, 176, 59, 0.25),
       0 0 35px rgba(238, 99, 39, 0.20),
       0 20px 50px rgba(0, 0, 0, 0.10);
   }
+
   50% {
     box-shadow:
       0 0 0 2.5px rgba(251, 176, 59, 0.40),
@@ -1291,19 +1462,24 @@ body.landscape #ARButton {
 }
 
 @keyframes loadingSweep {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 /* ──────────────────────────────────────────
    WebXR DOM Overlay Transparency
 ────────────────────────────────────────── */
-:xr-overlay {
+::xr-overlay {
   background: transparent !important;
   background-color: transparent !important;
 }
 
-#ui-overlay:xr-overlay {
+#ui-overlay::xr-overlay {
   background: transparent !important;
   background-color: transparent !important;
 }
@@ -1314,14 +1490,14 @@ body.landscape #ARButton {
 #ui-overlay {
   transition:
     transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    width     0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    height    0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    left      0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    top       0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    left 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    top 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Force hide WebXR ARButton whenever QR scan screen is active */
 body:has(#qr-screen:not(.hidden)) #ARButton,
-#qr-screen:not(.hidden) ~ #ARButton {
+#qr-screen:not(.hidden)~#ARButton {
   display: none !important;
 }
