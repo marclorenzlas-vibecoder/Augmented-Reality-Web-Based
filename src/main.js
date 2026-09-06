@@ -104,8 +104,268 @@ let isQrProcessing   = false;
 let activeQrCameraId = null;
 let restartQrTimer   = null;
 
+// ── Spatial Audio State (Three.js PositionalAudio) ───────────────────────────
+let audioListener     = null;
+let positionalAudio   = null;
+let audioLoader       = null;
+let currentAudioUrl   = null;
+let audioBuffer       = null;
+let isAudioReady      = false;
+let isAudioMuted      = false;
+let audioLoadToken    = 0;
+
+function updateSoundButtonUi() {
+  const btn = document.getElementById('sound-btn');
+  const icon = document.getElementById('sound-icon');
+  const text = document.getElementById('sound-text');
+  if (!btn) return;
+
+  if (isAudioMuted) {
+    if (icon) icon.textContent = '🔇';
+    if (text) text.textContent = 'Muted';
+    btn.setAttribute('title', 'Spatial Audio: Muted. Tap to unmute.');
+  } else {
+    if (icon) icon.textContent = '🔊';
+    if (text) text.textContent = 'Sound';
+    btn.setAttribute('title', 'Spatial Audio: Active. Tap to mute.');
+  }
+}
+
+function resumeAudioContext() {
+  const ctx = (audioListener && audioListener.context) || (THREE.AudioContext && THREE.AudioContext.getContext && THREE.AudioContext.getContext());
+  if (ctx && ctx.state === 'suspended') {
+    ctx.resume().catch((err) => {
+      console.warn('AudioContext resume warning:', err);
+    });
+  }
+}
+
+function playPositionalAudio() {
+  if (!positionalAudio || !isAudioReady || isAudioMuted) return;
+  resumeAudioContext();
+  if (!positionalAudio.isPlaying) {
+    try {
+      positionalAudio.play();
+    } catch (err) {
+      console.warn('Failed to play positional audio:', err);
+    }
+  }
+}
+
+function pausePositionalAudio() {
+  if (positionalAudio && positionalAudio.isPlaying) {
+    try {
+      positionalAudio.pause();
+    } catch (err) {
+      console.warn('Failed to pause positional audio:', err);
+    }
+  }
+}
+
+function stopPositionalAudio() {
+  if (positionalAudio && positionalAudio.isPlaying) {
+    try {
+      positionalAudio.stop();
+    } catch (err) {
+      console.warn('Failed to stop positional audio:', err);
+    }
+  }
+}
+
+function toggleAudioMute() {
+  isAudioMuted = !isAudioMuted;
+  if (positionalAudio) {
+    if (isAudioMuted) {
+      positionalAudio.setVolume(0);
+    } else {
+      positionalAudio.setVolume(1.0);
+      resumeAudioContext();
+      if (!positionalAudio.isPlaying && isPlaced && isAudioReady) {
+        playPositionalAudio();
+      }
+    }
+  }
+  updateSoundButtonUi();
+}
+
+function resolveAudioUrl(raw) {
+  if (!raw) return '';
+  let url = raw.trim();
+
+  if (url.startsWith('www.')) {
+    url = 'https://' + url;
+  }
+
+  // Prepend slash for relative local files without scheme or leading slash
+  if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
+    if (/\.(mp3|wav|ogg|m4a|aac)($|[?#])/i.test(url)) {
+      url = '/' + url;
+    }
+  }
+
+  return resolveMediaUrl(url);
+}
+
+async function loadPositionalAudio(rawUrl, token) {
+  if (!rawUrl) return;
+  const resolvedAudioUrl = resolveAudioUrl(rawUrl);
+  if (!resolvedAudioUrl) return;
+
+  currentAudioUrl = resolvedAudioUrl;
+  isAudioReady = false;
+
+  if (!audioLoader) {
+    audioLoader = new THREE.AudioLoader();
+  }
+
+  stopPositionalAudio();
+
+  const handleAudioBuffer = (buffer) => {
+    if (token !== audioLoadToken) return;
+    audioBuffer = buffer;
+    isAudioReady = true;
+
+    if (positionalAudio) {
+      try {
+        if (positionalAudio.isPlaying) positionalAudio.stop();
+        positionalAudio.setBuffer(buffer);
+        positionalAudio.setLoop(true);
+        positionalAudio.setVolume(isAudioMuted ? 0 : 1.0);
+        positionalAudio.setRefDistance(1.5);
+        positionalAudio.setMaxDistance(20);
+        positionalAudio.setRolloffFactor(1.2);
+        positionalAudio.setDistanceModel('inverse');
+      } catch (err) {
+        console.warn('Error attaching audio buffer:', err);
+      }
+    }
+
+    if (isPlaced && !isAudioMuted) {
+      playPositionalAudio();
+      const soundBtn = $('sound-btn');
+      if (soundBtn) {
+        soundBtn.classList.remove('hidden');
+        updateSoundButtonUi();
+      }
+    }
+  };
+
+  const isLocal = resolvedAudioUrl.startsWith('/') ||
+                  resolvedAudioUrl.startsWith('./') ||
+                  resolvedAudioUrl.startsWith('../') ||
+                  resolvedAudioUrl.startsWith(window.location.origin);
+
+  if (isLocal) {
+    audioLoader.load(
+      resolvedAudioUrl,
+      handleAudioBuffer,
+      undefined,
+      (err) => console.warn('Local AudioLoader error:', err)
+    );
+    return;
+  }
+
+  // Remote audio fetch with fallback to corsproxy
+  try {
+    const res = await fetch(resolvedAudioUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const arrayBuffer = await res.arrayBuffer();
+    if (token !== audioLoadToken) return;
+
+    const ctx = (audioListener && audioListener.context) || (THREE.AudioContext && THREE.AudioContext.getContext && THREE.AudioContext.getContext());
+    if (ctx) {
+      ctx.decodeAudioData(arrayBuffer, handleAudioBuffer, (decodeErr) => {
+        console.warn('decodeAudioData error:', decodeErr);
+      });
+    }
+  } catch (directErr) {
+    console.warn('Direct audio fetch failed, trying CORS proxy:', directErr);
+    try {
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(resolvedAudioUrl)}`;
+      const proxyRes = await fetch(proxyUrl);
+      if (!proxyRes.ok) throw new Error(`Proxy HTTP ${proxyRes.status}`);
+      const arrayBuffer = await proxyRes.arrayBuffer();
+      if (token !== audioLoadToken) return;
+
+      const ctx = (audioListener && audioListener.context) || (THREE.AudioContext && THREE.AudioContext.getContext && THREE.AudioContext.getContext());
+      if (ctx) {
+        ctx.decodeAudioData(arrayBuffer, handleAudioBuffer, (decodeErr) => {
+          console.warn('decodeAudioData proxy error:', decodeErr);
+        });
+      }
+    } catch (proxyErr) {
+      console.error('Failed to load audio via proxy:', proxyErr);
+    }
+  }
+}
+
 // Chroma Key / Transparency Modes (0 = Opaque, 1 = Green Screen, 2 = Black BG Key)
-let currentKeyMode = 1;
+let currentKeyMode = 2;
+let userOverrodeKeyMode = false;
+
+function updateKeyModeButtonUi() {
+  const btn = document.getElementById('key-mode-btn');
+  const icon = document.getElementById('key-mode-icon');
+  const text = document.getElementById('key-mode-text');
+  if (!btn) return;
+
+  if (currentKeyMode === 2) {
+    if (icon) icon.textContent = '⚫';
+    if (text) text.textContent = 'Black BG';
+    btn.setAttribute('title', 'Background: Black BG Keyed. Tap to change.');
+  } else if (currentKeyMode === 1) {
+    if (icon) icon.textContent = '🟢';
+    if (text) text.textContent = 'Green Screen';
+    btn.setAttribute('title', 'Background: Green Screen Keyed. Tap to change.');
+  } else {
+    if (icon) icon.textContent = '⚪';
+    if (text) text.textContent = 'Original BG';
+    btn.setAttribute('title', 'Background: Original (No Key). Tap to change.');
+  }
+}
+
+function setKeyMode(mode, fromUser = false) {
+  currentKeyMode = mode;
+  if (fromUser) userOverrodeKeyMode = true;
+  if (videoMesh && videoMesh.material && videoMesh.material.uniforms && videoMesh.material.uniforms.keyMode) {
+    videoMesh.material.uniforms.keyMode.value = mode;
+    videoMesh.material.needsUpdate = true;
+  }
+  updateKeyModeButtonUi();
+}
+
+function autoDetectKeyModeFromVideo() {
+  if (userOverrodeKeyMode || !dancerVideo || dancerVideo.videoWidth === 0) return;
+  try {
+    const sampleCanvas = document.createElement('canvas');
+    sampleCanvas.width = 16;
+    sampleCanvas.height = 16;
+    const ctx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+    ctx.drawImage(dancerVideo, 0, 0, 16, 16);
+    const data = ctx.getImageData(0, 0, 16, 16).data;
+
+    // Check corners: TL (0,0), TR (15,0), BL (0,15), BR (15,15)
+    const corners = [0, 15 * 4, (15 * 16) * 4, (15 * 16 + 15) * 4];
+    let totalR = 0, totalG = 0, totalB = 0;
+    for (const idx of corners) {
+      totalR += data[idx];
+      totalG += data[idx + 1];
+      totalB += data[idx + 2];
+    }
+    const avgR = totalR / 4;
+    const avgG = totalG / 4;
+    const avgB = totalB / 4;
+
+    if (avgG > 80 && avgG > avgR * 1.35 && avgG > avgB * 1.35) {
+      setKeyMode(1); // Green Screen
+    } else if (avgR < 40 && avgG < 40 && avgB < 40) {
+      setKeyMode(2); // Black BG
+    }
+  } catch (err) {
+    // Canvas read security restriction on cross-origin media
+  }
+}
 
 const RETICLE_ACCENT = 0xee6327; // Bacolod Orange
 const RETICLE_LIGHT  = 0xfbb03b; // Bacolod Yellow
@@ -181,13 +441,18 @@ const ChromaShader = {
         if (alpha < 0.05) discard;
         gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
       } else if (keyMode == 2) {
-        // Black background removal (Luminance key)
+        // Black background removal (Luminance & Color Threshold key)
+        float maxVal = max(texColor.r, max(texColor.g, texColor.b));
         float luma = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
-        if (luma < 0.12) {
+        float metric = max(luma, maxVal * 0.9);
+
+        float threshold = 0.07;
+        float feather = 0.14;
+        if (metric < threshold) {
           discard;
         }
-        float alpha = smoothstep(0.12, 0.30, luma);
-        if (alpha < 0.03) discard;
+        float alpha = smoothstep(threshold, threshold + feather, metric);
+        if (alpha < 0.02) discard;
         gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
       } else {
         gl_FragColor = texColor;
@@ -723,6 +988,8 @@ const toastEl         = $('toast');
 const infoToggleBtnEl = $('info-toggle-btn');
 const captureBtnEl    = $('capture-btn');
 const recenterBtnEl   = $('recenter-btn');
+const keyModeBtnEl    = $('key-mode-btn');
+const soundBtnEl      = $('sound-btn');
 const historyModalEl  = $('history-modal');
 const closeHistoryBtn = $('close-history-btn');
 const qrSwitchBtn     = $('qr-switch-btn');
@@ -809,6 +1076,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     dancerVideo.addEventListener('loadedmetadata', () => {
       updateVideoBillboardGeometry();
+      autoDetectKeyModeFromVideo();
       if (videoTex) videoTex.needsUpdate = true;
     });
 
@@ -816,7 +1084,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (dancerVideo.paused) {
         dancerVideo.play().catch(() => {});
       }
+      autoDetectKeyModeFromVideo();
       if (videoTex) videoTex.needsUpdate = true;
+    });
+
+    dancerVideo.addEventListener('playing', () => {
+      autoDetectKeyModeFromVideo();
     });
   }
 
@@ -900,6 +1173,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     historyModalEl.classList.add('hidden');
   });
 
+  // Background key mode toggle: Black BG -> Green Screen -> Original -> Black BG
+  keyModeBtnEl?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (currentKeyMode === 2) {
+      setKeyMode(1, true);
+      setToast('Transparency: Green Screen');
+    } else if (currentKeyMode === 1) {
+      setKeyMode(0, true);
+      setToast('Transparency: Off (Original)');
+    } else {
+      setKeyMode(2, true);
+      setToast('Transparency: Black BG Keyed');
+    }
+  });
+
+  // Spatial Audio toggle
+  soundBtnEl?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleAudioMute();
+  });
+
   // Reposition
   recenterBtnEl?.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -924,11 +1218,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const arBtn = document.getElementById('ARButton');
     if (arBtn) arBtn.style.display = 'none';
     dancerVideo?.pause();
+    stopPositionalAudio();
 
     // Reset all buttons to hidden state
     infoToggleBtnEl?.classList.add('hidden');
     captureBtnEl?.classList.add('hidden');
     recenterBtnEl?.classList.add('hidden');
+    keyModeBtnEl?.classList.add('hidden');
+    soundBtnEl?.classList.add('hidden');
     toastEl?.classList.add('hidden');
 
     restartQrCameraSoon();
@@ -1169,6 +1466,32 @@ function initThreeScene() {
   dancerGroup.visible = false;
   scene.add(dancerGroup);
 
+  // Setup Spatial 3D Audio Listener on Camera
+  if (!audioListener) {
+    audioListener = new THREE.AudioListener();
+    camera.add(audioListener);
+  }
+
+  // Setup Positional Audio node attached directly to dancerGroup
+  if (!positionalAudio) {
+    positionalAudio = new THREE.PositionalAudio(audioListener);
+    positionalAudio.setRefDistance(1.5);
+    positionalAudio.setMaxDistance(20);
+    positionalAudio.setRolloffFactor(1.2);
+    positionalAudio.setDistanceModel('inverse');
+    positionalAudio.setLoop(true);
+    positionalAudio.setVolume(isAudioMuted ? 0 : 1.0);
+    dancerGroup.add(positionalAudio);
+  }
+
+  if (audioBuffer && (!positionalAudio.buffer || positionalAudio.buffer !== audioBuffer)) {
+    try {
+      positionalAudio.setBuffer(audioBuffer);
+    } catch (err) {
+      console.warn('Error setting initial audio buffer:', err);
+    }
+  }
+
   // Fallback pointer down on canvas & window for touch / tap placement
   const handlePlacementTap = (e) => {
     if (isPlaced) return;
@@ -1245,11 +1568,14 @@ function initThreeScene() {
           const arBtn = document.getElementById('ARButton');
           if (arBtn) arBtn.style.display = 'none';
           dancerVideo?.pause();
+          stopPositionalAudio();
           
           // Reset all AR buttons to hidden state
           infoToggleBtnEl?.classList.add('hidden');
           captureBtnEl?.classList.add('hidden');
           recenterBtnEl?.classList.add('hidden');
+          keyModeBtnEl?.classList.add('hidden');
+          soundBtnEl?.classList.add('hidden');
           toastEl?.classList.add('hidden');
 
           restartQrCameraSoon();
@@ -1279,12 +1605,15 @@ function initThreeScene() {
         : null;
     }
 
-    if (isPlaced) {
-      const t = clock.getElapsedTime();
-      const dt = t * 3.5;
-      dancerGroup.position.y = (dancerGroup.userData.baseY || 0) + Math.abs(Math.sin(dt)) * PLACEMENT_FLOAT_AMPLITUDE;
-      dancerGroup.rotation.y = (dancerGroup.userData.baseRotY || 0) + Math.sin(t * 2) * 0.18;
-      dancerGroup.rotation.z = Math.sin(dt) * 0.04;
+    if (isPlaced && dancerGroup) {
+      // Anchored stably to placed location without artificial wobbling
+      if (dancerGroup.userData.baseY !== undefined) {
+        dancerGroup.position.y = dancerGroup.userData.baseY;
+      }
+      if (dancerGroup.userData.baseRotY !== undefined) {
+        dancerGroup.rotation.y = dancerGroup.userData.baseRotY;
+      }
+      dancerGroup.rotation.z = 0;
     }
 
     // ── Real-time UI & 3D Model rotation from XR camera pose ───────────
@@ -1415,14 +1744,47 @@ function resolveMediaUrl(raw) {
 // ── Load GIF / Video / Image from Scanned QR Code ──────────────────────────
 async function loadMediaFromQR(text) {
   if (!text) return;
-  const resolvedUrl = resolveMediaUrl(text);
+
+  // ── Option C : Support Pipe-Separated "video.mp4|music.mp3" ──────────────
+  let videoSource = text.trim();
+  let audioSource = null;
+
+  if (videoSource.includes('|')) {
+    const parts = videoSource.split('|');
+    videoSource = parts[0].trim();
+    audioSource = parts[1].trim();
+    if (audioSource.toLowerCase().startsWith('audio=')) {
+      audioSource = audioSource.slice(6).trim();
+    }
+  } else {
+    // Also support ?audio= parameter if someone uses query string
+    try {
+      const parsedUrl = new URL(videoSource, window.location.href);
+      if (parsedUrl.searchParams.has('audio')) {
+        audioSource = parsedUrl.searchParams.get('audio');
+        parsedUrl.searchParams.delete('audio');
+        videoSource = parsedUrl.toString();
+      }
+    } catch (e) {}
+  }
+
+  if (audioSource) {
+    const aToken = ++audioLoadToken;
+    loadPositionalAudio(audioSource, aToken);
+  }
+
+  const resolvedUrl = resolveMediaUrl(videoSource);
   if (!resolvedUrl) return;
 
-  // Dynamically determine chroma key mode: default to 1 (green screen) unless explicit black background is specified
-  if (/MaxwellNB/i.test(resolvedUrl) || /nobg/i.test(resolvedUrl) || /black/i.test(resolvedUrl)) {
-    currentKeyMode = 2; // Black background removal
+  // Dynamically determine chroma key mode:
+  // Explicit green screen triggers
+  if (/green/i.test(resolvedUrl) || /chroma/i.test(resolvedUrl) || /bg=green/i.test(resolvedUrl) || /key=green/i.test(resolvedUrl)) {
+    setKeyMode(1); // Green screen chroma keying
+  } else if (/none/i.test(resolvedUrl) || /opaque/i.test(resolvedUrl) || /bg=none/i.test(resolvedUrl) || /key=none/i.test(resolvedUrl)) {
+    setKeyMode(0); // Original / Opaque
   } else {
-    currentKeyMode = 1; // Green screen chroma keying (default)
+    // Default to Black BG keying (mode 2) for plain black background videos like YAN_2R_DP.mp4, file.garden, MaxwellNB, etc.
+    setKeyMode(2);
   }
 
   const loadToken = ++mediaLoadToken;
@@ -2033,18 +2395,35 @@ function placeDancer() {
 
   dancerVideo?.play().catch(() => {});
 
+  // Spatial Positional 3D Audio : resume AudioContext and play from dancer!
+  resumeAudioContext();
+  if (isAudioReady && !isAudioMuted) {
+    playPositionalAudio();
+  }
+
   setToast('3D Object placed on floor');
   setTimeout(() => {
     toastEl?.classList.add('hidden');
     infoToggleBtnEl?.classList.remove('hidden');
     captureBtnEl?.classList.remove('hidden');
     recenterBtnEl?.classList.remove('hidden');
+    if (isAudioReady || audioBuffer) {
+      soundBtnEl?.classList.remove('hidden');
+      updateSoundButtonUi();
+    }
+    if (currentMediaType === 'video' || currentMediaType === 'default') {
+      keyModeBtnEl?.classList.remove('hidden');
+      updateKeyModeButtonUi();
+    }
   }, 1500);
 }
 
 function repositionDancer() {
   isPlaced = false;
   dancerGroup.visible = false;
+
+  // Pause positional audio while repositioning
+  pausePositionalAudio();
 
   // Re-enable pulsating floor grid on detected floor surfaces
   if (floorGridMesh) {
@@ -2058,6 +2437,8 @@ function repositionDancer() {
   infoToggleBtnEl?.classList.add('hidden');
   captureBtnEl?.classList.add('hidden');
   recenterBtnEl?.classList.add('hidden');
+  keyModeBtnEl?.classList.add('hidden');
+  soundBtnEl?.classList.add('hidden');
 
   setToast('Point at floor plane and tap anywhere on grid to place');
 }
