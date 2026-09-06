@@ -118,22 +118,6 @@ let isAudioReady      = false;
 let isAudioMuted      = false;
 let audioLoadToken    = 0;
 
-function updateSoundButtonUi() {
-  const btn = document.getElementById('sound-btn');
-  const icon = document.getElementById('sound-icon');
-  const text = document.getElementById('sound-text');
-  if (!btn) return;
-
-  if (isAudioMuted) {
-    if (icon) icon.textContent = '🔇';
-    if (text) text.textContent = 'Muted';
-    btn.setAttribute('title', 'Spatial Audio: Muted. Tap to unmute.');
-  } else {
-    if (icon) icon.textContent = '🔊';
-    if (text) text.textContent = 'Sound';
-    btn.setAttribute('title', 'Spatial Audio: Active. Tap to mute.');
-  }
-}
 
 function resumeAudioContext() {
   const ctx = (audioListener && audioListener.context) || (THREE.AudioContext && THREE.AudioContext.getContext && THREE.AudioContext.getContext());
@@ -251,22 +235,6 @@ function stopPositionalAudio() {
   }
 }
 
-function toggleAudioMute() {
-  isAudioMuted = !isAudioMuted;
-  if (positionalAudio) {
-    if (isAudioMuted) {
-      positionalAudio.setVolume(0);
-      pausePositionalAudio();
-    } else {
-      positionalAudio.setVolume(1.0);
-      resumeAudioContext();
-      if (isPlaced && isAudioReady) {
-        syncAudioToVideo(true);
-      }
-    }
-  }
-  updateSoundButtonUi();
-}
 
 function resolveAudioUrl(raw) {
   if (!raw) return '';
@@ -322,11 +290,6 @@ async function loadPositionalAudio(rawUrl, token) {
 
     if (arStarted && isPlaced && dancerGroup && dancerGroup.visible && !isAudioMuted) {
       syncAudioToVideo(true);
-      const soundBtn = $('sound-btn');
-      if (soundBtn) {
-        soundBtn.classList.remove('hidden');
-        updateSoundButtonUi();
-      }
     }
   };
 
@@ -1156,7 +1119,6 @@ const toastEl = $('toast');
 const infoToggleBtnEl = $('info-toggle-btn');
 const captureBtnEl    = $('capture-btn');
 const recenterBtnEl   = $('recenter-btn');
-const soundBtnEl      = $('sound-btn');
 const historyModalEl  = $('history-modal');
 const closeHistoryBtn = $('close-history-btn');
 const qrSwitchBtn = $('qr-switch-btn');
@@ -1395,12 +1357,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     historyModalEl.classList.add('hidden');
   });
 
-  // Spatial Audio toggle
-  soundBtnEl?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleAudioMute();
-  });
-
   // Reposition
   const onRecenterTrigger = (e) => {
     e.stopPropagation();
@@ -1442,7 +1398,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     infoToggleBtnEl?.classList.add('hidden');
     captureBtnEl?.classList.add('hidden');
     recenterBtnEl?.classList.add('hidden');
-    soundBtnEl?.classList.add('hidden');
     toastEl?.classList.add('hidden');
 
     restartQrCameraSoon();
@@ -1923,7 +1878,6 @@ function initThreeScene() {
           infoToggleBtnEl?.classList.add('hidden');
           captureBtnEl?.classList.add('hidden');
           recenterBtnEl?.classList.add('hidden');
-          soundBtnEl?.classList.add('hidden');
           toastEl?.classList.add('hidden');
 
           restartQrCameraSoon();
@@ -2152,8 +2106,6 @@ async function loadMediaFromQR(text) {
     isAudioReady = false;
     audioBuffer = null;
     currentAudioUrl = null;
-    const soundBtn = $('sound-btn');
-    if (soundBtn) soundBtn.classList.add('hidden');
   }
 
   const resolvedUrl = resolveMediaUrl(videoSource);
@@ -2855,10 +2807,6 @@ function placeDancer() {
     infoToggleBtnEl?.classList.remove('hidden');
     captureBtnEl?.classList.remove('hidden');
     recenterBtnEl?.classList.remove('hidden');
-    if (isAudioReady || audioBuffer) {
-      soundBtnEl?.classList.remove('hidden');
-      updateSoundButtonUi();
-    }
   }, 1500);
 }
 
@@ -2890,7 +2838,6 @@ function repositionDancer() {
   infoToggleBtnEl?.classList.add('hidden');
   captureBtnEl?.classList.add('hidden');
   recenterBtnEl?.classList.add('hidden');
-  soundBtnEl?.classList.add('hidden');
 
   setToast('Point at floor plane and tap anywhere on grid to place');
 
