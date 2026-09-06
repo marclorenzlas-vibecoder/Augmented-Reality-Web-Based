@@ -303,43 +303,96 @@ async function loadPositionalAudio(rawUrl, token) {
   }
 }
 
-// Chroma Key / Transparency Modes (0 = Opaque, 1 = Green Screen, 2 = Black BG Key)
-let currentKeyMode = 2;
-let userOverrodeKeyMode = false;
+// ── Automatic Background / Chroma Key Configuration ─────────────────────────
+// Modes: 0 = Original/Opaque, 1 = Green/Blue Screen, 2 = Black BG Key, 3 = Grey BG Key, 4 = White BG Key
+let currentKeyMode    = 2;
+let currentKeyColor   = new THREE.Color(0x000000);
+let currentSimilarity = 0.38;
+let currentSmoothness = 0.10;
+let hasFilenameKeyTag = false;
 
-function updateKeyModeButtonUi() {
-  const btn = document.getElementById('key-mode-btn');
-  const icon = document.getElementById('key-mode-icon');
-  const text = document.getElementById('key-mode-text');
-  if (!btn) return;
+function applyKeySettings(mode, color = null, similarity = null, smoothness = null) {
+  currentKeyMode = mode;
+  if (color) currentKeyColor = color;
+  if (similarity !== null) currentSimilarity = similarity;
+  if (smoothness !== null) currentSmoothness = smoothness;
 
-  if (currentKeyMode === 2) {
-    if (icon) icon.textContent = '⚫';
-    if (text) text.textContent = 'Black BG';
-    btn.setAttribute('title', 'Background: Black BG Keyed. Tap to change.');
-  } else if (currentKeyMode === 1) {
-    if (icon) icon.textContent = '🟢';
-    if (text) text.textContent = 'Green Screen';
-    btn.setAttribute('title', 'Background: Green Screen Keyed. Tap to change.');
-  } else {
-    if (icon) icon.textContent = '⚪';
-    if (text) text.textContent = 'Original BG';
-    btn.setAttribute('title', 'Background: Original (No Key). Tap to change.');
+  if (videoMesh && videoMesh.material && videoMesh.material.uniforms) {
+    if (videoMesh.material.uniforms.keyMode) {
+      videoMesh.material.uniforms.keyMode.value = currentKeyMode;
+    }
+    if (videoMesh.material.uniforms.keyColor && color) {
+      videoMesh.material.uniforms.keyColor.value.copy(currentKeyColor);
+    }
+    if (videoMesh.material.uniforms.similarity && similarity !== null) {
+      videoMesh.material.uniforms.similarity.value = currentSimilarity;
+    }
+    if (videoMesh.material.uniforms.smoothness && smoothness !== null) {
+      videoMesh.material.uniforms.smoothness.value = currentSmoothness;
+    }
+    videoMesh.material.needsUpdate = true;
   }
 }
 
-function setKeyMode(mode, fromUser = false) {
-  currentKeyMode = mode;
-  if (fromUser) userOverrodeKeyMode = true;
-  if (videoMesh && videoMesh.material && videoMesh.material.uniforms && videoMesh.material.uniforms.keyMode) {
-    videoMesh.material.uniforms.keyMode.value = mode;
-    videoMesh.material.needsUpdate = true;
+function detectAndApplyKeyModeFromUrl(url) {
+  if (!url) return;
+  const decoded = decodeURIComponent(url).toLowerCase();
+  hasFilenameKeyTag = false;
+
+  // 1. Grey / Gray background tag: _greybg, _graybg, _grey, _gray, greybg, graybg
+  if (/(_greybg|_graybg|_grey\b|_gray\b|greybg|graybg|bg[_-]?grey|bg[_-]?gray)/i.test(decoded)) {
+    console.log('Chroma Key: Detected Grey background from filename');
+    hasFilenameKeyTag = true;
+    applyKeySettings(3, new THREE.Color(0.5, 0.5, 0.5), 0.28, 0.12);
+    return;
   }
-  updateKeyModeButtonUi();
+
+  // 2. Green background tag: _greenbg, _green, greenbg, greenscreen
+  if (/(_greenbg|_green\b|greenbg|greenscreen|chroma[_-]?green|key[_-]?green|bg[_-]?green)/i.test(decoded)) {
+    console.log('Chroma Key: Detected Green Screen from filename');
+    hasFilenameKeyTag = true;
+    applyKeySettings(1, new THREE.Color(0x00ff00), 0.38, 0.10);
+    return;
+  }
+
+  // 3. Blue background tag: _bluebg, _blue, bluebg, bluescreen
+  if (/(_bluebg|_blue\b|bluebg|bluescreen|chroma[_-]?blue|bg[_-]?blue)/i.test(decoded)) {
+    console.log('Chroma Key: Detected Blue Screen from filename');
+    hasFilenameKeyTag = true;
+    applyKeySettings(1, new THREE.Color(0x0000ff), 0.38, 0.10);
+    return;
+  }
+
+  // 4. White background tag: _whitebg, _white, whitebg
+  if (/(_whitebg|_white\b|whitebg|bg[_-]?white)/i.test(decoded)) {
+    console.log('Chroma Key: Detected White background from filename');
+    hasFilenameKeyTag = true;
+    applyKeySettings(4, new THREE.Color(1.0, 1.0, 1.0), 0.20, 0.12);
+    return;
+  }
+
+  // 5. Opaque / None tag: _nobgkey, _original, _opaque, _none, bg=none, key=none
+  if (/(_nobgkey|_original|_opaque|_none\b|bg=none|key=none)/i.test(decoded)) {
+    console.log('Chroma Key: Original / Opaque (No Keying)');
+    hasFilenameKeyTag = true;
+    applyKeySettings(0);
+    return;
+  }
+
+  // 6. Black / nobg tag: _blackbg, _nobg, nobg, blackbg
+  if (/(_blackbg|_black\b|_nobg\b|blackbg|nobg)/i.test(decoded)) {
+    console.log('Chroma Key: Detected Black/NoBG from filename');
+    hasFilenameKeyTag = true;
+    applyKeySettings(2, new THREE.Color(0x000000), 0.07, 0.14);
+    return;
+  }
+
+  // Default to Black BG keying for standard dark background videos
+  applyKeySettings(2, new THREE.Color(0x000000), 0.07, 0.14);
 }
 
 function autoDetectKeyModeFromVideo() {
-  if (userOverrodeKeyMode || !dancerVideo || dancerVideo.videoWidth === 0) return;
+  if (hasFilenameKeyTag || !dancerVideo || dancerVideo.videoWidth === 0) return;
   try {
     const sampleCanvas = document.createElement('canvas');
     sampleCanvas.width = 16;
@@ -362,9 +415,11 @@ function autoDetectKeyModeFromVideo() {
     const avgB = totalB / 4;
 
     if (avgG > 80 && avgG > avgR * 1.35 && avgG > avgB * 1.35) {
-      setKeyMode(1); // Green Screen
+      applyKeySettings(1, new THREE.Color(0x00ff00), 0.38, 0.10); // Green Screen
+    } else if (Math.abs(avgR - avgG) < 20 && Math.abs(avgG - avgB) < 20 && avgR > 60 && avgR < 200) {
+      applyKeySettings(3, new THREE.Color(avgR / 255, avgG / 255, avgB / 255), 0.28, 0.12); // Grey Screen
     } else if (avgR < 40 && avgG < 40 && avgB < 40) {
-      setKeyMode(2); // Black BG
+      applyKeySettings(2, new THREE.Color(0x000000), 0.07, 0.14); // Black BG
     }
   } catch (err) {
     // Canvas read security restriction on cross-origin media
@@ -450,8 +505,30 @@ const ChromaShader = {
         float luma = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
         float metric = max(luma, maxVal * 0.9);
 
-        float threshold = 0.07;
-        float feather = 0.14;
+        float threshold = similarity;
+        float feather = smoothness;
+        if (metric < threshold) {
+          discard;
+        }
+        float alpha = smoothstep(threshold, threshold + feather, metric);
+        if (alpha < 0.02) discard;
+        gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
+      } else if (keyMode == 3) {
+        // Grey / Gray background removal (Euclidean RGB distance from keyColor)
+        float dist = distance(texColor.rgb, keyColor);
+        if (dist < similarity) {
+          discard;
+        }
+        float alpha = smoothstep(similarity, similarity + smoothness, dist);
+        if (alpha < 0.05) discard;
+        gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
+      } else if (keyMode == 4) {
+        // White background removal
+        float minVal = min(texColor.r, min(texColor.g, texColor.b));
+        float luma = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
+        float metric = 1.0 - min(luma, minVal);
+        float threshold = similarity;
+        float feather = smoothness;
         if (metric < threshold) {
           discard;
         }
@@ -470,9 +547,9 @@ function createBillboardMaterial(texture) {
     uniforms: {
       map: { value: texture },
       keyMode: { value: currentKeyMode },
-      keyColor: { value: new THREE.Color(0x00ff00) },
-      similarity: { value: 0.38 },
-      smoothness: { value: 0.10 }
+      keyColor: { value: currentKeyColor.clone() },
+      similarity: { value: currentSimilarity },
+      smoothness: { value: currentSmoothness }
     },
     vertexShader: ChromaShader.vertexShader,
     fragmentShader: ChromaShader.fragmentShader,
@@ -993,7 +1070,6 @@ const toastEl = $('toast');
 const infoToggleBtnEl = $('info-toggle-btn');
 const captureBtnEl    = $('capture-btn');
 const recenterBtnEl   = $('recenter-btn');
-const keyModeBtnEl    = $('key-mode-btn');
 const soundBtnEl      = $('sound-btn');
 const historyModalEl  = $('history-modal');
 const closeHistoryBtn = $('close-history-btn');
@@ -1184,21 +1260,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     historyModalEl.classList.add('hidden');
   });
 
-  // Background key mode toggle: Black BG -> Green Screen -> Original -> Black BG
-  keyModeBtnEl?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (currentKeyMode === 2) {
-      setKeyMode(1, true);
-      setToast('Transparency: Green Screen');
-    } else if (currentKeyMode === 1) {
-      setKeyMode(0, true);
-      setToast('Transparency: Off (Original)');
-    } else {
-      setKeyMode(2, true);
-      setToast('Transparency: Black BG Keyed');
-    }
-  });
-
   // Spatial Audio toggle
   soundBtnEl?.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1246,7 +1307,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     infoToggleBtnEl?.classList.add('hidden');
     captureBtnEl?.classList.add('hidden');
     recenterBtnEl?.classList.add('hidden');
-    keyModeBtnEl?.classList.add('hidden');
     soundBtnEl?.classList.add('hidden');
     toastEl?.classList.add('hidden');
 
@@ -1658,7 +1718,6 @@ function initThreeScene() {
           infoToggleBtnEl?.classList.add('hidden');
           captureBtnEl?.classList.add('hidden');
           recenterBtnEl?.classList.add('hidden');
-          keyModeBtnEl?.classList.add('hidden');
           soundBtnEl?.classList.add('hidden');
           toastEl?.classList.add('hidden');
 
@@ -1868,16 +1927,8 @@ async function loadMediaFromQR(text) {
   const resolvedUrl = resolveMediaUrl(videoSource);
   if (!resolvedUrl) return;
 
-  // Dynamically determine chroma key mode:
-  // Explicit green screen triggers
-  if (/green/i.test(resolvedUrl) || /chroma/i.test(resolvedUrl) || /bg=green/i.test(resolvedUrl) || /key=green/i.test(resolvedUrl)) {
-    setKeyMode(1); // Green screen chroma keying
-  } else if (/none/i.test(resolvedUrl) || /opaque/i.test(resolvedUrl) || /bg=none/i.test(resolvedUrl) || /key=none/i.test(resolvedUrl)) {
-    setKeyMode(0); // Original / Opaque
-  } else {
-    // Default to Black BG keying (mode 2) for plain black background videos like YAN_2R_DP.mp4, file.garden, MaxwellNB, etc.
-    setKeyMode(2);
-  }
+  // Automatically detect and apply chroma key mode based on file name or URL:
+  detectAndApplyKeyModeFromUrl(resolvedUrl);
 
   const loadToken = ++mediaLoadToken;
   setMediaReady(false);
@@ -2540,10 +2591,6 @@ function placeDancer() {
       soundBtnEl?.classList.remove('hidden');
       updateSoundButtonUi();
     }
-    if (currentMediaType === 'video' || currentMediaType === 'default') {
-      keyModeBtnEl?.classList.remove('hidden');
-      updateKeyModeButtonUi();
-    }
   }, 1500);
 }
 
@@ -2568,7 +2615,6 @@ function repositionDancer() {
   infoToggleBtnEl?.classList.add('hidden');
   captureBtnEl?.classList.add('hidden');
   recenterBtnEl?.classList.add('hidden');
-  keyModeBtnEl?.classList.add('hidden');
   soundBtnEl?.classList.add('hidden');
 
   setToast('Point at floor plane and tap anywhere on grid to place');
