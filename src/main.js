@@ -145,7 +145,17 @@ function resumeAudioContext() {
 }
 
 function playPositionalAudio() {
+  // STRICT: Do NOT play audio if AR has not started, object is not placed, or dancer is hidden!
+  if (!arStarted || !isPlaced || !dancerGroup || !dancerGroup.visible) return;
   if (!positionalAudio || !isAudioReady || isAudioMuted) return;
+
+  // Strict sync with video: if dancer is a video, don't play audio if video is paused or buffering
+  if (currentMediaType === 'video' || currentMediaType === 'default') {
+    if (dancerVideo && (dancerVideo.paused || dancerVideo.readyState < 2)) {
+      return;
+    }
+  }
+
   resumeAudioContext();
   if (!positionalAudio.isPlaying) {
     try {
@@ -167,9 +177,11 @@ function pausePositionalAudio() {
 }
 
 function stopPositionalAudio() {
-  if (positionalAudio && positionalAudio.isPlaying) {
+  if (positionalAudio) {
     try {
-      positionalAudio.stop();
+      if (positionalAudio.isPlaying) {
+        positionalAudio.stop();
+      }
     } catch (err) {
       console.warn('Failed to stop positional audio:', err);
     }
@@ -244,7 +256,7 @@ async function loadPositionalAudio(rawUrl, token) {
       }
     }
 
-    if (isPlaced && !isAudioMuted) {
+    if (arStarted && isPlaced && dancerGroup && dancerGroup.visible && !isAudioMuted) {
       playPositionalAudio();
       const soundBtn = $('sound-btn');
       if (soundBtn) {
@@ -1021,6 +1033,7 @@ function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
   };
 
   dancerVideo.pause();
+  pausePositionalAudio();
   dancerVideo.crossOrigin = 'anonymous';
   dancerVideo.muted = true;
   dancerVideo.loop = true;
@@ -1177,6 +1190,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     dancerVideo.addEventListener('playing', () => {
       autoDetectKeyModeFromVideo();
+      // Tight sync: Only play audio if dancer is placed and visible in AR
+      if (arStarted && isPlaced && dancerGroup && dancerGroup.visible && !isAudioMuted) {
+        playPositionalAudio();
+      } else {
+        pausePositionalAudio();
+      }
+    });
+
+    dancerVideo.addEventListener('pause', () => {
+      pausePositionalAudio();
+    });
+
+    dancerVideo.addEventListener('waiting', () => {
+      pausePositionalAudio();
+    });
+
+    dancerVideo.addEventListener('seeking', () => {
+      pausePositionalAudio();
+    });
+
+    let lastVideoSyncTime = 0;
+    dancerVideo.addEventListener('timeupdate', () => {
+      // Loop sync: when the dancer video loops back to start, restart audio so they stay matched in tempo
+      if (dancerVideo.currentTime < lastVideoSyncTime - 0.4) {
+        if (arStarted && isPlaced && dancerGroup && dancerGroup.visible && !isAudioMuted && positionalAudio) {
+          try {
+            positionalAudio.stop();
+            playPositionalAudio();
+          } catch (e) { }
+        }
+      }
+      lastVideoSyncTime = dancerVideo.currentTime;
     });
   }
 
@@ -1943,9 +1988,18 @@ async function loadMediaFromQR(text) {
     } catch (e) {}
   }
 
+  // Immediately stop any previously playing audio when scanning new media
+  stopPositionalAudio();
+
   if (audioSource) {
     const aToken = ++audioLoadToken;
     loadPositionalAudio(audioSource, aToken);
+  } else {
+    isAudioReady = false;
+    audioBuffer = null;
+    currentAudioUrl = null;
+    const soundBtn = $('sound-btn');
+    if (soundBtn) soundBtn.classList.add('hidden');
   }
 
   const resolvedUrl = resolveMediaUrl(videoSource);
@@ -2480,6 +2534,7 @@ function resetArSessionState() {
   if (dancerGroup) dancerGroup.visible = false;
   const toast = toastEl || $('toast');
   if (toast) toast.classList.add('hidden');
+  stopPositionalAudio();
 }
 
 function enablePlacementListener() {
