@@ -144,26 +144,88 @@ function resumeAudioContext() {
   }
 }
 
-function playPositionalAudio() {
-  // STRICT: Do NOT play audio if AR has not started, object is not placed, or dancer is hidden!
-  if (!arStarted || !isPlaced || !dancerGroup || !dancerGroup.visible) return;
-  if (!positionalAudio || !isAudioReady || isAudioMuted) return;
+let isSyncingAudio = false;
 
-  // Strict sync with video: if dancer is a video, don't play audio if video is paused or buffering
-  if (currentMediaType === 'video' || currentMediaType === 'default') {
-    if (dancerVideo && (dancerVideo.paused || dancerVideo.readyState < 2)) {
+function syncAudioToVideo(force = false) {
+  if (isSyncingAudio || !positionalAudio || !positionalAudio.buffer || !isAudioReady || isAudioMuted) {
+    return;
+  }
+
+  // 1. If AR has not started, object is not placed, or dancer is hidden -> stop audio immediately!
+  if (!arStarted || !isPlaced || !dancerGroup || !dancerGroup.visible) {
+    if (positionalAudio.isPlaying) {
+      stopPositionalAudio();
+    }
+    return;
+  }
+
+  // 2. If dancer is a video: check playback state
+  const isVideo = (currentMediaType === 'video' || currentMediaType === 'default') && dancerVideo;
+  if (isVideo) {
+    // If video is paused, buffering, seeking, or hasn't loaded enough data -> pause audio
+    if (dancerVideo.paused || dancerVideo.seeking || dancerVideo.readyState < 2) {
+      if (positionalAudio.isPlaying) {
+        pausePositionalAudio();
+      }
       return;
     }
-  }
 
-  resumeAudioContext();
-  if (!positionalAudio.isPlaying) {
-    try {
-      positionalAudio.play();
-    } catch (err) {
-      console.warn('Failed to play positional audio:', err);
+    const audioDuration = positionalAudio.buffer.duration;
+    if (!audioDuration || audioDuration <= 0) return;
+
+    const targetAudioTime = dancerVideo.currentTime % audioDuration;
+
+    if (positionalAudio.isPlaying) {
+      const elapsed = Math.max(0, positionalAudio.context.currentTime - (positionalAudio._startedAt || 0)) * (positionalAudio.playbackRate || 1.0);
+      const currentAudioTime = ((positionalAudio._progress || 0) + elapsed) % audioDuration;
+
+      let drift = Math.abs(currentAudioTime - targetAudioTime);
+      if (drift > audioDuration / 2) {
+        drift = audioDuration - drift;
+      }
+
+      // Re-sync if forced (loop / seek / place) or if drift exceeds ~70ms
+      if (force || drift > 0.07) {
+        isSyncingAudio = true;
+        try {
+          positionalAudio.stop();
+          positionalAudio._progress = targetAudioTime;
+          positionalAudio.play();
+        } catch (err) {
+          console.warn('Positional audio re-sync error:', err);
+        } finally {
+          isSyncingAudio = false;
+        }
+      }
+    } else {
+      // Audio was paused or stopped; start aligned to current video time
+      isSyncingAudio = true;
+      try {
+        resumeAudioContext();
+        positionalAudio.stop();
+        positionalAudio._progress = targetAudioTime;
+        positionalAudio.play();
+      } catch (err) {
+        console.warn('Positional audio start sync error:', err);
+      } finally {
+        isSyncingAudio = false;
+      }
+    }
+  } else {
+    // Non-video media (e.g. 3D GLTF model or static image)
+    if (!positionalAudio.isPlaying) {
+      resumeAudioContext();
+      try {
+        positionalAudio.play();
+      } catch (err) {
+        console.warn('Failed to play positional audio for 3D model:', err);
+      }
     }
   }
+}
+
+function playPositionalAudio() {
+  syncAudioToVideo(false);
 }
 
 function pausePositionalAudio() {
@@ -182,6 +244,7 @@ function stopPositionalAudio() {
       if (positionalAudio.isPlaying) {
         positionalAudio.stop();
       }
+      positionalAudio._progress = 0;
     } catch (err) {
       console.warn('Failed to stop positional audio:', err);
     }
@@ -193,11 +256,12 @@ function toggleAudioMute() {
   if (positionalAudio) {
     if (isAudioMuted) {
       positionalAudio.setVolume(0);
+      pausePositionalAudio();
     } else {
       positionalAudio.setVolume(1.0);
       resumeAudioContext();
-      if (!positionalAudio.isPlaying && isPlaced && isAudioReady) {
-        playPositionalAudio();
+      if (isPlaced && isAudioReady) {
+        syncAudioToVideo(true);
       }
     }
   }
@@ -257,7 +321,7 @@ async function loadPositionalAudio(rawUrl, token) {
     }
 
     if (arStarted && isPlaced && dancerGroup && dancerGroup.visible && !isAudioMuted) {
-      playPositionalAudio();
+      syncAudioToVideo(true);
       const soundBtn = $('sound-btn');
       if (soundBtn) {
         soundBtn.classList.remove('hidden');
@@ -866,6 +930,9 @@ function setMediaReady(ready) {
   if (videoMesh) {
     videoMesh.visible = ready;
   }
+  if (!ready) {
+    stopPositionalAudio();
+  }
   const arBtn = document.getElementById('ARButton');
   if (ready) {
     hideLoadingBar();
@@ -914,7 +981,13 @@ function markVideoReady(loadToken) {
 
   applyVideoToBillboard();
   setMediaReady(true);
-  dancerVideo.play().catch(() => { });
+  if (arStarted && isPlaced && dancerGroup && dancerGroup.visible) {
+    dancerVideo.play().catch(() => { });
+    syncAudioToVideo(true);
+  } else {
+    dancerVideo.pause();
+    stopPositionalAudio();
+  }
 }
 
 function describeVideoError() {
@@ -1181,8 +1254,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     dancerVideo.addEventListener('canplay', () => {
-      if (dancerVideo.paused) {
-        dancerVideo.play().catch(() => { });
+      if (arStarted && isPlaced && dancerGroup && dancerGroup.visible) {
+        if (dancerVideo.paused) {
+          dancerVideo.play().catch(() => { });
+        }
+      } else {
+        dancerVideo.pause();
       }
       autoDetectKeyModeFromVideo();
       if (videoTex) videoTex.needsUpdate = true;
@@ -1192,7 +1269,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       autoDetectKeyModeFromVideo();
       // Tight sync: Only play audio if dancer is placed and visible in AR
       if (arStarted && isPlaced && dancerGroup && dancerGroup.visible && !isAudioMuted) {
-        playPositionalAudio();
+        syncAudioToVideo(true);
       } else {
         pausePositionalAudio();
       }
@@ -1206,19 +1283,32 @@ document.addEventListener('DOMContentLoaded', async () => {
       pausePositionalAudio();
     });
 
+    dancerVideo.addEventListener('stalled', () => {
+      pausePositionalAudio();
+    });
+
     dancerVideo.addEventListener('seeking', () => {
       pausePositionalAudio();
+    });
+
+    dancerVideo.addEventListener('seeked', () => {
+      if (arStarted && isPlaced && dancerGroup && dancerGroup.visible && !isAudioMuted && !dancerVideo.paused) {
+        syncAudioToVideo(true);
+      }
+    });
+
+    dancerVideo.addEventListener('ended', () => {
+      if (arStarted && isPlaced && dancerGroup && dancerGroup.visible && !isAudioMuted) {
+        syncAudioToVideo(true);
+      }
     });
 
     let lastVideoSyncTime = 0;
     dancerVideo.addEventListener('timeupdate', () => {
       // Loop sync: when the dancer video loops back to start, restart audio so they stay matched in tempo
-      if (dancerVideo.currentTime < lastVideoSyncTime - 0.4) {
-        if (arStarted && isPlaced && dancerGroup && dancerGroup.visible && !isAudioMuted && positionalAudio) {
-          try {
-            positionalAudio.stop();
-            playPositionalAudio();
-          } catch (e) { }
+      if (dancerVideo.currentTime < lastVideoSyncTime - 0.25) {
+        if (arStarted && isPlaced && dancerGroup && dancerGroup.visible && !isAudioMuted) {
+          syncAudioToVideo(true);
         }
       }
       lastVideoSyncTime = dancerVideo.currentTime;
@@ -1733,10 +1823,25 @@ function initThreeScene() {
     }
 
     if (mixer) {
-      mixer.update(delta);
+      if (arStarted && isPlaced && dancerGroup && dancerGroup.visible) {
+        mixer.update(delta);
+      }
     }
     if (currentGifPlayer) {
-      currentGifPlayer.update(performance.now());
+      if (arStarted && isPlaced && dancerGroup && dancerGroup.visible) {
+        currentGifPlayer.update(performance.now());
+      }
+    }
+
+    // Continuous lock-step video and positional audio synchronization
+    if (positionalAudio && isAudioReady) {
+      if (!arStarted || !isPlaced || !dancerGroup || !dancerGroup.visible) {
+        if (positionalAudio.isPlaying) {
+          stopPositionalAudio();
+        }
+      } else if (dancerVideo && (currentMediaType === 'video' || currentMediaType === 'default')) {
+        syncAudioToVideo(false);
+      }
     }
 
     if (frame) {
@@ -2532,6 +2637,10 @@ function resetArSessionState() {
   resetDetectedPlaneGrids();
   if (floorGridMesh) floorGridMesh.visible = false;
   if (dancerGroup) dancerGroup.visible = false;
+  if (dancerVideo) {
+    dancerVideo.pause();
+    dancerVideo.currentTime = 0;
+  }
   const toast = toastEl || $('toast');
   if (toast) toast.classList.add('hidden');
   stopPositionalAudio();
@@ -2676,12 +2785,20 @@ function placeDancer() {
     floorGridMesh.visible = false;
   }
 
-  dancerVideo?.play().catch(() => { });
+  // Reset video to start frame so video and audio begin in perfect unison
+  if (dancerVideo) {
+    dancerVideo.currentTime = 0;
+    dancerVideo.play().catch(() => { });
+  }
 
-  // Spatial Positional 3D Audio : resume AudioContext and play from dancer!
+  // Spatial Positional 3D Audio : resume AudioContext and play from dancer in lock-step!
   resumeAudioContext();
   if (isAudioReady && !isAudioMuted) {
-    playPositionalAudio();
+    if (positionalAudio) {
+      positionalAudio.stop();
+      positionalAudio._progress = 0;
+    }
+    syncAudioToVideo(true);
   }
 
   setToast('3D Object placed on floor');
@@ -2703,8 +2820,12 @@ function repositionDancer() {
   dancerGroup.visible = false;
   disablePlacementListener();
 
-  // Pause positional audio while repositioning
-  pausePositionalAudio();
+  // Stop positional audio and pause video while repositioning
+  stopPositionalAudio();
+  if (dancerVideo) {
+    dancerVideo.pause();
+    dancerVideo.currentTime = 0;
+  }
 
   // Re-enable pulsating floor grid on detected floor surfaces
   if (floorGridMesh) {
@@ -2904,3 +3025,20 @@ function hideLoadingBar() {
     }, 300);
   }, 200);
 }
+
+// ── Visibility & Focus Handling ────────────────────────────────────────────
+// If the user locks their phone, switches apps, or minimizes the browser: pause video and stop audio immediately
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (dancerVideo) dancerVideo.pause();
+    pausePositionalAudio();
+  } else {
+    if (arStarted && isPlaced && dancerGroup && dancerGroup.visible && !isAudioMuted) {
+      if (dancerVideo) {
+        dancerVideo.play().catch(() => {});
+      }
+      syncAudioToVideo(true);
+    }
+  }
+});
+
