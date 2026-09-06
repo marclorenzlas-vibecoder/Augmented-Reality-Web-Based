@@ -1640,13 +1640,37 @@ function initThreeScene() {
     }
   }
 
+  // Global screen-space tap tracking for exact touch coordinates in WebXR
+  let lastTapScreenX = null;
+  let lastTapScreenY = null;
+
+  function updateTapCoordinates(clientX, clientY) {
+    if (typeof clientX === 'number' && clientX > 0 && typeof clientY === 'number' && clientY > 0) {
+      lastTapScreenX = clientX;
+      lastTapScreenY = clientY;
+    }
+  }
+
+  window.addEventListener('pointerdown', (e) => {
+    updateTapCoordinates(e.clientX, e.clientY);
+  }, { passive: true, capture: true });
+
+  window.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches.length > 0) {
+      updateTapCoordinates(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, { passive: true, capture: true });
+
   // Touch / pointer placement handler on canvas (strictly inactive until user starts AR)
   handlePlacementTap = (e) => {
     if (!arStarted || isPlaced) return;
     if (performance.now() < ignorePlacementUntil) return;
     if (e.target && e.target.closest && e.target.closest('button, .drawer, .top-bar-controls, .top-bar, .dock, input, label, #ARButton')) return;
 
-    handleFloorTap(e.clientX, e.clientY);
+    const x = e.clientX ?? (e.touches && e.touches[0]?.clientX) ?? (e.changedTouches && e.changedTouches[0]?.clientX);
+    const y = e.clientY ?? (e.touches && e.touches[0]?.clientY) ?? (e.changedTouches && e.changedTouches[0]?.clientY);
+    updateTapCoordinates(x, y);
+    handleFloorTap(x, y);
   };
 
   // Ensure placement listener is inactive until user explicitly taps "Start AR"
@@ -2461,8 +2485,10 @@ function resetArSessionState() {
 function enablePlacementListener() {
   if (!arStarted || isPlaced) return;
   const canvas = $('ar-canvas');
-  if (placementListenerAttached || !canvas || typeof handlePlacementTap !== 'function') return;
-  canvas.addEventListener('pointerdown', handlePlacementTap);
+  if (placementListenerAttached || typeof handlePlacementTap !== 'function') return;
+  if (canvas) canvas.addEventListener('pointerdown', handlePlacementTap);
+  window.addEventListener('pointerdown', handlePlacementTap);
+  window.addEventListener('touchend', handlePlacementTap);
   placementListenerAttached = true;
 }
 
@@ -2473,6 +2499,7 @@ function disablePlacementListener() {
   }
   if (typeof handlePlacementTap === 'function') {
     window.removeEventListener('pointerdown', handlePlacementTap);
+    window.removeEventListener('touchend', handlePlacementTap);
   }
   placementListenerAttached = false;
 }
@@ -2481,7 +2508,7 @@ function disablePlacementListener() {
 function onSelect() {
   if (!arStarted || isPlaced) return;
   if (performance.now() < ignorePlacementUntil) return;
-  handleFloorTap(null, null);
+  handleFloorTap(lastTapScreenX, lastTapScreenY);
 }
 
 function handleFloorTap(screenX = null, screenY = null) {
@@ -2491,20 +2518,32 @@ function handleFloorTap(screenX = null, screenY = null) {
   const targetPoint = new THREE.Vector3();
   let foundIntersection = false;
 
-  const currentCamera = (renderer && renderer.xr && renderer.xr.isPresenting)
+  // In WebXR, renderer.xr.getCamera() returns an ArrayCamera whose first child is the active eye perspective camera
+  const xrCam = (renderer && renderer.xr && renderer.xr.isPresenting)
     ? renderer.xr.getCamera()
     : camera;
+  const activeCam = (xrCam && xrCam.cameras && xrCam.cameras.length > 0)
+    ? xrCam.cameras[0]
+    : camera;
+
+  activeCam.updateMatrixWorld(true);
 
   const raycaster = new THREE.Raycaster();
-  if (typeof screenX === 'number' && typeof screenY === 'number' && screenX > 0 && screenY > 0) {
-    const mouse = new THREE.Vector2(
-      (screenX / window.innerWidth) * 2 - 1,
-      -(screenY / window.innerHeight) * 2 + 1
-    );
-    raycaster.setFromCamera(mouse, currentCamera);
-  } else {
-    raycaster.setFromCamera(new THREE.Vector2(0, 0), currentCamera);
-  }
+
+  // Use the exact screen coordinate where user tapped; fallback to center only if completely unknown
+  const tapX = (typeof screenX === 'number' && screenX > 0)
+    ? screenX
+    : (typeof lastTapScreenX === 'number' && lastTapScreenX > 0 ? lastTapScreenX : window.innerWidth / 2);
+  const tapY = (typeof screenY === 'number' && screenY > 0)
+    ? screenY
+    : (typeof lastTapScreenY === 'number' && lastTapScreenY > 0 ? lastTapScreenY : window.innerHeight / 2);
+
+  const mouse = new THREE.Vector2(
+    (tapX / window.innerWidth) * 2 - 1,
+    -(tapY / window.innerHeight) * 2 + 1
+  );
+
+  raycaster.setFromCamera(mouse, activeCam);
 
   // 1. Test intersection with detected floor grid meshes
   if (floorGridMesh && floorGridMesh.children.length > 0) {
@@ -2514,7 +2553,7 @@ function handleFloorTap(screenX = null, screenY = null) {
     });
 
     if (planeMeshes.length > 0) {
-      const intersects = raycaster.intersectObjects(planeMeshes, false);
+      const intersects = raycaster.intersectObjects(planeMeshes, true);
       if (intersects.length > 0) {
         targetPoint.copy(intersects[0].point);
         foundIntersection = true;
@@ -2523,18 +2562,27 @@ function handleFloorTap(screenX = null, screenY = null) {
   }
 
   // 2. Intersect with horizontal ground plane at detected floor height
+  const floorY = detectedFloorHeight !== null 
+    ? detectedFloorHeight 
+    : (lastHitPosition ? lastHitPosition.y : (activeCam.position.y - 1.2));
+
   if (!foundIntersection) {
-    const floorY = detectedFloorHeight !== null ? detectedFloorHeight : (lastHitPosition ? lastHitPosition.y : 0);
     const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorY);
     if (raycaster.ray.intersectPlane(groundPlane, targetPoint)) {
-      foundIntersection = true;
+      const camDir = new THREE.Vector3();
+      activeCam.getWorldDirection(camDir);
+      const toHit = targetPoint.clone().sub(activeCam.position);
+      if (toHit.dot(camDir) > 0.05 && toHit.length() < 25) {
+        foundIntersection = true;
+      }
     }
   }
 
-  // 3. Fallback to last hit-test matrix position
-  if (!foundIntersection && lastHitPoseMatrix) {
-    const mat = new THREE.Matrix4().fromArray(lastHitPoseMatrix);
-    targetPoint.setFromMatrixPosition(mat);
+  // 3. Fallback: project along user's tapped ray direction at current depth instead of forcing screen center
+  if (!foundIntersection) {
+    const dist = lastHitPosition ? activeCam.position.distanceTo(lastHitPosition) : 1.8;
+    targetPoint.copy(raycaster.ray.direction).multiplyScalar(dist).add(raycaster.ray.origin);
+    targetPoint.y = floorY;
     foundIntersection = true;
   }
 
@@ -2547,7 +2595,7 @@ function handleFloorTap(screenX = null, screenY = null) {
     dancerGroup.userData.baseY = targetPoint.y;
 
     const cameraPos = new THREE.Vector3();
-    currentCamera.getWorldPosition(cameraPos);
+    activeCam.getWorldPosition(cameraPos);
     const angle = Math.atan2(
       cameraPos.x - dancerGroup.position.x,
       cameraPos.z - dancerGroup.position.z
