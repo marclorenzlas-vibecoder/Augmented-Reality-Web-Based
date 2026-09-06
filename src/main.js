@@ -1794,7 +1794,38 @@ function initThreeScene() {
     if (e.touches && e.touches.length > 0) {
       updateTapCoordinates(e.touches[0].clientX, e.touches[0].clientY);
     }
+    if (e.touches && e.touches.length === 2 && isPlaced && dancerGroup) {
+      initialPinchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      basePinchScale = currentDancerScale;
+    }
   }, { passive: true, capture: true });
+
+  // Two-finger pinch gesture to dynamically scale dancer size to the viewer
+  let initialPinchDist = null;
+  let basePinchScale = 1.0;
+  let currentDancerScale = 1.0;
+
+  window.addEventListener('touchmove', (e) => {
+    if (e.touches && e.touches.length === 2 && isPlaced && dancerGroup && initialPinchDist) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const factor = dist / initialPinchDist;
+      currentDancerScale = THREE.MathUtils.clamp(basePinchScale * factor, 0.4, 3.5);
+      dancerGroup.scale.set(currentDancerScale, currentDancerScale, currentDancerScale);
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchend', (e) => {
+    if (!e.touches || e.touches.length < 2) {
+      initialPinchDist = null;
+      basePinchScale = currentDancerScale;
+    }
+  }, { passive: true });
 
   // Touch / pointer placement handler on canvas (strictly inactive until user starts AR)
   handlePlacementTap = (e) => {
@@ -1927,9 +1958,27 @@ function initThreeScene() {
       if (dancerGroup.userData.baseY !== undefined) {
         dancerGroup.position.y = dancerGroup.userData.baseY;
       }
-      if (dancerGroup.userData.baseRotY !== undefined) {
+      // If billboard is 2D video or image, continuously face viewer so it never looks flat or skewed from side angles
+      if (currentMediaType === 'video' || currentMediaType === 'default' || currentMediaType === 'image') {
+        const xrCam = (renderer && renderer.xr && renderer.xr.isPresenting)
+          ? renderer.xr.getCamera()
+          : camera;
+        const activeCam = (xrCam && xrCam.cameras && xrCam.cameras.length > 0)
+          ? xrCam.cameras[0]
+          : (xrCam || camera);
+        if (activeCam) {
+          const camPos = new THREE.Vector3();
+          activeCam.getWorldPosition(camPos);
+          const angle = Math.atan2(
+            camPos.x - dancerGroup.position.x,
+            camPos.z - dancerGroup.position.z
+          );
+          dancerGroup.rotation.y = angle;
+        }
+      } else if (dancerGroup.userData.baseRotY !== undefined) {
         dancerGroup.rotation.y = dancerGroup.userData.baseRotY;
       }
+      dancerGroup.rotation.x = 0;
       dancerGroup.rotation.z = 0;
     }
 
@@ -2425,7 +2474,7 @@ function tryLoadImage(url, loadToken = ++mediaLoadToken) {
 }
 
 const VIDEO_ASPECT = 9 / 16;
-const BILLBOARD_HEIGHT = 1.4;
+const BILLBOARD_HEIGHT = 1.75; // Life-sized human dancer scale (matches viewer eye height)
 const PLACEMENT_FLOAT_AMPLITUDE = 0.04;
 
 function applyVideoToBillboard() {
@@ -2552,10 +2601,6 @@ function createGroundOcclusionShadow() {
 function buildVideoBillboard() {
   const group = new THREE.Group();
 
-  // Add realistic ground contact occlusion shadow plane
-  const occlusionShadow = createGroundOcclusionShadow();
-  group.add(occlusionShadow);
-
   let mat;
   let aspect = VIDEO_ASPECT;
 
@@ -2636,7 +2681,10 @@ function resetArSessionState() {
   detectedFloorHeight = null;
   resetDetectedPlaneGrids();
   if (floorGridMesh) floorGridMesh.visible = false;
-  if (dancerGroup) dancerGroup.visible = false;
+  if (dancerGroup) {
+    dancerGroup.visible = false;
+    dancerGroup.scale.set(1, 1, 1);
+  }
   if (dancerVideo) {
     dancerVideo.pause();
     dancerVideo.currentTime = 0;
@@ -2817,7 +2865,10 @@ function placeDancer() {
 function repositionDancer() {
   ignorePlacementUntil = performance.now() + 800;
   isPlaced = false;
-  dancerGroup.visible = false;
+  if (dancerGroup) {
+    dancerGroup.visible = false;
+    dancerGroup.scale.set(1, 1, 1);
+  }
   disablePlacementListener();
 
   // Stop positional audio and pause video while repositioning
