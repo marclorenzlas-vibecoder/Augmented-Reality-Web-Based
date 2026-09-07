@@ -1199,19 +1199,6 @@ body.landscape--reverse .shutter-btn,
   left: calc(max(env(safe-area-inset-left), 0px) + 45px);
 }
 
-body.landscape--reverse .top-bar,
-.overlay.landscape--reverse .top-bar {
-  right: auto;
-  left: max(env(safe-area-inset-left), 32px);
-  justify-content: flex-start;
-}
-
-body.landscape--reverse .btn--info,
-.overlay.landscape--reverse .btn--info {
-  right: auto;
-  left: calc(max(env(safe-area-inset-left), 0px) + 40px);
-}
-
 body.landscape .btn--info,
 .overlay.landscape .btn--info {
   position: absolute;
