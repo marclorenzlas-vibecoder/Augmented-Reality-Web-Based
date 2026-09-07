@@ -431,7 +431,7 @@ function detectAndApplyKeyModeFromUrl(url) {
 }
 
 function autoDetectKeyModeFromVideo() {
-  if (hasFilenameKeyTag || !dancerVideo || dancerVideo.videoWidth === 0) return;
+  if (!dancerVideo || dancerVideo.videoWidth === 0) return;
   try {
     const sampleCanvas = document.createElement('canvas');
     sampleCanvas.width = 16;
@@ -453,10 +453,16 @@ function autoDetectKeyModeFromVideo() {
     const avgG = totalG / 4;
     const avgB = totalB / 4;
 
+    // If already tagged as greybg or detected as neutral grey, refine keyColor with exact sampled corner color
+    if (currentKeyMode === 3 || (Math.abs(avgR - avgG) < 22 && Math.abs(avgG - avgB) < 22 && avgR > 50 && avgR < 210)) {
+      applyKeySettings(3, new THREE.Color(avgR / 255, avgG / 255, avgB / 255), 0.28, 0.12);
+      return;
+    }
+
+    if (hasFilenameKeyTag) return;
+
     if (avgG > 80 && avgG > avgR * 1.35 && avgG > avgB * 1.35) {
       applyKeySettings(1, new THREE.Color(0x00ff00), 0.38, 0.10); // Green Screen
-    } else if (Math.abs(avgR - avgG) < 20 && Math.abs(avgG - avgB) < 20 && avgR > 60 && avgR < 200) {
-      applyKeySettings(3, new THREE.Color(avgR / 255, avgG / 255, avgB / 255), 0.28, 0.12); // Grey Screen
     } else if (avgR < 40 && avgG < 40 && avgB < 40) {
       applyKeySettings(2, new THREE.Color(0x000000), 0.07, 0.14); // Black BG
     }
@@ -553,12 +559,21 @@ const ChromaShader = {
         if (alpha < 0.02) discard;
         gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
       } else if (keyMode == 3) {
-        // Grey / Gray background removal (Euclidean RGB distance from keyColor)
+        // Grey / Gray background removal
+        float maxC = max(texColor.r, max(texColor.g, texColor.b));
+        float minC = min(texColor.r, min(texColor.g, texColor.b));
+        float chroma = maxC - minC;
+
+        float luma = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
+        float targetLuma = dot(keyColor, vec3(0.299, 0.587, 0.114));
+        float lumaDiff = abs(luma - targetLuma);
         float dist = distance(texColor.rgb, keyColor);
-        if (dist < similarity) {
+
+        // Discard if color is within similarity distance or is neutral grey matching target luminance
+        if (dist < similarity || (chroma < 0.10 && lumaDiff < similarity * 0.9)) {
           discard;
         }
-        float alpha = smoothstep(similarity, similarity + smoothness, dist);
+        float alpha = smoothstep(similarity, similarity + smoothness, max(dist, chroma * 1.5));
         if (alpha < 0.05) discard;
         gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
       } else if (keyMode == 4) {
@@ -2073,11 +2088,16 @@ function resolveMediaUrl(raw) {
 async function loadMediaFromQR(text) {
   if (!text) return;
 
-  // ── Option C : Support Pipe-Separated "video.mp4|music.mp3" ──────────────
-  let videoSource = text.trim();
+  const raw = text.trim();
+  let videoSource = raw;
   let audioSource = null;
 
-  if (videoSource.includes('|')) {
+  // Support direct File Garden folder links (e.g. https://file.garden/aoVl-M0-p1TyFay4/masskara1)
+  const cleanFolder = raw.replace(/\/+$/, '');
+  if (/file\.garden\/[^\/]+\/masskara1$/i.test(cleanFolder) || cleanFolder.endsWith('/masskara1')) {
+    videoSource = `${cleanFolder}/Composition_greybg.mp4`;
+    audioSource = `${cleanFolder}/masskara`;
+  } else if (videoSource.includes('|')) {
     const parts = videoSource.split('|');
     videoSource = parts[0].trim();
     audioSource = parts[1].trim();
@@ -2094,6 +2114,11 @@ async function loadMediaFromQR(text) {
         videoSource = parsedUrl.toString();
       }
     } catch (e) {}
+  }
+
+  // If video is from masskara1 folder and audio wasn't explicitly passed, auto-pair with masskara audio
+  if (!audioSource && videoSource.includes('/masskara1/')) {
+    audioSource = videoSource.replace(/Composition_greybg\.mp4/i, 'masskara');
   }
 
   // Immediately stop any previously playing audio when scanning new media
