@@ -1053,14 +1053,11 @@ function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
   updateLoadingBar(20, true);
 
   let timeoutId = null;
-  let fallbackId = null;
   const cleanup = () => {
     clearTimeout(timeoutId);
-    clearTimeout(fallbackId);
     dancerVideo.removeEventListener('loadedmetadata', onReady);
     dancerVideo.removeEventListener('loadeddata', onReady);
     dancerVideo.removeEventListener('canplay', onReady);
-    dancerVideo.removeEventListener('playing', onReady);
     dancerVideo.removeEventListener('error', onError);
   };
 
@@ -1097,6 +1094,7 @@ function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
     cleanup();
     console.warn('Video load error:', describeVideoError());
 
+    // Only fallback to blob if native element fails with CORS or decode error
     if (allowBlobFallback) {
       loadVideoViaBlob(url, loadToken);
     } else {
@@ -1104,8 +1102,10 @@ function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
     }
   };
 
+  // Keep video completely paused and muted during loading - DO NOT play in background!
   dancerVideo.pause();
   pausePositionalAudio();
+  dancerVideo.currentTime = 0;
   dancerVideo.crossOrigin = 'anonymous';
   dancerVideo.muted = true;
   dancerVideo.loop = true;
@@ -1115,12 +1115,11 @@ function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
   dancerVideo.addEventListener('loadedmetadata', onReady);
   dancerVideo.addEventListener('loadeddata', onReady);
   dancerVideo.addEventListener('canplay', onReady);
-  dancerVideo.addEventListener('playing', onReady);
   dancerVideo.addEventListener('error', onError);
 
   dancerVideo.src = url;
   dancerVideo.load();
-  dancerVideo.play().catch(() => { });
+  // Strictly do NOT call dancerVideo.play() here - it only plays when placed in AR!
 
   if ('requestVideoFrameCallback' in dancerVideo) {
     dancerVideo.requestVideoFrameCallback(() => {
@@ -1130,19 +1129,14 @@ function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
 
   setTimeout(readyStateCheck, 0);
   setTimeout(readyStateCheck, 250);
-
-  fallbackId = setTimeout(() => {
-    if (!allowBlobFallback || loadToken !== mediaLoadToken || isMediaReady) return;
-    loadVideoViaBlob(url, loadToken);
-    setTimeout(readyStateCheck, 1000);
-  }, 3000);
+  setTimeout(readyStateCheck, 800);
 
   timeoutId = setTimeout(() => {
     if (loadToken !== mediaLoadToken || isMediaReady) return;
     cleanup();
     hideLoadingBar();
     setToast('Video loading timed out', false);
-  }, 8000);
+  }, 15000);
 }
 
 const $ = (id) => document.getElementById(id);
@@ -2179,22 +2173,30 @@ async function loadMediaFromQR(text) {
     return;
   }
 
-  // If local, we can try direct video/image/3D detection by file extension without fetch
-  if (isLocal) {
-    const isGif = /\.(gif)($|\?)/i.test(resolvedUrl);
-    const isImage = /\.(jpg|jpeg|png|webp)($|\?)/i.test(resolvedUrl);
-    const isGlb = /\.(glb|gltf)($|\?)/i.test(resolvedUrl);
+  // Direct detection by media extension for BOTH local and remote URLs (prevents downloading 60MB via fetch into RAM!)
+  const isVideoExt = /\.(mp4|webm|mov|m4v|ogg)($|[?#])/i.test(resolvedUrl);
+  const isGifExt   = /\.(gif)($|[?#])/i.test(resolvedUrl);
+  const isImageExt = /\.(jpg|jpeg|png|webp)($|[?#])/i.test(resolvedUrl);
+  const isGlbExt   = /\.(glb|gltf)($|[?#])/i.test(resolvedUrl);
 
-    if (isGif) {
-      tryLoadGif(resolvedUrl, loadToken);
-    } else if (isImage) {
-      tryLoadImage(resolvedUrl, loadToken);
-    } else if (isGlb) {
-      tryLoadGlb(resolvedUrl, loadToken);
-    } else {
-      currentMediaType = 'video';
-      loadVideoMedia(resolvedUrl, loadToken);
-    }
+  if (isVideoExt) {
+    currentMediaType = 'video';
+    loadVideoMedia(resolvedUrl, loadToken);
+    return;
+  }
+
+  if (isGlbExt) {
+    tryLoadGlb(resolvedUrl, loadToken);
+    return;
+  }
+
+  if (isImageExt) {
+    tryLoadImage(resolvedUrl, loadToken);
+    return;
+  }
+
+  if (isGifExt) {
+    tryLoadGif(resolvedUrl, loadToken);
     return;
   }
 
