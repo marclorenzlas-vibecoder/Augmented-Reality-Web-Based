@@ -129,6 +129,30 @@ function resumeAudioContext() {
 }
 
 let isSyncingAudio = false;
+let lastAudioDriftCheckTime = 0;
+
+function startPositionalAudioAt(targetAudioTime) {
+  if (!positionalAudio || !positionalAudio.buffer) return;
+  try {
+    resumeAudioContext();
+    if (positionalAudio.isPlaying) {
+      positionalAudio.stop();
+    }
+    positionalAudio.offset = Math.max(0, targetAudioTime);
+    positionalAudio.play();
+  } catch (err) {
+    console.warn('Error starting positional audio at offset:', err);
+  }
+}
+
+function getPositionalAudioCurrentTime(audioDuration) {
+  if (!positionalAudio || !positionalAudio.isPlaying || !positionalAudio.context) return 0;
+  const startT = (positionalAudio.startTime !== undefined && positionalAudio.startTime > 0)
+    ? positionalAudio.startTime
+    : positionalAudio.context.currentTime;
+  const elapsed = Math.max(0, positionalAudio.context.currentTime - startT) * (positionalAudio.playbackRate || 1.0);
+  return ((positionalAudio.offset || 0) + elapsed) % audioDuration;
+}
 
 function syncAudioToVideo(force = false) {
   if (isSyncingAudio || !positionalAudio || !positionalAudio.buffer || !isAudioReady || isAudioMuted) {
@@ -160,23 +184,27 @@ function syncAudioToVideo(force = false) {
     const targetAudioTime = dancerVideo.currentTime % audioDuration;
 
     if (positionalAudio.isPlaying) {
-      const elapsed = Math.max(0, positionalAudio.context.currentTime - (positionalAudio._startedAt || 0)) * (positionalAudio.playbackRate || 1.0);
-      const currentAudioTime = ((positionalAudio._progress || 0) + elapsed) % audioDuration;
+      if (force) {
+        isSyncingAudio = true;
+        try {
+          startPositionalAudioAt(targetAudioTime);
+        } finally {
+          isSyncingAudio = false;
+        }
+        return;
+      }
 
+      const currentAudioTime = getPositionalAudioCurrentTime(audioDuration);
       let drift = Math.abs(currentAudioTime - targetAudioTime);
       if (drift > audioDuration / 2) {
         drift = audioDuration - drift;
       }
 
-      // Re-sync if forced (loop / seek / place) or if drift exceeds ~70ms
-      if (force || drift > 0.07) {
+      // Re-sync only if drift is significant (> 0.5s) to avoid fighting mobile video timing jitter
+      if (drift > 0.5) {
         isSyncingAudio = true;
         try {
-          positionalAudio.stop();
-          positionalAudio._progress = targetAudioTime;
-          positionalAudio.play();
-        } catch (err) {
-          console.warn('Positional audio re-sync error:', err);
+          startPositionalAudioAt(targetAudioTime);
         } finally {
           isSyncingAudio = false;
         }
@@ -185,12 +213,7 @@ function syncAudioToVideo(force = false) {
       // Audio was paused or stopped; start aligned to current video time
       isSyncingAudio = true;
       try {
-        resumeAudioContext();
-        positionalAudio.stop();
-        positionalAudio._progress = targetAudioTime;
-        positionalAudio.play();
-      } catch (err) {
-        console.warn('Positional audio start sync error:', err);
+        startPositionalAudioAt(targetAudioTime);
       } finally {
         isSyncingAudio = false;
       }
@@ -228,7 +251,7 @@ function stopPositionalAudio() {
       if (positionalAudio.isPlaying) {
         positionalAudio.stop();
       }
-      positionalAudio._progress = 0;
+      positionalAudio.offset = 0;
     } catch (err) {
       console.warn('Failed to stop positional audio:', err);
     }
@@ -1586,7 +1609,8 @@ async function onQrCodeSuccess(decodedText) {
 async function startUniversalAR() {
   resetArSessionState();
   if (dancerVideo) {
-    dancerVideo.play().catch(() => { });
+    dancerVideo.pause();
+    dancerVideo.currentTime = 0;
   }
 
   if (!isThreeInitialized) {
@@ -1829,6 +1853,9 @@ function initThreeScene() {
 
   // Render loop using setAnimationLoop for WebXR compatibility
   const clock = new THREE.Clock();
+  const _renderCamPos = new THREE.Vector3();
+  const _renderUnitX = new THREE.Vector3(1, 0, 0);
+  const _renderWorldRight = new THREE.Vector3();
 
   const renderLoop = (timestamp, frame) => {
     const delta = clock.getDelta();
@@ -1849,14 +1876,17 @@ function initThreeScene() {
       }
     }
 
-    // Continuous lock-step video and positional audio synchronization
+    // Throttled video and positional audio synchronization check (every 2000ms instead of 60fps churn)
     if (positionalAudio && isAudioReady) {
       if (!arStarted || !isPlaced || !dancerGroup || !dancerGroup.visible) {
         if (positionalAudio.isPlaying) {
           stopPositionalAudio();
         }
       } else if (dancerVideo && (currentMediaType === 'video' || currentMediaType === 'default')) {
-        syncAudioToVideo(false);
+        if (timestamp - lastAudioDriftCheckTime > 2000) {
+          lastAudioDriftCheckTime = timestamp;
+          syncAudioToVideo(false);
+        }
       }
     }
 
@@ -1951,11 +1981,10 @@ function initThreeScene() {
           ? xrCam.cameras[0]
           : (xrCam || camera);
         if (activeCam) {
-          const camPos = new THREE.Vector3();
-          activeCam.getWorldPosition(camPos);
+          activeCam.getWorldPosition(_renderCamPos);
           const angle = Math.atan2(
-            camPos.x - dancerGroup.position.x,
-            camPos.z - dancerGroup.position.z
+            _renderCamPos.x - dancerGroup.position.x,
+            _renderCamPos.z - dancerGroup.position.z
           );
           dancerGroup.rotation.y = angle;
         }
@@ -1970,8 +1999,8 @@ function initThreeScene() {
     if (renderer.xr.isPresenting) {
       const xrCam = renderer.xr.getCamera();
       if (xrCam) {
-        const worldRight = new THREE.Vector3(1, 0, 0).applyQuaternion(xrCam.quaternion);
-        const tilt = Math.abs(worldRight.y);
+        _renderWorldRight.copy(_renderUnitX).applyQuaternion(xrCam.quaternion);
+        const tilt = Math.abs(_renderWorldRight.y);
         const screenAngle = (screen?.orientation?.angle !== undefined ? screen.orientation.angle : null) ?? window.orientation;
         const screenIsLandscape = screenAngle === 90 || screenAngle === -90 || screenAngle === 270;
 
@@ -1983,7 +2012,7 @@ function initThreeScene() {
           xrLastLandscape = isXrLandscape;
 
           if (isXrLandscape) {
-            let deg = worldRight.y < 0 ? -90 : 90;
+            let deg = _renderWorldRight.y < 0 ? -90 : 90;
             if (screenAngle === 90) deg = 90;
             else if (screenAngle === 270 || screenAngle === -90) deg = -90;
 
@@ -2844,7 +2873,7 @@ function placeDancer() {
   if (isAudioReady && !isAudioMuted) {
     if (positionalAudio) {
       positionalAudio.stop();
-      positionalAudio._progress = 0;
+      positionalAudio.offset = 0;
     }
     syncAudioToVideo(true);
   }
