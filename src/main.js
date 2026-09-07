@@ -382,7 +382,7 @@ function detectAndApplyKeyModeFromUrl(url) {
   if (/(_greybg|_graybg|_grey\b|_gray\b|greybg|graybg|bg[_-]?grey|bg[_-]?gray)/i.test(decoded)) {
     console.log('Chroma Key: Detected Grey background from filename');
     hasFilenameKeyTag = true;
-    applyKeySettings(3, new THREE.Color(0.5, 0.5, 0.5), 0.28, 0.12);
+    applyKeySettings(3, new THREE.Color(0.5, 0.5, 0.5), 0.20, 0.08);
     return;
   }
 
@@ -441,10 +441,10 @@ function autoDetectKeyModeFromVideo() {
     ctx.drawImage(dancerVideo, 0, 0, 16, 16);
     const data = ctx.getImageData(0, 0, 16, 16).data;
 
-    // Check corners: TL (0,0), TR (15,0), BL (0,15), BR (15,15)
-    const corners = [0, 15 * 4, (15 * 16) * 4, (15 * 16 + 15) * 4];
+    // Sample top row corners (safe from dancer feet/shadows at bottom): TL (0,0), TR (15,0)
+    const topCorners = [0, 4, 14 * 4, 15 * 4];
     let totalR = 0, totalG = 0, totalB = 0;
-    for (const idx of corners) {
+    for (const idx of topCorners) {
       totalR += data[idx];
       totalG += data[idx + 1];
       totalB += data[idx + 2];
@@ -454,8 +454,8 @@ function autoDetectKeyModeFromVideo() {
     const avgB = totalB / 4;
 
     // If already tagged as greybg or detected as neutral grey, refine keyColor with exact sampled corner color
-    if (currentKeyMode === 3 || (Math.abs(avgR - avgG) < 22 && Math.abs(avgG - avgB) < 22 && avgR > 50 && avgR < 210)) {
-      applyKeySettings(3, new THREE.Color(avgR / 255, avgG / 255, avgB / 255), 0.28, 0.12);
+    if (currentKeyMode === 3 || (Math.abs(avgR - avgG) < 20 && Math.abs(avgG - avgB) < 20 && avgR > 50 && avgR < 210)) {
+      applyKeySettings(3, new THREE.Color(avgR / 255, avgG / 255, avgB / 255), 0.20, 0.08);
       return;
     }
 
@@ -559,23 +559,44 @@ const ChromaShader = {
         if (alpha < 0.02) discard;
         gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
       } else if (keyMode == 3) {
-        // Grey / Gray background removal
+        // High-Precision Grey Screen Chroma Key
+        // 1. Calculate color saturation (chroma = max channel - min channel)
         float maxC = max(texColor.r, max(texColor.g, texColor.b));
         float minC = min(texColor.r, min(texColor.g, texColor.b));
         float chroma = maxC - minC;
 
+        // 2. Calculate luminance and distance from target grey
         float luma = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
         float targetLuma = dot(keyColor, vec3(0.299, 0.587, 0.114));
         float lumaDiff = abs(luma - targetLuma);
-        float dist = distance(texColor.rgb, keyColor);
 
-        // Discard if color is within similarity distance or is neutral grey matching target luminance
-        if (dist < similarity || (chroma < 0.10 && lumaDiff < similarity * 0.9)) {
-          discard;
+        // 3. Color channel deltas from keyColor
+        vec3 colDiff = abs(texColor.rgb - keyColor);
+        float maxColDiff = max(colDiff.r, max(colDiff.g, colDiff.b));
+
+        // Thresholds tailored specifically for flat grey video backgrounds:
+        // Any pixel with color (chroma > 0.055) is protected as dancer/costume
+        float chromaTol = 0.055;
+        float lumaTol = similarity * 0.45;
+
+        // If the pixel has color, or is significantly darker/lighter than the grey background,
+        // it is 100% the dancer: keep it completely untouched and opaque!
+        if (chroma > chromaTol || lumaDiff > lumaTol || maxColDiff > lumaTol * 1.3) {
+          gl_FragColor = texColor;
+        } else {
+          // Pixel is in the neutral grey zone: compute soft edge transition
+          float chromaFactor = smoothstep(chromaTol * 0.35, chromaTol, chroma);
+          float lumaFactor = smoothstep(lumaTol * 0.5, lumaTol, lumaDiff);
+          float dancerStrength = max(chromaFactor, lumaFactor);
+
+          if (dancerStrength < 0.12) {
+            discard; // Pure background
+          }
+
+          float alpha = smoothstep(0.12, 0.75, dancerStrength);
+          if (alpha < 0.02) discard;
+          gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
         }
-        float alpha = smoothstep(similarity, similarity + smoothness, max(dist, chroma * 1.5));
-        if (alpha < 0.05) discard;
-        gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
       } else if (keyMode == 4) {
         // White background removal
         float minVal = min(texColor.r, min(texColor.g, texColor.b));
