@@ -92,6 +92,7 @@ let hitTestSource = null;
 let hitTestSourceRequested = false;
 let controller;
 let xrLastLandscape = null; // tracks overlay rotation state inside WebXR
+let xrLastScreenAngle = null;
 let currentMediaUrl = null;
 let currentMediaType = 'default'; // 'video' | 'image' | 'default'
 let currentTexture = null;
@@ -1184,7 +1185,7 @@ const loadingBar = $('loading-bar');
 const ORIENTATION_FADE_OUT_MS = 50;
 let arOrientationFadeToken = 0;
 
-function applyXrOverlayOrientation({ isLandscape, deg = 0, width = '', height = '', left = '', top = '' }) {
+function applyXrOverlayOrientation({ isLandscape, needsTransform = false, deg = 0, width = '', height = '', left = '', top = '' }) {
   const uiWrapper = uiWrapperEl || $('ui-wrapper');
 
   if (isLandscape) {
@@ -1194,26 +1195,27 @@ function applyXrOverlayOrientation({ isLandscape, deg = 0, width = '', height = 
     } else {
       document.body.classList.remove('landscape--reverse');
     }
-    if (uiWrapper) {
+  } else {
+    document.body.classList.remove('landscape');
+    document.body.classList.remove('landscape--reverse');
+  }
+
+  if (uiWrapper) {
+    if (needsTransform) {
       uiWrapper.style.width = width;
       uiWrapper.style.height = height;
       uiWrapper.style.left = left;
       uiWrapper.style.top = top;
       uiWrapper.style.transformOrigin = 'center center';
       uiWrapper.style.transform = `rotate(${deg}deg)`;
+    } else {
+      uiWrapper.style.width = '';
+      uiWrapper.style.height = '';
+      uiWrapper.style.left = '';
+      uiWrapper.style.top = '';
+      uiWrapper.style.transform = '';
+      uiWrapper.style.transformOrigin = '';
     }
-    return;
-  }
-
-  document.body.classList.remove('landscape');
-  document.body.classList.remove('landscape--reverse');
-  if (uiWrapper) {
-    uiWrapper.style.width = '';
-    uiWrapper.style.height = '';
-    uiWrapper.style.left = '';
-    uiWrapper.style.top = '';
-    uiWrapper.style.transform = '';
-    uiWrapper.style.transformOrigin = '';
   }
 }
 
@@ -1725,6 +1727,8 @@ function initThreeScene() {
 
   renderer.xr.addEventListener('sessionstart', () => {
     arStarted = true;
+    xrLastLandscape = null;
+    xrLastScreenAngle = null;
     const arBtn = document.getElementById('ARButton');
     if (arBtn) arBtn.style.display = 'none';
     const toast = toastEl || $('toast');
@@ -1906,8 +1910,9 @@ function initThreeScene() {
           hitTestSource = null;
           resetArSessionState();
           xrLastLandscape = null; // reset so next session re-evaluates
+          xrLastScreenAngle = null;
 
-          // Reset overlay rotation back to portrait
+          // Reset overlay rotation back to default
           const uiWrapper = $('ui-wrapper');
           if (uiWrapper) {
             uiWrapper.style.width = '';
@@ -1926,6 +1931,8 @@ function initThreeScene() {
             uiOverlayEl.style.transformOrigin = '';
           }
           document.body.classList.remove('landscape');
+          document.body.classList.remove('landscape--reverse');
+          updateOrientationClass();
 
           // Reset UI
           uiOverlayEl?.classList.add('hidden');
@@ -2002,27 +2009,52 @@ function initThreeScene() {
         _renderWorldRight.copy(_renderUnitX).applyQuaternion(xrCam.quaternion);
         const tilt = Math.abs(_renderWorldRight.y);
         const screenAngle = (screen?.orientation?.angle !== undefined ? screen.orientation.angle : null) ?? window.orientation;
-        const screenIsLandscape = screenAngle === 90 || screenAngle === -90 || screenAngle === 270;
 
-        // Quick responsive landscape detection:
-        // Uses both device orientation sensor and 3D camera roll (>0.58 / ~35°) for instant response
-        const isXrLandscape = screenIsLandscape || (xrLastLandscape ? tilt > 0.40 : tilt > 0.58);
+        // Current DOM viewport aspect ratio
+        const viewportIsLandscape = window.innerWidth > window.innerHeight;
 
-        if (isXrLandscape !== xrLastLandscape) {
-          xrLastLandscape = isXrLandscape;
+        // Determine if device is physically held in landscape:
+        const isScreenAngleLandscape =
+          screenAngle === 90 || screenAngle === -90 || screenAngle === 270 ||
+          (screen?.orientation?.type && screen.orientation.type.includes('landscape'));
 
-          if (isXrLandscape) {
+        let isPhysicalLandscape;
+        if (isScreenAngleLandscape) {
+          isPhysicalLandscape = true;
+        } else if (screenAngle === 0 || screenAngle === 180 || (screen?.orientation?.type && screen.orientation.type.includes('portrait'))) {
+          isPhysicalLandscape = false;
+        } else {
+          // If sensor angle is locked/unavailable, use camera roll tilt with hysteresis
+          isPhysicalLandscape = xrLastLandscape ? tilt > 0.40 : tilt > 0.58;
+        }
+
+        if (isPhysicalLandscape !== xrLastLandscape || screenAngle !== xrLastScreenAngle) {
+          xrLastLandscape = isPhysicalLandscape;
+          xrLastScreenAngle = screenAngle;
+
+          if (isPhysicalLandscape === viewportIsLandscape) {
+            // Viewport ALREADY matches physical orientation natively!
+            // When started in landscape or when browser natively resizes:
+            // No rotate transform needed! CSS rules for body.landscape handle layout.
+            fadeToXrOverlayOrientation({
+              isLandscape: isPhysicalLandscape,
+              needsTransform: false,
+              deg: (isPhysicalLandscape && (screenAngle === 270 || screenAngle === -90)) ? -90 : 0
+            });
+          } else if (isPhysicalLandscape) {
+            // Viewport was initialized in Portrait (pw < ph), but phone is held in Landscape:
             let deg = _renderWorldRight.y < 0 ? -90 : 90;
             if (screenAngle === 90) deg = 90;
             else if (screenAngle === 270 || screenAngle === -90) deg = -90;
 
-            const pw = window.innerWidth;   // frozen portrait width
-            const ph = window.innerHeight;  // frozen portrait height
-            const offsetX = (pw - ph) / 2;  // negative → moves left
-            const offsetY = (ph - pw) / 2;  // positive → moves down
+            const pw = window.innerWidth;
+            const ph = window.innerHeight;
+            const offsetX = (pw - ph) / 2;
+            const offsetY = (ph - pw) / 2;
 
             fadeToXrOverlayOrientation({
               isLandscape: true,
+              needsTransform: true,
               deg,
               width: ph + 'px',
               height: pw + 'px',
@@ -2030,7 +2062,24 @@ function initThreeScene() {
               top: offsetY + 'px',
             });
           } else {
-            fadeToXrOverlayOrientation({ isLandscape: false });
+            // Viewport was initialized in Landscape (lw > lh), but phone is held in Portrait:
+            let deg = -90;
+            if (screenAngle === 270 || screenAngle === -90 || _renderWorldRight.x > 0) deg = 90;
+
+            const lw = window.innerWidth;
+            const lh = window.innerHeight;
+            const offsetX = (lw - lh) / 2;
+            const offsetY = (lh - lw) / 2;
+
+            fadeToXrOverlayOrientation({
+              isLandscape: false,
+              needsTransform: true,
+              deg,
+              width: lh + 'px',
+              height: lw + 'px',
+              left: offsetX + 'px',
+              top: offsetY + 'px',
+            });
           }
         }
       }
@@ -3047,28 +3096,35 @@ function setToast(msg, persist = false) {
 
 
 let lastOrientationAngle = null;
+let lastIsLandscape = null;
+
 function updateOrientationClass() {
   if (renderer?.xr?.isPresenting) return;
-  // ── Primary source: screen.orientation.angle ─────────────────────────────
-  // This is the ONLY reliable signal inside a WebXR session.
-  // Chrome freezes window.innerWidth/Height to portrait values once WebXR
-  // starts, so we CANNOT use w > h as the landscape test inside AR mode.
+
   const angle =
     (screen?.orientation?.angle !== undefined ? screen.orientation.angle : null) ??
     window.orientation ??
-    0;
+    null;
 
-  // Skip re-applying if nothing changed
-  if (angle === lastOrientationAngle) return;
+  const isLandscape =
+    (screen?.orientation?.type?.includes('landscape')) ||
+    angle === 90 || angle === -90 || angle === 270 ||
+    window.innerWidth > window.innerHeight;
+
+  if (isLandscape === lastIsLandscape && angle === lastOrientationAngle) return;
+  lastIsLandscape = isLandscape;
   lastOrientationAngle = angle;
-
-  // angle 90 or -90 = landscape-left, angle 270 = landscape-right
-  const isLandscape = angle === 90 || angle === -90 || angle === 270;
 
   if (isLandscape) {
     document.body.classList.add('landscape');
+    if (angle === 270 || angle === -90) {
+      document.body.classList.add('landscape--reverse');
+    } else {
+      document.body.classList.remove('landscape--reverse');
+    }
   } else {
     document.body.classList.remove('landscape');
+    document.body.classList.remove('landscape--reverse');
   }
 }
 
