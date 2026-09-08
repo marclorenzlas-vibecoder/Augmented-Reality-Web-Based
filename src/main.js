@@ -979,7 +979,7 @@ async function loadVideoViaBlob(url, loadToken) {
   if (loadToken !== mediaLoadToken || isMediaReady) return;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   try {
     updateLoadingBar(20, true);
@@ -1084,7 +1084,7 @@ function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
 
   dancerVideo.src = url;
   dancerVideo.load();
-  dancerVideo.play().catch(() => { });
+  dancerVideo.play().catch(() => {});
 
   if ('requestVideoFrameCallback' in dancerVideo) {
     dancerVideo.requestVideoFrameCallback(() => {
@@ -1095,18 +1095,19 @@ function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
   setTimeout(readyStateCheck, 0);
   setTimeout(readyStateCheck, 250);
 
+  // If after 4s no metadata/frames are ready, try blob fallback
   fallbackId = setTimeout(() => {
-    if (!allowBlobFallback || loadToken !== mediaLoadToken || isMediaReady) return;
+    if (!allowBlobFallback || loadToken !== mediaLoadToken || isMediaReady || hasDecodedVideoFrame()) return;
     loadVideoViaBlob(url, loadToken);
     setTimeout(readyStateCheck, 1000);
-  }, 3000);
+  }, 4000);
 
   timeoutId = setTimeout(() => {
-    if (loadToken !== mediaLoadToken || isMediaReady) return;
+    if (loadToken !== mediaLoadToken || isMediaReady || hasDecodedVideoFrame()) return;
     cleanup();
     hideLoadingBar();
     setToast('Video loading timed out', false);
-  }, 8000);
+  }, 10000);
 }
 
 const $ = (id) => document.getElementById(id);
@@ -1128,79 +1129,365 @@ const exitArBtnEl = $('exit-ar-btn');
 const loadingBarContainer = $('loading-bar-container');
 const loadingBar = $('loading-bar');
 
-const ORIENTATION_FADE_OUT_MS = 50;
-let arOrientationFadeToken = 0;
+// ── Viewport & Orientation Layout Logic ────────────────────────────────────
+let currentOrientationIsLandscape = null;
+let currentOrientationState = { isLandscape: false, angle: 0 };
+let isTransitioningOrientation = false;
+let pendingOrientationTarget = null;
+let orientationTransitionTimer = null;
+let lastDeviceOrientationAngle = null;
+let lastDeviceOrientationTimestamp = 0;
 
-function applyXrOverlayOrientation({ isLandscape, deg = 0, width = '', height = '', left = '', top = '' }) {
-  const uiWrapper = uiWrapperEl || $('ui-wrapper');
+window.addEventListener('deviceorientation', (e) => {
+  if (e.gamma !== null && e.gamma !== undefined) {
+    lastDeviceOrientationTimestamp = performance.now();
+    const absGamma = Math.abs(e.gamma);
+    const absBeta = Math.abs(e.beta || 0);
+
+    // If phone is held upright in portrait, gamma is small and beta is tilted up
+    if (absGamma < 25 && absBeta > 30) {
+      lastDeviceOrientationAngle = 0; // portrait
+    } else if (e.gamma < -45 || (absBeta < 35 && e.gamma < -25)) {
+      lastDeviceOrientationAngle = 90; // landscape primary (counter-clockwise)
+    } else if (e.gamma > 45 || (absBeta < 35 && e.gamma > 25)) {
+      lastDeviceOrientationAngle = -90; // landscape secondary (clockwise)
+    }
+  }
+}, true);
+
+function getXrDeviceOrientation(cameraObj) {
+  const activeCam = (cameraObj && cameraObj.cameras && cameraObj.cameras.length > 0)
+    ? cameraObj.cameras[0]
+    : (cameraObj || camera);
+  if (!activeCam) return null;
+  const q = activeCam.quaternion;
+
+  // Local directions in world space:
+  // -Z: camera forward direction pointing into the world
+  // +Y: camera local up
+  // +X: camera local right
+  const camDir = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+  const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+  const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+
+  // If camera is pointing almost straight down at the floor or up at ceiling, maintain previous state
+  if (Math.abs(camDir.y) > 0.94) {
+    if (currentOrientationIsLandscape !== null) {
+      return { isLandscape: currentOrientationIsLandscape, angle: currentOrientationState?.angle ?? (currentOrientationIsLandscape ? 90 : 0) };
+    }
+    return null;
+  }
+
+  // Project world UP (0, 1, 0) onto camera's screen plane
+  const projUp = new THREE.Vector3(0, 1, 0).addScaledVector(camDir, -camDir.y);
+  const len = projUp.length();
+  if (len < 0.2) {
+    if (currentOrientationIsLandscape !== null) {
+      return { isLandscape: currentOrientationIsLandscape, angle: currentOrientationState?.angle ?? (currentOrientationIsLandscape ? 90 : 0) };
+    }
+    return null;
+  }
+  projUp.divideScalar(len);
+
+  // Determine whether the XR camera's native viewport aspect is landscape or portrait
+  const m = activeCam.projectionMatrix?.elements;
+  const isNativeXrLandscape = (m && m[0] && m[5]) ? (m[0] < m[5]) : (window.innerWidth > window.innerHeight);
+
+  if (!isNativeXrLandscape) {
+    // Native viewport is portrait:
+    // camUp (+Y) is along long edge of phone.
+    // camRight (+X) is along short edge of phone.
+    const rightDot = camRight.dot(projUp);
+    const absRight = Math.abs(rightDot);
+    // In portrait: camUp points up, absRight is near 0.
+    // In landscape: camRight points up, absRight is near 1.
+    const isLandscape = currentOrientationIsLandscape ? absRight >= 0.42 : absRight >= 0.62;
+    const angle = rightDot < 0 ? -90 : 90;
+    return { isLandscape, angle };
+  } else {
+    // Native viewport is landscape (session started in landscape):
+    // camRight (+X) is along long edge of phone.
+    // camUp (+Y) is along short edge of phone.
+    const upDot = camUp.dot(projUp);
+    const absUp = Math.abs(upDot);
+    // When phone is in landscape, short edge (camUp) points up (absUp ≈ 1).
+    // When phone is in portrait, short edge (camUp) points horizontally (absUp ≈ 0).
+    const isLandscape = currentOrientationIsLandscape ? absUp >= 0.42 : absUp >= 0.62;
+    const angle = isLandscape ? (upDot < 0 ? -90 : 90) : 0;
+    return { isLandscape, angle };
+  }
+}
+
+function getScreenOrientationInfo() {
+  // 1. Check Screen Orientation API (type) - most reliable on modern mobile
+  if (screen?.orientation?.type) {
+    if (screen.orientation.type.startsWith('portrait')) return { isLandscape: false, angle: 0 };
+    if (screen.orientation.type.startsWith('landscape-secondary')) return { isLandscape: true, angle: -90 };
+    if (screen.orientation.type.startsWith('landscape')) return { isLandscape: true, angle: 90 };
+  }
+
+  // 2. Check orientation angle
+  const angle = screen?.orientation?.angle ?? (typeof window.orientation === 'number' ? window.orientation : null);
+  if (angle !== null && angle !== undefined) {
+    if (angle === 0 || angle === 180) return { isLandscape: false, angle: 0 };
+    if (Math.abs(angle) === 90) return { isLandscape: true, angle: 90 };
+    if (angle === 270 || angle === -90) return { isLandscape: true, angle: -90 };
+  }
+
+  // 3. Check media queries
+  if (window.matchMedia) {
+    if (window.matchMedia('(orientation: portrait)').matches) {
+      return { isLandscape: false, angle: 0 };
+    }
+    if (window.matchMedia('(orientation: landscape)').matches) {
+      return { isLandscape: true, angle: 90 };
+    }
+  }
+
+  // 4. Fallback to viewport dimensions
+  if (window.innerWidth > window.innerHeight) {
+    return { isLandscape: true, angle: 90 };
+  }
+
+  return { isLandscape: false, angle: 0 };
+}
+
+function getEffectiveOrientation() {
+  if (renderer?.xr?.isPresenting) {
+    const xrCam = renderer.xr.getCamera?.();
+    const activeCam = (xrCam && xrCam.cameras && xrCam.cameras.length > 0) ? xrCam.cameras[0] : (xrCam || camera);
+    const xrOrient = getXrDeviceOrientation(activeCam);
+    if (xrOrient !== null) {
+      return xrOrient;
+    }
+  }
+
+  const screenInfo = getScreenOrientationInfo();
+
+  // If screen orientation says portrait, but device was actively tilted recently
+  const isRecentTilt = (performance.now() - lastDeviceOrientationTimestamp) < 2000;
+  if (isRecentTilt && lastDeviceOrientationAngle !== null && lastDeviceOrientationAngle !== 0 && screenInfo.angle === 0 && !screen?.orientation?.type?.startsWith('portrait')) {
+    return {
+      isLandscape: true,
+      angle: lastDeviceOrientationAngle
+    };
+  }
+
+  return screenInfo;
+}
+
+function applyOrientationClasses(orientationInfo) {
+  const isLandscape = !!orientationInfo?.isLandscape;
+  const angle = orientationInfo?.angle ?? 90;
+
+  currentOrientationIsLandscape = isLandscape;
+  currentOrientationState = { isLandscape, angle };
+
+  const overlay = document.getElementById('ar-overlay') || document.getElementById('ui-overlay') || uiOverlayEl;
+  const uiWrapper = document.getElementById('ui-wrapper') || uiWrapperEl;
+
+  const isNativeLandscape = window.innerWidth > window.innerHeight;
 
   if (isLandscape) {
-    document.body.classList.add('landscape');
-    if (deg === -90) {
-      document.body.classList.add('landscape--reverse');
-    } else {
-      document.body.classList.remove('landscape--reverse');
+    document.body.classList.add('is-landscape', 'landscape');
+    document.body.classList.remove('is-portrait', 'simulated-portrait');
+    if (overlay) {
+      overlay.classList.add('is-landscape', 'landscape');
+      overlay.classList.remove('is-portrait');
     }
     if (uiWrapper) {
-      uiWrapper.style.width = width;
-      uiWrapper.style.height = height;
-      uiWrapper.style.left = left;
-      uiWrapper.style.top = top;
-      uiWrapper.style.transformOrigin = 'center center';
-      uiWrapper.style.transform = `rotate(${deg}deg)`;
+      uiWrapper.classList.add('is-landscape', 'landscape');
+      uiWrapper.classList.remove('is-portrait', 'simulated-portrait');
     }
-    return;
+
+    if (overlay) {
+      overlay.style.position = 'fixed';
+      overlay.style.inset = '0';
+      overlay.style.width = '100dvw';
+      overlay.style.height = '100dvh';
+      overlay.style.pointerEvents = 'none';
+      overlay.style.transform = '';
+      if (!isNativeLandscape) {
+        overlay.style.overflow = 'visible';
+      } else {
+        overlay.style.overflow = '';
+      }
+    }
+
+    if (uiWrapper) {
+      if (isNativeLandscape) {
+        document.body.classList.remove('simulated-landscape', 'simulated-landscape-90', 'simulated-landscape--90');
+        uiWrapper.classList.remove('simulated-landscape', 'simulated-landscape-90', 'simulated-landscape--90');
+        uiWrapper.style.setProperty('position', 'absolute', 'important');
+        uiWrapper.style.setProperty('inset', '0', 'important');
+        uiWrapper.style.setProperty('width', '100%', 'important');
+        uiWrapper.style.setProperty('height', '100%', 'important');
+        uiWrapper.style.setProperty('left', '0', 'important');
+        uiWrapper.style.setProperty('top', '0', 'important');
+        uiWrapper.style.setProperty('transform', 'none', 'important');
+        uiWrapper.style.setProperty('transform-origin', 'center center', 'important');
+        uiWrapper.style.setProperty('opacity', '1', 'important');
+      } else {
+        // Simulated landscape inside portrait viewport (e.g. WebXR DOM overlay on Android Chrome)
+        const pw = window.innerWidth;
+        const ph = window.innerHeight;
+        const deg = angle === -90 || angle === 270 ? -90 : 90;
+        const simClass = deg === -90 ? 'simulated-landscape--90' : 'simulated-landscape-90';
+        const otherSimClass = deg === -90 ? 'simulated-landscape-90' : 'simulated-landscape--90';
+
+        document.body.classList.add('simulated-landscape', simClass);
+        document.body.classList.remove(otherSimClass);
+        uiWrapper.classList.add('simulated-landscape', simClass);
+        uiWrapper.classList.remove(otherSimClass);
+
+        uiWrapper.style.setProperty('position', 'absolute', 'important');
+        uiWrapper.style.setProperty('inset', 'auto', 'important');
+        uiWrapper.style.setProperty('width', ph + 'px', 'important');
+        uiWrapper.style.setProperty('height', pw + 'px', 'important');
+        uiWrapper.style.setProperty('left', ((pw - ph) / 2) + 'px', 'important');
+        uiWrapper.style.setProperty('top', ((ph - pw) / 2) + 'px', 'important');
+        uiWrapper.style.setProperty('transform-origin', 'center center', 'important');
+        uiWrapper.style.setProperty('transform', `rotate(${deg}deg)`, 'important');
+        uiWrapper.style.setProperty('opacity', '1', 'important');
+      }
+    }
+  } else {
+    document.body.classList.add('is-portrait');
+    document.body.classList.remove('is-landscape', 'landscape', 'simulated-landscape', 'simulated-landscape-90', 'simulated-landscape--90');
+    if (overlay) {
+      overlay.classList.add('is-portrait');
+      overlay.classList.remove('is-landscape', 'landscape');
+      overlay.style.overflow = '';
+    }
+    if (uiWrapper) {
+      uiWrapper.classList.add('is-portrait');
+      uiWrapper.classList.remove('is-landscape', 'landscape', 'simulated-landscape', 'simulated-landscape-90', 'simulated-landscape--90');
+
+      if (!isNativeLandscape) {
+        // Native portrait viewport: normal 100% overlay
+        document.body.classList.remove('simulated-portrait');
+        uiWrapper.classList.remove('simulated-portrait');
+        uiWrapper.style.setProperty('position', 'absolute', 'important');
+        uiWrapper.style.setProperty('inset', '0', 'important');
+        uiWrapper.style.setProperty('width', '100%', 'important');
+        uiWrapper.style.setProperty('height', '100%', 'important');
+        uiWrapper.style.setProperty('left', '0', 'important');
+        uiWrapper.style.setProperty('top', '0', 'important');
+        uiWrapper.style.setProperty('transform', 'none', 'important');
+        uiWrapper.style.setProperty('transform-origin', 'center center', 'important');
+        uiWrapper.style.setProperty('opacity', '1', 'important');
+      } else {
+        // Simulated portrait inside landscape viewport (e.g. AR started in landscape on mobile, then phone rotated to portrait)
+        const pw = window.innerWidth;
+        const ph = window.innerHeight;
+        const deg = (angle === -90 || angle === 270) ? 90 : -90;
+        document.body.classList.add('simulated-portrait');
+        uiWrapper.classList.add('simulated-portrait');
+        uiWrapper.style.setProperty('position', 'absolute', 'important');
+        uiWrapper.style.setProperty('inset', 'auto', 'important');
+        uiWrapper.style.setProperty('width', ph + 'px', 'important');
+        uiWrapper.style.setProperty('height', pw + 'px', 'important');
+        uiWrapper.style.setProperty('left', ((pw - ph) / 2) + 'px', 'important');
+        uiWrapper.style.setProperty('top', ((ph - pw) / 2) + 'px', 'important');
+        uiWrapper.style.setProperty('transform-origin', 'center center', 'important');
+        uiWrapper.style.setProperty('transform', `rotate(${deg}deg)`, 'important');
+        uiWrapper.style.setProperty('opacity', '1', 'important');
+      }
+    }
   }
 
-  document.body.classList.remove('landscape');
-  document.body.classList.remove('landscape--reverse');
-  if (uiWrapper) {
-    uiWrapper.style.width = '';
-    uiWrapper.style.height = '';
-    uiWrapper.style.left = '';
-    uiWrapper.style.top = '';
-    uiWrapper.style.transform = '';
-    uiWrapper.style.transformOrigin = '';
+
+  // Recalculate camera aspect ratio and projection matrix if not presenting XR
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+
+  if (camera && !renderer?.xr?.isPresenting) {
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  }
+
+  if (renderer && !renderer?.xr?.isPresenting) {
+    renderer.setSize(width, height);
   }
 }
 
-function fadeToXrOverlayOrientation(layout) {
-  const uiWrapper = uiWrapperEl || $('ui-wrapper');
-  const shouldFade =
-    uiWrapper &&
-    uiOverlayEl &&
-    !uiOverlayEl.classList.contains('hidden');
+function updateUILayout(forcedOrientation = null) {
+  let target = forcedOrientation;
+  if (typeof target === 'boolean') {
+    target = { isLandscape: target, angle: 90 };
+  } else if (!target) {
+    target = getEffectiveOrientation();
+  }
 
-  if (!shouldFade) {
-    applyXrOverlayOrientation(layout);
+  const uiWrapper = document.getElementById('ui-wrapper') || uiWrapperEl;
+  const isFirstRun = currentOrientationIsLandscape === null;
+  const hasChanged = !isFirstRun && (
+    target.isLandscape !== currentOrientationIsLandscape ||
+    (target.isLandscape && target.angle !== currentOrientationState?.angle)
+  );
+
+  // If already at target, skip
+  if (!isFirstRun && !hasChanged) {
     return;
   }
 
-  const token = ++arOrientationFadeToken;
-  uiWrapper.classList.add('ui-wrapper--orientation-fading');
+  // If already in the middle of transitioning towards this exact target state, ignore duplicate calls
+  if (isTransitioningOrientation && pendingOrientationTarget &&
+      pendingOrientationTarget.isLandscape === target.isLandscape &&
+      pendingOrientationTarget.angle === target.angle) {
+    return;
+  }
 
-  window.setTimeout(() => {
-    if (token !== arOrientationFadeToken) return;
+  if (isFirstRun || !uiWrapper || !arStarted) {
+    // Initial run or before AR start: apply immediately without transition delay
+    pendingOrientationTarget = null;
+    isTransitioningOrientation = false;
+    applyOrientationClasses(target);
+    return;
+  }
 
-    applyXrOverlayOrientation(layout);
+  // Smooth fade-out, swap layout, and fade-in
+  pendingOrientationTarget = { ...target };
+  isTransitioningOrientation = true;
 
+  if (orientationTransitionTimer) {
+    clearTimeout(orientationTransitionTimer);
+    orientationTransitionTimer = null;
+  }
+
+  uiWrapper.classList.add('ui-transitioning');
+
+  orientationTransitionTimer = setTimeout(() => {
+    applyOrientationClasses(pendingOrientationTarget || target);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        if (token !== arOrientationFadeToken) return;
-        uiWrapper.classList.remove('ui-wrapper--orientation-fading');
+        uiWrapper.classList.remove('ui-transitioning');
+        isTransitioningOrientation = false;
+        pendingOrientationTarget = null;
+        orientationTransitionTimer = null;
       });
     });
-  }, ORIENTATION_FADE_OUT_MS);
+  }, 180);
 }
 
+const updateLayoutAndOrientation = updateUILayout;
+const updateOrientationClass = updateUILayout;
 
 // ── Phase 1 : Direct QR Scanner (No Injected UI Widget) ────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  updateOrientationClass();
-  window.addEventListener('resize', updateOrientationClass);
-  window.addEventListener('orientationchange', updateOrientationClass);
-  if (screen.orientation) {
-    screen.orientation.addEventListener('change', updateOrientationClass);
+  updateUILayout();
+  window.addEventListener('resize', () => updateUILayout());
+  window.addEventListener('orientationchange', () => updateUILayout());
+  if (screen?.orientation) {
+    screen.orientation.addEventListener('change', () => {
+      if (screen.orientation.type?.startsWith('portrait') || screen.orientation.angle === 0 || screen.orientation.angle === 180) {
+        lastDeviceOrientationAngle = 0;
+      }
+      updateUILayout();
+    });
+  }
+  if (window.matchMedia) {
+    window.matchMedia('(orientation: landscape)').addEventListener('change', () => updateUILayout());
   }
   dancerVideo = $('dancer-video');
   if (dancerVideo) {
@@ -1282,9 +1569,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     qrControlsContainer.classList.remove('hidden');
   }
 
-  initCustomQrScanner().catch(err => {
-    console.error('Auto QR scan start failed:', err);
-  });
+  // ── Camera startup: check secure context first, then probe getUserMedia so
+  // the browser always shows its native permission dialog, then hand off to
+  // html5-qrcode. Errors are shown in #camera-error-msg with a retry button.
+  initCameraWithPermissionCheck();
 
   // ── Gallery QR Upload ────────────────────────────────────────────────────
   // Lets users pick a QR code image from their phone gallery.
@@ -1346,16 +1634,103 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // History drawer toggles
+  // History drawer toggles & touch scroll support
   infoToggleBtnEl?.addEventListener('click', (e) => {
     e.stopPropagation();
+    ignorePlacementUntil = performance.now() + 800;
     historyModalEl.classList.remove('hidden');
+    document.body.classList.add('drawer-open');
   });
 
   closeHistoryBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
+    ignorePlacementUntil = performance.now() + 800;
     historyModalEl.classList.add('hidden');
+    document.body.classList.remove('drawer-open');
   });
+
+  // Enable smooth touch and wheel scrolling inside drawer in all orientations
+  const drawerBodyEl = historyModalEl?.querySelector('.drawer-body');
+  if (drawerBodyEl) {
+    let startY = 0;
+    let startX = 0;
+    let startScrollTop = 0;
+    let isTouchingDrawer = false;
+    let lastTime = 0;
+    let lastDelta = 0;
+    let velocity = 0;
+    let momentumRaf = null;
+
+    drawerBodyEl.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        if (momentumRaf) cancelAnimationFrame(momentumRaf);
+        isTouchingDrawer = true;
+        startY = e.touches[0].clientY;
+        startX = e.touches[0].clientX;
+        startScrollTop = drawerBodyEl.scrollTop;
+        lastTime = performance.now();
+        lastDelta = 0;
+        velocity = 0;
+        ignorePlacementUntil = performance.now() + 800;
+      }
+    }, { passive: true });
+
+    drawerBodyEl.addEventListener('touchmove', (e) => {
+      if (!isTouchingDrawer || e.touches.length !== 1) return;
+      ignorePlacementUntil = performance.now() + 800;
+
+      const isSimulated = document.body.classList.contains('simulated-landscape') ||
+                          document.body.classList.contains('simulated-landscape-90') ||
+                          document.body.classList.contains('simulated-landscape--90') ||
+                          uiWrapperEl?.classList.contains('simulated-landscape');
+      const isDegMinus90 = document.body.classList.contains('simulated-landscape--90') ||
+                           uiWrapperEl?.classList.contains('simulated-landscape--90');
+
+      if (isSimulated) {
+        // Invert delta so finger movement matches natural scroll direction
+        let delta = isDegMinus90 ? (startX - e.touches[0].clientX) : (e.touches[0].clientX - startX);
+        drawerBodyEl.scrollTop = startScrollTop + delta;
+
+        const now = performance.now();
+        const dt = now - lastTime;
+        if (dt > 12) {
+          velocity = (delta - lastDelta) / dt;
+          lastDelta = delta;
+          lastTime = now;
+        }
+        if (e.cancelable) e.preventDefault();
+      }
+    }, { passive: false });
+
+    const endDrawerTouch = () => {
+      if (!isTouchingDrawer) return;
+      isTouchingDrawer = false;
+      ignorePlacementUntil = performance.now() + 800;
+
+      const isSimulated = document.body.classList.contains('simulated-landscape') ||
+                          document.body.classList.contains('simulated-landscape-90') ||
+                          document.body.classList.contains('simulated-landscape--90') ||
+                          uiWrapperEl?.classList.contains('simulated-landscape');
+
+      if (isSimulated && Math.abs(velocity) > 0.15) {
+        let v = velocity * 14;
+        const step = () => {
+          if (Math.abs(v) < 0.4) return;
+          drawerBodyEl.scrollTop += v;
+          v *= 0.92;
+          momentumRaf = requestAnimationFrame(step);
+        };
+        momentumRaf = requestAnimationFrame(step);
+      }
+    };
+
+    drawerBodyEl.addEventListener('touchend', endDrawerTouch, { passive: true });
+    drawerBodyEl.addEventListener('touchcancel', endDrawerTouch, { passive: true });
+
+    drawerBodyEl.addEventListener('wheel', (e) => {
+      drawerBodyEl.scrollTop += e.deltaY;
+    }, { passive: true });
+  }
 
   // Reposition
   const onRecenterTrigger = (e) => {
@@ -1406,11 +1781,147 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupCapture();
 });
 
+/**
+ * Classify a camera/getUserMedia error into a human-readable message.
+ * @param {Error} err
+ * @returns {string}
+ */
+function classifyCameraError(err) {
+  const name = err?.name || '';
+  const msg  = (err?.message || '').toLowerCase();
+  console.error('[Camera] Error name:', name, '| message:', err?.message);
+
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+    return 'Camera access was denied. Please tap the camera/lock icon in your browser\'s address bar, allow Camera, then refresh the page.';
+  }
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    return 'No camera found on this device. Please connect a camera and try again.';
+  }
+  if (name === 'NotReadableError' || name === 'TrackStartError') {
+    return 'Camera is in use by another app. Close other apps that use the camera (e.g. video call, camera app) and refresh.';
+  }
+  if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+    return 'Rear camera not available. Trying front camera…';
+  }
+  if (name === 'SecurityError' || msg.includes('secure') || msg.includes('http')) {
+    return 'Camera requires a secure (HTTPS) page. Make sure you are visiting https://localhost:5173 — not http://';
+  }
+  if (msg.includes('not found') || msg.includes('could not start')) {
+    return `Could not start camera: ${err.message}. (Close other apps using the camera and try again.)`;
+  }
+  return `Camera error: ${err.message || err}. (Try closing other apps that use the camera and refresh.)`;
+}
+
+/**
+ * Called once on page load. Checks for secure context, probes getUserMedia so
+ * the browser shows the native permission dialog, then starts html5-qrcode.
+ * Falls back to a visible retry button on failure.
+ */
+function initCameraWithPermissionCheck() {
+  console.log('[Camera] Checking environment…');
+  console.log('[Camera] isSecureContext:', window.isSecureContext);
+  console.log('[Camera] location.protocol:', location.protocol);
+  console.log('[Camera] navigator.mediaDevices available:', !!navigator.mediaDevices);
+
+  // ── 1. Secure context guard ────────────────────────────────────────────
+  if (!window.isSecureContext) {
+    const errMsg = 'Camera requires HTTPS. You are on ' + location.protocol + '//' + location.host +
+      '. Please open https://localhost:5173 instead, or use the HTTPS network URL shown by Vite.';
+    console.error('[Camera]', errMsg);
+    showCameraError(errMsg);
+    return;
+  }
+
+  // ── 2. API availability guard ─────────────────────────────────────────
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const errMsg = 'navigator.mediaDevices.getUserMedia is not available in this browser. ' +
+      'Try Chrome, Firefox, or Safari on HTTPS.';
+    console.error('[Camera]', errMsg);
+    showCameraError(errMsg);
+    return;
+  }
+
+  // ── 3. Pre-flight getUserMedia probe ─────────────────────────────────
+  // We briefly open a stream ourselves so the browser always shows its
+  // native Allow/Block camera prompt BEFORE html5-qrcode takes over.
+  // Once the user grants permission we immediately release the test track
+  // so html5-qrcode can acquire its own stream cleanly.
+  console.log('[Camera] Pre-flight getUserMedia probe starting…');
+  navigator.mediaDevices
+    .getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 640 },
+        height: { ideal: 480 }
+      },
+      audio: false   // we NEVER request mic
+    })
+    .then((testStream) => {
+      console.log('[Camera] Pre-flight OK — permission granted. Releasing test stream.');
+      // Release the probe stream immediately; html5-qrcode will open its own.
+      testStream.getTracks().forEach(t => t.stop());
+
+      // ── 4. Now init html5-qrcode ────────────────────────────────────
+      initCustomQrScanner().catch(err => {
+        console.error('[Camera] initCustomQrScanner failed after permission granted:', err);
+        showCameraError(classifyCameraError(err));
+      });
+    })
+    .catch((err) => {
+      console.error('[Camera] Pre-flight getUserMedia failed:', err);
+      const errMsg = classifyCameraError(err);
+
+      // If it was an OverconstrainedError (no back cam), try user-facing cam
+      if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
+        console.warn('[Camera] Rear camera unavailable — trying any camera.');
+        navigator.mediaDevices
+          .getUserMedia({ video: true, audio: false })
+          .then((fallbackStream) => {
+            fallbackStream.getTracks().forEach(t => t.stop());
+            initCustomQrScanner().catch(e => showCameraError(classifyCameraError(e)));
+          })
+          .catch((fallbackErr) => {
+            showCameraError(classifyCameraError(fallbackErr));
+          });
+        return;
+      }
+
+      showCameraError(errMsg);
+    });
+}
+
+/**
+ * Display an error message in #camera-error-msg with a Retry button.
+ * @param {string} message
+ */
+function showCameraError(message) {
+  if (!cameraErrorEl) return;
+  // Build a styled error message with retry button
+  cameraErrorEl.innerHTML =
+    `<span>${message}</span>` +
+    `<button id="camera-retry-btn" style="` +
+      `display:block;margin-top:10px;padding:8px 18px;` +
+      `background:var(--bacolod-orange,#ee6327);color:#fff;` +
+      `border:none;border-radius:20px;font-size:14px;font-weight:700;cursor:pointer;` +
+    `">Tap to retry camera</button>`;
+  cameraErrorEl.classList.remove('hidden');
+
+  const retryBtn = document.getElementById('camera-retry-btn');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => {
+      console.log('[Camera] User tapped Retry.');
+      cameraErrorEl.classList.add('hidden');
+      // A retry button click IS a user gesture — safe to call getUserMedia directly
+      initCameraWithPermissionCheck();
+    }, { once: true });
+  }
+}
+
 async function initCustomQrScanner() {
   try {
     if (!html5QrCode) {
       try {
-        html5QrCode = new Html5Qrcode("qr-reader", {
+        html5QrCode = new Html5Qrcode('qr-reader', {
           formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
           experimentalFeatures: {
             useBarCodeDetectorIfSupported: true
@@ -1418,20 +1929,19 @@ async function initCustomQrScanner() {
           verbose: false
         });
       } catch (err) {
-        console.warn('Fallback standard Html5Qrcode init:', err);
-        html5QrCode = new Html5Qrcode("qr-reader");
+        console.warn('[Camera] Fallback standard Html5Qrcode init:', err);
+        html5QrCode = new Html5Qrcode('qr-reader');
       }
     }
 
-    // Always choose the back camera directly using facingMode constraint
+    console.log('[Camera] Starting html5-qrcode scanner with facingMode:environment…');
+    // Always use the back camera using facingMode constraint
     await startQrCamera();
+    console.log('[Camera] html5-qrcode scanner started successfully.');
 
   } catch (err) {
-    console.error('QR Scanner init error:', err);
-    if (cameraErrorEl) {
-      cameraErrorEl.textContent = `Camera Error: ${err.message || err}. (Try fully closing other apps that use the camera)`;
-      cameraErrorEl.classList.remove('hidden');
-    }
+    console.error('[Camera] QR Scanner init error:', err);
+    throw err; // re-throw so initCameraWithPermissionCheck can classify it
   }
 }
 
@@ -1481,23 +1991,22 @@ async function startQrCameraInternal() {
     await wait(100);
   }
 
+  console.log('[Camera] html5QrCode.start() — facingMode:environment');
   try {
     await html5QrCode.start(
-      { facingMode: "environment" },
+      { facingMode: 'environment' },
       QR_CAMERA_CONFIG,
       onQrCodeSuccess,
-      () => { }
+      () => { } // QR scan error callback (not a camera error)
     );
     activeQrCameraId = 'environment';
+    console.log('[Camera] QR scanner live — rear camera active.');
     cameraErrorEl?.classList.add('hidden');
     if (qrStatusTextEl) qrStatusTextEl.textContent = 'Align QR code in frame';
   } catch (err) {
     activeQrCameraId = null;
-    console.error('Failed to start camera:', err);
-    if (cameraErrorEl) {
-      cameraErrorEl.textContent = `Failed to start camera: ${err.message || err}`;
-      cameraErrorEl.classList.remove('hidden');
-    }
+    console.error('[Camera] html5QrCode.start() failed:', err);
+    showCameraError(classifyCameraError(err));
   }
 }
 
@@ -1640,6 +2149,7 @@ function initThreeScene() {
         const session = await navigator.xr.requestSession('immersive-ar', sessionInit);
         await renderer.xr.setSession(session);
       }
+      updateLayoutAndOrientation();
     } catch (err) {
       console.warn('Primary WebXR session request failed, trying minimal features:', err);
       try {
@@ -1650,6 +2160,7 @@ function initThreeScene() {
         };
         const session = await navigator.xr.requestSession('immersive-ar', fallbackInit);
         await renderer.xr.setSession(session);
+        updateLayoutAndOrientation();
       } catch (fallbackErr) {
         console.error('AR session start failed completely:', fallbackErr);
         setToast('Failed to start AR: ' + (fallbackErr.message || fallbackErr), true);
@@ -1658,6 +2169,8 @@ function initThreeScene() {
         return;
       }
     }
+
+    updateLayoutAndOrientation();
 
     // Hide Start AR button once session starts
     arButton.style.display = 'none';
@@ -1671,6 +2184,9 @@ function initThreeScene() {
 
   renderer.xr.addEventListener('sessionstart', () => {
     arStarted = true;
+    updateLayoutAndOrientation();
+    requestAnimationFrame(updateLayoutAndOrientation);
+    setTimeout(updateLayoutAndOrientation, 150);
     const arBtn = document.getElementById('ARButton');
     if (arBtn) arBtn.style.display = 'none';
     const toast = toastEl || $('toast');
@@ -1875,6 +2391,7 @@ function initThreeScene() {
           dancerVideo?.pause();
           stopPositionalAudio();
           // Reset all AR buttons to hidden state
+          document.body.classList.remove('drawer-open');
           infoToggleBtnEl?.classList.add('hidden');
           captureBtnEl?.classList.add('hidden');
           recenterBtnEl?.classList.add('hidden');
@@ -1934,50 +2451,24 @@ function initThreeScene() {
       }
       dancerGroup.rotation.x = 0;
       dancerGroup.rotation.z = 0;
+      if (videoMesh) {
+        videoMesh.rotation.z = 0;
+      }
+      if (currentGlbModel) {
+        currentGlbModel.rotation.z = 0;
+      }
     }
 
-    // ── Real-time UI & 3D Model rotation from XR camera pose ───────────
+    // Real-time orientation sync in WebXR
     if (renderer.xr.isPresenting) {
-      const xrCam = renderer.xr.getCamera();
-      if (xrCam) {
-        const worldRight = new THREE.Vector3(1, 0, 0).applyQuaternion(xrCam.quaternion);
-        const tilt = Math.abs(worldRight.y);
-        const screenAngle = (screen?.orientation?.angle !== undefined ? screen.orientation.angle : null) ?? window.orientation;
-        const screenIsLandscape = screenAngle === 90 || screenAngle === -90 || screenAngle === 270;
-
-        // Quick responsive landscape detection:
-        // Uses both device orientation sensor and 3D camera roll (>0.58 / ~35°) for instant response
-        const isXrLandscape = screenIsLandscape || (xrLastLandscape ? tilt > 0.40 : tilt > 0.58);
-
-        if (isXrLandscape !== xrLastLandscape) {
-          xrLastLandscape = isXrLandscape;
-
-          if (isXrLandscape) {
-            let deg = worldRight.y < 0 ? -90 : 90;
-            if (screenAngle === 90) deg = 90;
-            else if (screenAngle === 270 || screenAngle === -90) deg = -90;
-
-            const pw = window.innerWidth;   // frozen portrait width
-            const ph = window.innerHeight;  // frozen portrait height
-            const offsetX = (pw - ph) / 2;  // negative → moves left
-            const offsetY = (ph - pw) / 2;  // positive → moves down
-
-            fadeToXrOverlayOrientation({
-              isLandscape: true,
-              deg,
-              width: ph + 'px',
-              height: pw + 'px',
-              left: offsetX + 'px',
-              top: offsetY + 'px',
-            });
-          } else {
-            fadeToXrOverlayOrientation({ isLandscape: false });
-          }
-        }
+      const orient = getEffectiveOrientation();
+      if (
+        currentOrientationIsLandscape === null ||
+        orient.isLandscape !== currentOrientationIsLandscape ||
+        (orient.isLandscape && orient.angle !== currentOrientationState.angle)
+      ) {
+        updateUILayout(orient);
       }
-    } else {
-      // Outside WebXR: use normal screen orientation class helper
-      updateOrientationClass();
     }
 
     renderer.render(scene, camera);
@@ -1998,28 +2489,33 @@ function initThreeScene() {
   }
 
   window.addEventListener('resize', () => {
-    updateOrientationClass();
-    if (renderer && renderer.xr && renderer.xr.getSession()) {
-      return; // Skip WebGL canvas resizing and camera projection update while inside WebXR
-    }
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    updateUILayout();
   });
 
-  // screen.orientation fires inside WebXR where window resize is frozen
+  // screen.orientation fires inside WebXR where window resize might be frozen
   if (screen?.orientation) {
     screen.orientation.addEventListener('change', () => {
-      // Reset cache so updateOrientationClass re-evaluates the new angle
       lastOrientationAngle = null;
-      updateOrientationClass();
+      if (screen.orientation.type?.startsWith('portrait') || screen.orientation.angle === 0 || screen.orientation.angle === 180) {
+        lastDeviceOrientationAngle = 0;
+      }
+      updateUILayout();
     });
   }
   // Legacy fallback (Safari / older Android)
   window.addEventListener('orientationchange', () => {
     lastOrientationAngle = null;
-    updateOrientationClass();
+    const angle = typeof window.orientation === 'number' ? window.orientation : null;
+    if (angle === 0 || angle === 180) {
+      lastDeviceOrientationAngle = 0;
+    }
+    updateUILayout();
   });
+  if (window.matchMedia) {
+    window.matchMedia('(orientation: landscape)').addEventListener('change', () => {
+      updateUILayout();
+    });
+  }
 }
 
 
@@ -2835,6 +3331,7 @@ function repositionDancer() {
   }
 
   historyModalEl?.classList.add('hidden');
+  document.body.classList.remove('drawer-open');
   infoToggleBtnEl?.classList.add('hidden');
   captureBtnEl?.classList.add('hidden');
   recenterBtnEl?.classList.add('hidden');
@@ -2970,30 +3467,6 @@ function setToast(msg, persist = false) {
 
 
 let lastOrientationAngle = null;
-function updateOrientationClass() {
-  if (renderer?.xr?.isPresenting) return;
-  // ── Primary source: screen.orientation.angle ─────────────────────────────
-  // This is the ONLY reliable signal inside a WebXR session.
-  // Chrome freezes window.innerWidth/Height to portrait values once WebXR
-  // starts, so we CANNOT use w > h as the landscape test inside AR mode.
-  const angle =
-    (screen?.orientation?.angle !== undefined ? screen.orientation.angle : null) ??
-    window.orientation ??
-    0;
-
-  // Skip re-applying if nothing changed
-  if (angle === lastOrientationAngle) return;
-  lastOrientationAngle = angle;
-
-  // angle 90 or -90 = landscape-left, angle 270 = landscape-right
-  const isLandscape = angle === 90 || angle === -90 || angle === 270;
-
-  if (isLandscape) {
-    document.body.classList.add('landscape');
-  } else {
-    document.body.classList.remove('landscape');
-  }
-}
 
 function updateLoadingBar(percent, isIndeterminate = false) {
   if (!loadingBarContainer || !loadingBar) return;

@@ -16,9 +16,6 @@
 </head>
 
 <body>
-  <!-- Persistent Top and Bottom Bacolod Mosaic Ribbon Strips -->
-  <div class="tribal-ribbon tribal-ribbon--top" aria-hidden="true"></div>
-  <div class="tribal-ribbon tribal-ribbon--bottom" aria-hidden="true"></div>
 
   <!-- Visual loading progress indicator -->
   <div id="loading-bar-container" class="loading-bar-container hidden">
@@ -97,14 +94,13 @@
   </div>
 
   <!-- ── SCREEN 2 : AR Interactive Overlay (Launched Automatically on Scan) ── -->
-  <div id="ui-overlay" class="overlay hidden">
-    <!-- Top and Bottom Bacolod Mosaic Ribbon Strips -->
-    <div class="tribal-ribbon tribal-ribbon--top" aria-hidden="true"></div>
-
-    <div id="ui-wrapper" class="ui-wrapper">
+  <div id="ui-overlay" class="overlay is-portrait hidden">
+    <div id="ui-wrapper" class="ui-wrapper is-portrait">
+      <!-- Bacolod Mosaic Ribbon Strips (Top in portrait, Left in landscape) -->
+      <div class="tribal-ribbon tribal-ribbon--top banner-top" aria-hidden="true"></div>
 
       <!-- Top bar with Controls -->
-      <div class="top-bar">
+      <div class="top-bar top-actions">
         <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
           <button id="recenter-btn" class="btn btn--ghost hidden">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -189,13 +185,13 @@
 
       <!-- Bottom dock -->
       <div class="dock">
-        <button id="capture-btn" class="shutter-btn hidden" aria-label="Capture Screen">
+        <button id="capture-btn" class="shutter-btn camera-button hidden" aria-label="Capture Screen">
           <div class="shutter-ring"></div>
           <div class="shutter-disc">
             <div class="shutter-inner-dot"></div>
           </div>
         </button>
-        <button id="info-toggle-btn" class="btn btn--info hidden">
+        <button id="info-toggle-btn" class="btn btn--info info-pill hidden">
           <span class="btn-festival-sparkle">🎭</span>
           <span>About MassKara Festival</span>
           <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
@@ -205,10 +201,9 @@
         </button>
       </div>
 
+      <!-- Bottom Mosaic Ribbon -->
+      <div class="tribal-ribbon tribal-ribbon--bottom banner-bottom" aria-hidden="true"></div>
     </div>
-
-    <!-- Bottom Mosaic Ribbon -->
-    <div class="tribal-ribbon tribal-ribbon--bottom" aria-hidden="true"></div>
   </div>
 </body>
 

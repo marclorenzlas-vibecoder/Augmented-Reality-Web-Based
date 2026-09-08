@@ -102,26 +102,41 @@ body {
    Bacolod Tourism Mosaic Ribbon (Love the Philippines Theme)
 ────────────────────────────────────────── */
 .tribal-ribbon {
-  position: fixed;
+  position: absolute;
+  z-index: 999;
+  pointer-events: none;
+  background-position: center center;
+  transition: opacity 0.22s ease;
+}
+
+.tribal-ribbon--top {
+  top: 0;
+  bottom: auto;
   left: 0;
   right: 0;
+  width: 100%;
   height: 30px;
   background-image: url('/bacolod-mosaic-ribbon.svg');
   background-repeat: repeat-x;
   background-size: 360px 30px;
   background-position: left center;
-  z-index: 999;
-  pointer-events: none;
-}
-
-.tribal-ribbon--top {
-  top: 0;
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+  transform: none !important;
 }
 
 .tribal-ribbon--bottom {
   bottom: 0;
+  top: auto;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 30px;
+  background-image: url('/bacolod-mosaic-ribbon.svg');
+  background-repeat: repeat-x;
+  background-size: 360px 30px;
+  background-position: left center;
   box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.12);
+  transform: none !important;
 }
 
 /* ──────────────────────────────────────────
@@ -610,7 +625,8 @@ body {
   border-radius: 50%;
 }
 
-.btn--info {
+.btn--info,
+.info-pill {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: var(--blur-md);
   -webkit-backdrop-filter: var(--blur-md);
@@ -618,19 +634,19 @@ body {
   color: #9f6c00;
   width: max-content;
   max-width: calc(100vw - 36px);
-  min-width: 200px;
-  padding: 12px 24px;
+  min-width: 260px;
+  padding: 12px 30px;
   font-family: var(--font-heading);
   font-size: 13.5px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 11px;
   pointer-events: auto;
   box-shadow: 0 8px 24px rgba(251, 176, 59, 0.18);
   white-space: nowrap;
-  transition: all 0.2s var(--ease-out);
+  transition: opacity 0.25s ease, background 0.2s var(--ease-out), border-color 0.2s var(--ease-out), color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
   align-self: center;
   margin: 0 auto;
 }
@@ -664,11 +680,16 @@ body {
 /* ──────────────────────────────────────────
    AR Overlay
 ────────────────────────────────────────── */
-.overlay {
+.overlay,
+#ui-overlay {
   position: fixed;
   inset: 0;
+  width: 100dvw;
+  height: 100dvh;
   z-index: 50;
   pointer-events: none;
+  overflow: hidden;
+  transform: none !important;
 }
 
 .ui-wrapper {
@@ -683,25 +704,20 @@ body {
   align-items: center;
   padding: max(env(safe-area-inset-top), 45px) 18px max(env(safe-area-inset-bottom), 28px);
   opacity: 1;
-  transition: opacity var(--orientation-fade-duration) ease;
-  will-change: opacity;
+  transition: opacity 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  transform: none !important;
 }
 
-.ui-wrapper--orientation-fading {
-  opacity: 0;
-}
-
-.ui-wrapper--orientation-fading .top-bar,
-.ui-wrapper--orientation-fading .toast,
-.ui-wrapper--orientation-fading .drawer,
-.ui-wrapper--orientation-fading .drawer-content,
-.ui-wrapper--orientation-fading .dock,
-.ui-wrapper--orientation-fading .btn--info {
-  transition: none !important;
+.ui-wrapper.ui-transitioning,
+body .ui-wrapper.ui-transitioning,
+#ui-overlay .ui-wrapper.ui-transitioning {
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Top Bar */
-.top-bar {
+.top-bar,
+.top-actions {
   position: absolute;
   top: max(env(safe-area-inset-top), 45px);
   left: 18px;
@@ -710,7 +726,7 @@ body {
   justify-content: flex-end;
   align-items: center;
   pointer-events: auto;
-  will-change: top, left, right, transform;
+  transition: opacity 0.2s ease;
 }
 
 .brand-tag {
@@ -737,7 +753,7 @@ body {
 /* Toast */
 .toast {
   position: absolute;
-  bottom: calc(max(env(safe-area-inset-bottom), 20px) + 78px);
+  bottom: calc(max(env(safe-area-inset-bottom, 0px), 0px) + 48px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 60;
@@ -816,7 +832,7 @@ body {
   -webkit-backdrop-filter: var(--blur-lg);
   border-top: 1px solid var(--c-border-md);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 16px 24px max(env(safe-area-inset-bottom), 36px);
+  padding: 12px 22px max(env(safe-area-inset-bottom), 24px);
   box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.16);
   position: relative;
   overflow: hidden;
@@ -826,9 +842,9 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 6px 0 14px;
+  padding: 0 0 10px;
   border-bottom: 1px solid var(--c-border);
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .eyebrow--light {
@@ -989,11 +1005,12 @@ body {
   padding: 0;
   gap: 14px;
   pointer-events: none;
-  will-change: transform, right, bottom, gap;
+  transition: opacity 0.2s ease;
 }
 
 /* Shutter Button */
-.shutter-btn {
+.shutter-btn,
+.camera-button {
   align-self: center;
   position: relative;
   width: 74px;
@@ -1007,6 +1024,7 @@ body {
   justify-content: center;
   padding: 0;
   pointer-events: auto;
+  transition: opacity 0.2s ease, transform 0.15s ease;
 }
 
 .shutter-ring {
@@ -1091,186 +1109,1002 @@ body {
 }
 
 /* ──────────────────────────────────────────
-   Landscape Adjustments
+   QR Scanner — Portrait Layout Adapted for Landscape Mode
 ────────────────────────────────────────── */
 body.landscape .screen--qr {
-  flex-direction: row;
-  flex-wrap: nowrap;
-  justify-content: space-evenly;
-  align-items: center;
-  gap: 24px;
-  padding: 36px 40px;
+  flex-direction: column !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: clamp(4px, 1.2vh, 8px) !important;
+  padding: max(env(safe-area-inset-top), 24px) 16px max(env(safe-area-inset-bottom), 24px) !important;
+  overflow-y: auto !important;
 }
 
-
-body.landscape .qr-header {
-  text-align: left;
-  align-items: flex-start;
-  max-width: 32%;
-  padding-top: 0;
+body.landscape .screen--qr .qr-header {
+  flex-shrink: 0 !important;
+  text-align: center !important;
+  align-items: center !important;
+  max-width: 440px !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+  padding-top: 0 !important;
+  gap: 2px !important;
 }
 
-body.landscape .qr-title {
-  justify-content: flex-start;
-  text-align: left;
+body.landscape .screen--qr .qr-header-emblem {
+  width: clamp(30px, 6.5vh, 40px) !important;
+  margin-bottom: 0 !important;
 }
 
-
-body.landscape .scanner-frame {
-  width: min(55vh, 200px);
-  margin: 0;
+body.landscape .screen--qr .city-badge {
+  padding: 2px 8px !important;
+  font-size: 9.5px !important;
 }
 
-body.landscape .qr-footer {
-  max-width: 30%;
-  margin-top: 0;
-  gap: 10px;
+body.landscape .screen--qr .qr-title {
+  justify-content: center !important;
+  text-align: center !important;
+  margin-top: 0 !important;
+  gap: 6px !important;
 }
 
-/* AR Overlay landscape repositioning */
-body.landscape .overlay,
-.overlay.landscape {
+body.landscape .screen--qr .qr-title-text {
+  font-size: clamp(18px, 4.2vh, 22px) !important;
+}
+
+body.landscape .screen--qr .ar-badge {
+  font-size: 10.5px !important;
+  padding: 1px 7px !important;
+}
+
+body.landscape .screen--qr .qr-desc {
+  display: none !important;
+}
+
+body.landscape .screen--qr .scanner-frame {
+  width: min(38vh, 155px) !important;
+  height: min(38vh, 155px) !important;
+  aspect-ratio: 1 / 1 !important;
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  margin: 0 auto !important;
+}
+
+body.landscape .screen--qr .qr-footer {
+  flex-shrink: 0 !important;
+  max-width: 320px !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+  gap: clamp(4px, 1vh, 8px) !important;
+}
+
+body.landscape .screen--qr .status-badge {
+  padding: 3px 12px !important;
+  font-size: 10.5px !important;
+}
+
+body.landscape .screen--qr .btn--gallery {
+  max-width: 230px !important;
+  padding: 7px 16px !important;
+  font-size: 12px !important;
+}
+
+body.landscape .screen--qr .tribal-ribbon--top {
+  position: absolute !important;
+  left: 0 !important;
+  right: auto !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 30px !important;
+  height: 100% !important;
+  background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
+  background-repeat: repeat-y !important;
+  background-size: 30px 360px !important;
+  background-position: center top !important;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.12) !important;
+  transform: none !important;
+}
+
+body.landscape .screen--qr .tribal-ribbon--bottom {
+  position: absolute !important;
+  right: 0 !important;
+  left: auto !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 30px !important;
+  height: 100% !important;
+  background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
+  background-repeat: repeat-y !important;
+  background-size: 30px 360px !important;
+  background-position: center top !important;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.12) !important;
+  transform: none !important;
+}
+
+@media (orientation: landscape) {
+  .screen--qr {
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: clamp(4px, 1.2vh, 8px) !important;
+    padding: max(env(safe-area-inset-top), 20px) max(env(safe-area-inset-right), 36px) max(env(safe-area-inset-bottom), 20px) max(env(safe-area-inset-left), 36px) !important;
+    overflow-y: auto !important;
+  }
+
+  .screen--qr .qr-header {
+    flex-shrink: 0 !important;
+    text-align: center !important;
+    align-items: center !important;
+    max-width: 440px !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding-top: 0 !important;
+    gap: 2px !important;
+  }
+
+  .screen--qr .qr-header-emblem {
+    width: clamp(30px, 6.5vh, 40px) !important;
+    margin-bottom: 0 !important;
+  }
+
+  .screen--qr .city-badge {
+    padding: 2px 8px !important;
+    font-size: 9.5px !important;
+  }
+
+  .screen--qr .qr-title {
+    justify-content: center !important;
+    text-align: center !important;
+    margin-top: 0 !important;
+    gap: 6px !important;
+  }
+
+  .screen--qr .qr-title-text {
+    font-size: clamp(18px, 4.2vh, 22px) !important;
+  }
+
+  .screen--qr .ar-badge {
+    font-size: 10.5px !important;
+    padding: 1px 7px !important;
+  }
+
+  .screen--qr .qr-desc {
+    display: none !important;
+  }
+
+  .screen--qr .scanner-frame {
+    width: min(38vh, 155px) !important;
+    height: min(38vh, 155px) !important;
+    aspect-ratio: 1 / 1 !important;
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
+    margin: 0 auto !important;
+  }
+
+  .screen--qr .qr-footer {
+    flex-shrink: 0 !important;
+    max-width: 320px !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    gap: clamp(4px, 1vh, 8px) !important;
+  }
+
+  .screen--qr .status-badge {
+    padding: 3px 12px !important;
+    font-size: 10.5px !important;
+  }
+
+  .screen--qr .btn--gallery {
+    max-width: 230px !important;
+    padding: 7px 16px !important;
+    font-size: 12px !important;
+  }
+
+  .screen--qr .tribal-ribbon--top {
+    position: absolute !important;
+    left: 0 !important;
+    right: auto !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    width: 30px !important;
+    height: 100% !important;
+    background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
+    background-repeat: repeat-y !important;
+    background-size: 30px 360px !important;
+    background-position: center top !important;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.12) !important;
+    transform: none !important;
+  }
+
+  .screen--qr .tribal-ribbon--bottom {
+    right: 0 !important;
+    left: auto !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    width: 30px !important;
+    height: 100% !important;
+    background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
+    background-repeat: repeat-y !important;
+    background-size: 30px 360px !important;
+    background-position: center top !important;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.12) !important;
+    transform: none !important;
+  }
+}
+
+/* ──────────────────────────────────────────
+   AR Overlay Landscape & Portrait Mode Layout
+
+   LANDSCAPE (phone rotated 90°):
+   Right column, top-to-bottom:
+     ① Top-right   : [Reposition]  [✕ Exit]
+     ② Middle-right: [ Camera ○ ]  (vertically centred)
+     ③ Bottom-right: [About MassKara Festival]
+
+   PORTRAIT (phone upright):
+     ① Top-right   : [Reposition]  [✕ Exit]
+     ② Bottom-center: [About MassKara] stacked above [ Camera ○ ]
+────────────────────────────────────────── */
+
+/* ─── Shared edge variables for AR Overlay ──────────────────────────────────
+   Side ribbons in landscape are 30px wide, so we keep 44px on left/right to clear them cleanly. */
+:root {
+  --ar-edge-l: calc(max(env(safe-area-inset-left, 0px), 0px) + 44px);
+  --ar-edge-r: calc(max(env(safe-area-inset-right, 0px), 0px) + 44px);
+  --ar-edge-t: calc(max(env(safe-area-inset-top,   0px), 8px) + 14px);
+  --ar-edge-b: calc(max(env(safe-area-inset-bottom,0px), 8px) + 16px);
+}
+
+/* ── Landscape: make #ui-overlay fill the whole screen ────────────────────── */
+@media (orientation: landscape) {
+  .overlay,
+  #ui-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100dvw;
+    height: 100dvh;
+    padding: 0;
+    pointer-events: none;
+    transform: none !important;
+  }
+}
+
+.is-landscape.overlay,
+.is-landscape #ui-overlay,
+body.landscape #ui-overlay {
+  position: fixed;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  width: 100dvw;
+  height: 100dvh;
   padding: 0;
+  pointer-events: none;
 }
 
-body.landscape .ui-wrapper,
-.overlay.landscape .ui-wrapper {
+body.simulated-landscape #ui-overlay {
+  overflow: visible !important;
+}
+
+/* ── Landscape: dock = transparent full-screen canvas ─────────────────────── */
+.is-landscape .dock,
+body.is-landscape .dock,
+body.landscape .dock {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
-  display: block;
   padding: 0;
+  margin: 0;
+  display: block;
 }
 
-body.landscape .top-bar,
-.overlay.landscape .top-bar {
+/* ──────────────────────────────────────────────────────────────────────────────
+   ① LANDSCAPE — Top-right: [Reposition] [✕]
+────────────────────────────────────────────────────────────────────────────── */
+.is-landscape .top-actions,
+.is-landscape .top-bar,
+body.is-landscape .top-actions,
+body.is-landscape .top-bar,
+body.landscape .top-actions,
+body.landscape .top-bar {
   position: absolute;
-  top: max(env(safe-area-inset-top), 20px);
-  right: max(env(safe-area-inset-right), 32px);
+  top: var(--ar-edge-t);
+  right: var(--ar-edge-r);
   left: auto;
   bottom: auto;
   width: auto;
   display: flex;
-  justify-content: flex-end;
+  flex-direction: row;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin: 0;
-  z-index: 70;
   pointer-events: auto;
+  z-index: 70;
 }
 
-body.landscape .dock,
-.overlay.landscape .dock {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  display: block;
-  transform: none;
-  bottom: 0;
-  right: 0;
-  left: 0;
-  top: 0;
-  margin: 0;
-}
-
-body.landscape .shutter-btn,
-.overlay.landscape .shutter-btn {
+/* ──────────────────────────────────────────────────────────────────────────────
+   ② LANDSCAPE — Middle-right: Camera button (vertically centred)
+────────────────────────────────────────────────────────────────────────────── */
+.is-landscape .camera-button,
+.is-landscape .shutter-btn,
+body.is-landscape .camera-button,
+body.is-landscape .shutter-btn,
+body.landscape .camera-button,
+body.landscape .shutter-btn {
   position: absolute;
   top: 50%;
-  right: calc(max(env(safe-area-inset-right), 0px) + 45px);
-  bottom: auto;
-  left: auto;
+  right: var(--ar-edge-r);
   transform: translateY(-50%);
+  left: auto;
+  bottom: auto;
   margin: 0;
   pointer-events: auto;
   z-index: 60;
 }
 
-body.landscape--reverse .shutter-btn,
-.overlay.landscape--reverse .shutter-btn {
-  right: auto;
-  left: calc(max(env(safe-area-inset-left), 0px) + 45px);
-}
-
-body.landscape .btn--info,
-.overlay.landscape .btn--info {
+/* ──────────────────────────────────────────────────────────────────────────────
+   ③ LANDSCAPE — Bottom-right: About MassKara pill
+────────────────────────────────────────────────────────────────────────────── */
+.is-landscape .info-pill,
+.is-landscape .btn--info,
+body.is-landscape .info-pill,
+body.is-landscape .btn--info,
+body.landscape .info-pill,
+body.landscape .btn--info {
   position: absolute;
-  right: calc(max(env(safe-area-inset-right), 0px) + 40px);
+  bottom: var(--ar-edge-b);
+  right: var(--ar-edge-r);
   left: auto;
-  bottom: calc(max(env(safe-area-inset-bottom), 0px) + 38px);
   top: auto;
   transform: none;
   margin: 0;
   pointer-events: auto;
-  width: max-content;
-  min-width: 290px;
-  max-width: min(440px, 46vw);
-  padding: 13px 32px;
-  font-size: 13.5px;
-  letter-spacing: 0.3px;
-  border-radius: var(--radius-pill);
-  box-shadow: 0 4px 20px rgba(12, 118, 186, 0.16);
-  white-space: nowrap;
   z-index: 60;
+  width: auto;
+  min-width: 270px;
+  max-width: min(400px, 58vw);
+  padding: 11px 32px;
+  font-size: 13.5px;
+  letter-spacing: 0.25px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
 
-body.landscape .toast,
-.overlay.landscape .toast {
+/* ── Landscape: toast floats bottom-center ───────────────────────────────── */
+.is-landscape .toast,
+body.is-landscape .toast,
+body.landscape .toast {
   position: absolute;
-  bottom: calc(max(env(safe-area-inset-bottom), 0px) + 130px);
+  bottom: var(--ar-edge-b);
   left: 50%;
+  right: auto;
   transform: translateX(-50%);
-  max-width: min(540px, 80vw);
+  max-width: min(520px, 55vw);
+  font-size: 12.5px;
+  text-align: center;
   z-index: 65;
 }
 
-/* Drawer landscape sidebar adjustments */
-body.landscape .drawer {
-  top: 0;
-  bottom: 0;
+/* ── Landscape ui-wrapper canvas ─────────────────────────────────────────── */
+body.landscape:not(.simulated-landscape) .ui-wrapper,
+body.is-landscape:not(.simulated-landscape) .ui-wrapper,
+.is-landscape:not(.simulated-landscape) .ui-wrapper {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+  transform: none !important;
+}
+
+/* Simulated landscape (phone tilted in portrait WebXR viewport) */
+body.simulated-landscape .ui-wrapper,
+.simulated-landscape .ui-wrapper {
+  position: absolute !important;
+  inset: auto !important;
+  padding: 0 !important;
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+}
+
+/* ── Explicit @media (orientation: landscape) overrides for LANDSCAPE ONLY ── */
+@media (orientation: landscape) {
+  body:not(.is-portrait) .ui-wrapper:not(.simulated-landscape):not(.simulated-portrait) {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    padding: 0 !important;
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: none !important;
+    transform: none !important;
+  }
+
+  /* Simulated portrait inside landscape viewport */
+  body.is-portrait .ui-wrapper.simulated-portrait,
+  .ui-wrapper.simulated-portrait {
+    position: absolute !important;
+    inset: auto !important;
+    padding: 0 !important;
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: none !important;
+  }
+
+  body:not(.is-portrait) .dock,
+  body.landscape:not(.is-portrait) .dock,
+  body.is-landscape:not(.is-portrait) .dock {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    transform: none !important;
+    flex-direction: row !important;
+  }
+
+  body:not(.is-portrait) .top-actions,
+  body:not(.is-portrait) .top-bar,
+  body.landscape:not(.is-portrait) .top-actions,
+  body.landscape:not(.is-portrait) .top-bar,
+  body.is-landscape:not(.is-portrait) .top-actions,
+  body.is-landscape:not(.is-portrait) .top-bar {
+    position: absolute !important;
+    top: var(--ar-edge-t) !important;
+    right: var(--ar-edge-r) !important;
+    left: auto !important;
+    bottom: auto !important;
+    width: auto !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    pointer-events: auto !important;
+    z-index: 70 !important;
+  }
+
+  body:not(.is-portrait) .camera-button,
+  body:not(.is-portrait) .shutter-btn,
+  body.landscape:not(.is-portrait) .camera-button,
+  body.landscape:not(.is-portrait) .shutter-btn,
+  body.is-landscape:not(.is-portrait) .camera-button,
+  body.is-landscape:not(.is-portrait) .shutter-btn {
+    position: absolute !important;
+    top: 50% !important;
+    right: var(--ar-edge-r) !important;
+    transform: translateY(-50%) !important;
+    left: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    pointer-events: auto !important;
+    z-index: 60 !important;
+  }
+
+  body:not(.is-portrait) .info-pill,
+  body:not(.is-portrait) .btn--info,
+  body.landscape:not(.is-portrait) .info-pill,
+  body.landscape:not(.is-portrait) .btn--info,
+  body.is-landscape:not(.is-portrait) .info-pill,
+  body.is-landscape:not(.is-portrait) .btn--info {
+    position: absolute !important;
+    bottom: var(--ar-edge-b) !important;
+    right: var(--ar-edge-r) !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    margin: 0 !important;
+    pointer-events: auto !important;
+    z-index: 60 !important;
+    width: auto !important;
+    min-width: 270px !important;
+    max-width: min(400px, 58vw) !important;
+    padding: 11px 32px !important;
+    font-size: 13.5px !important;
+    letter-spacing: 0.25px !important;
+    white-space: nowrap !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 12px !important;
+  }
+
+  body:not(.is-portrait) .toast,
+  body.landscape:not(.is-portrait) .toast,
+  body.is-landscape:not(.is-portrait) .toast {
+    position: absolute !important;
+    top: auto !important;
+    bottom: var(--ar-edge-b) !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    max-width: min(520px, 55vw) !important;
+    font-size: 12.5px !important;
+    text-align: center !important;
+    z-index: 65 !important;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   PORTRAIT MODE — clean vertical stack at the bottom
+──────────────────────────────────────────────────────────────────────────────
+   Dock = bottom strip, column stack:
+     (top of dock)    [About MassKara]   ← info pill first in DOM
+     (bottom of dock) [  Camera ○  ]     ← shutter button below
+   Top-right: [Reposition] [✕]
+   Bottom-center: [Point camera toast] floating above dock
+────────────────────────────────────────────────────────────────────────────── */
+
+/* Portrait dock: bottom-anchored column, centred */
+.is-portrait .dock,
+body.is-portrait .dock {
+  position: absolute;
+  bottom: calc(max(env(safe-area-inset-bottom, 0px), 0px) + 38px);
+  left: 0;
   right: 0;
-  left: auto;
-  width: 360px;
-  max-width: 90vw;
-  z-index: 10000;
-  transform: translateX(0);
-}
-
-body.landscape .drawer.hidden {
-  transform: translateX(100%);
-}
-
-body.landscape .drawer-content {
-  height: 100%;
-  border-top: none;
-  border-left: 1px solid var(--c-border-md);
-  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
-  padding: 20px 22px max(env(safe-area-inset-bottom), 24px);
+  width: 100%;
+  transform: none;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;  /* camera on bottom, about on top */
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 0 12px;
+  gap: 12px;
+  pointer-events: none;
 }
 
-body.landscape .drawer-body {
-  max-height: none;
-  flex: 1;
-  overflow-y: auto;
+/* Portrait: camera button — in flow, centred */
+.is-portrait .camera-button,
+.is-portrait .shutter-btn,
+body.is-portrait .camera-button,
+body.is-portrait .shutter-btn {
+  position: relative;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  align-self: center;
+  margin: 0;
+  pointer-events: auto;
+  z-index: 60;
 }
 
-body.landscape .drawer-handle {
-  display: none;
+/* Portrait: About MassKara pill — in flow, centred, above camera */
+.is-portrait .info-pill,
+.is-portrait .btn--info,
+body.is-portrait .info-pill,
+body.is-portrait .btn--info {
+  position: relative;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  align-self: center;
+  margin: 0;
+  pointer-events: auto;
+  z-index: 60;
+  width: auto;
+  max-width: min(340px, 86vw);
+  white-space: nowrap;
 }
 
-/* Hide bottom ribbon whenever the drawer is open to prevent any visual obstruction */
+/* Portrait: top-right row — Reposition + X */
+.is-portrait .top-actions,
+.is-portrait .top-bar,
+body.is-portrait .top-actions,
+body.is-portrait .top-bar {
+  position: absolute;
+  top: calc(max(env(safe-area-inset-top, 0px), 0px) + 38px);
+  right: 14px;
+  left: auto;
+  bottom: auto;
+  width: auto;
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+  z-index: 70;
+}
+
+/* Portrait: toast text indicator at the bottom */
+.is-portrait .toast,
+body.is-portrait .toast {
+  position: absolute;
+  top: auto;
+  bottom: calc(max(env(safe-area-inset-bottom, 0px), 0px) + 48px);
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  max-width: min(440px, 90vw);
+  text-align: center;
+  z-index: 65;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   Dynamic Festival Ribbon Orientation Rules:
+   - PORTRAIT : Ribbons on TOP and BOTTOM edges (horizontal, 30px tall)
+   - LANDSCAPE: Ribbons on LEFT and RIGHT edges (vertical, 30px wide, running full height)
+────────────────────────────────────────────────────────────────────────────── */
+
+/* ── PORTRAIT MODE (Top & Bottom) ── */
+.is-portrait .tribal-ribbon--top,
+body.is-portrait .tribal-ribbon--top,
+.overlay.is-portrait .tribal-ribbon--top,
+#ui-overlay.is-portrait .tribal-ribbon--top,
+.ui-wrapper.is-portrait .tribal-ribbon--top,
+body.is-portrait .screen--qr .tribal-ribbon--top,
+body:not(.landscape):not(.is-landscape) .tribal-ribbon--top {
+  position: absolute !important;
+  top: 0 !important;
+  bottom: auto !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: 30px !important;
+  background-image: url('/bacolod-mosaic-ribbon.svg') !important;
+  background-repeat: repeat-x !important;
+  background-size: 360px 30px !important;
+  background-position: left center !important;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12) !important;
+  transform: none !important;
+  display: block !important;
+}
+
+.is-portrait .tribal-ribbon--bottom,
+body.is-portrait .tribal-ribbon--bottom,
+.overlay.is-portrait .tribal-ribbon--bottom,
+#ui-overlay.is-portrait .tribal-ribbon--bottom,
+.ui-wrapper.is-portrait .tribal-ribbon--bottom,
+body.is-portrait .screen--qr .tribal-ribbon--bottom,
+body:not(.landscape):not(.is-landscape) .tribal-ribbon--bottom {
+  position: absolute !important;
+  bottom: 0 !important;
+  top: auto !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: 30px !important;
+  background-image: url('/bacolod-mosaic-ribbon.svg') !important;
+  background-repeat: repeat-x !important;
+  background-size: 360px 30px !important;
+  background-position: left center !important;
+  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.12) !important;
+  transform: none !important;
+  display: block !important;
+}
+
+/* ── LANDSCAPE MODE (Left & Right Sides) ── */
+.is-landscape .tribal-ribbon--top,
+.landscape .tribal-ribbon--top,
+body.is-landscape .tribal-ribbon--top,
+body.landscape .tribal-ribbon--top,
+.overlay.is-landscape .tribal-ribbon--top,
+#ui-overlay.is-landscape .tribal-ribbon--top,
+.ui-wrapper.is-landscape .tribal-ribbon--top,
+body.simulated-landscape .tribal-ribbon--top,
+.simulated-landscape .tribal-ribbon--top,
+body.landscape .screen--qr .tribal-ribbon--top,
+body.is-landscape .screen--qr .tribal-ribbon--top {
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: auto !important;
+  width: 30px !important;
+  height: 100% !important;
+  background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
+  background-repeat: repeat-y !important;
+  background-size: 30px 360px !important;
+  background-position: center top !important;
+  box-shadow: 3px 0 12px rgba(0, 0, 0, 0.18) !important;
+  transform: none !important;
+  display: block !important;
+}
+
+.is-landscape .tribal-ribbon--bottom,
+.landscape .tribal-ribbon--bottom,
+body.is-landscape .tribal-ribbon--bottom,
+body.landscape .tribal-ribbon--bottom,
+.overlay.is-landscape .tribal-ribbon--bottom,
+#ui-overlay.is-landscape .tribal-ribbon--bottom,
+.ui-wrapper.is-landscape .tribal-ribbon--bottom,
+body.simulated-landscape .tribal-ribbon--bottom,
+.simulated-landscape .tribal-ribbon--bottom,
+body.landscape .screen--qr .tribal-ribbon--bottom,
+body.is-landscape .screen--qr .tribal-ribbon--bottom {
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  right: 0 !important;
+  left: auto !important;
+  width: 30px !important;
+  height: 100% !important;
+  background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
+  background-repeat: repeat-y !important;
+  background-size: 30px 360px !important;
+  background-position: center top !important;
+  box-shadow: -3px 0 12px rgba(0, 0, 0, 0.18) !important;
+  transform: none !important;
+  display: block !important;
+}
+
+@media (orientation: landscape) {
+  body:not(.is-portrait) .tribal-ribbon--top,
+  .screen--qr .tribal-ribbon--top {
+    position: absolute !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: auto !important;
+    width: 30px !important;
+    height: 100% !important;
+    background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
+    background-repeat: repeat-y !important;
+    background-size: 30px 360px !important;
+    background-position: center top !important;
+    box-shadow: 3px 0 12px rgba(0, 0, 0, 0.18) !important;
+    transform: none !important;
+    display: block !important;
+  }
+
+  body:not(.is-portrait) .tribal-ribbon--bottom,
+  .screen--qr .tribal-ribbon--bottom {
+    position: absolute !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    right: 0 !important;
+    left: auto !important;
+    width: 30px !important;
+    height: 100% !important;
+    background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
+    background-repeat: repeat-y !important;
+    background-size: 30px 360px !important;
+    background-position: center top !important;
+    box-shadow: -3px 0 12px rgba(0, 0, 0, 0.18) !important;
+    transform: none !important;
+    display: block !important;
+  }
+}
+
+
+/* ──────────────────────────────────────────
+   Drawer Landscape Sidebar (Slides in from the RIGHT)
+   Wider layout (480px) & fully scrollable container
+────────────────────────────────────────── */
+@media (orientation: landscape) {
+  .drawer,
+  .is-landscape .drawer,
+  body.landscape .drawer,
+  body.is-landscape .drawer {
+    position: absolute !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    right: 0 !important;
+    left: auto !important;
+    width: 480px !important;
+    max-width: min(540px, 86vw) !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    z-index: 10000 !important;
+    transform: translateX(0) !important;
+    transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    pointer-events: auto !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .drawer.hidden,
+  .is-landscape .drawer.hidden,
+  body.landscape .drawer.hidden,
+  body.is-landscape .drawer.hidden {
+    transform: translateX(100%) !important;
+    display: block !important;
+    pointer-events: none !important;
+  }
+
+  .drawer-content,
+  .is-landscape .drawer-content,
+  body.landscape .drawer-content,
+  body.is-landscape .drawer-content {
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    border-top: none !important;
+    border-left: 1.5px solid var(--c-border-md) !important;
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg) !important;
+    padding: 12px 22px 14px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    background: rgba(255, 255, 255, 0.98) !important;
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.22) !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    pointer-events: auto !important;
+  }
+
+  .drawer-head,
+  .is-landscape .drawer-head,
+  body.landscape .drawer-head,
+  body.is-landscape .drawer-head {
+    flex-shrink: 0 !important;
+    padding: 0 0 8px !important;
+    margin-bottom: 10px !important;
+  }
+
+  .eyebrow--light,
+  .is-landscape .eyebrow--light,
+  body.landscape .eyebrow--light,
+  body.is-landscape .eyebrow--light {
+    margin-top: 0 !important;
+    margin-bottom: 2px !important;
+  }
+
+  .drawer-body,
+  .is-landscape .drawer-body,
+  body.landscape .drawer-body,
+  body.is-landscape .drawer-body {
+    flex: 1 1 0px !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    height: auto !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y pan-x auto !important;
+    overscroll-behavior: contain !important;
+    pointer-events: auto !important;
+    box-sizing: border-box !important;
+    padding-right: 6px !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(238, 99, 39, 0.45) rgba(0, 0, 0, 0.04) !important;
+  }
+
+  .drawer-handle,
+  .is-landscape .drawer-handle,
+  body.landscape .drawer-handle,
+  body.is-landscape .drawer-handle {
+    display: none !important;
+  }
+}
+
+/* Also apply to landscape classes regardless of media query */
+.is-landscape .drawer,
+body.landscape .drawer,
+body.is-landscape .drawer {
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  right: 0 !important;
+  left: auto !important;
+  width: 480px !important;
+  max-width: min(540px, 86vw) !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  z-index: 10000 !important;
+  transform: translateX(0) !important;
+  transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  pointer-events: auto !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.is-landscape .drawer.hidden,
+body.landscape .drawer.hidden,
+body.is-landscape .drawer.hidden {
+  transform: translateX(100%) !important;
+  display: block !important;
+  pointer-events: none !important;
+}
+
+.is-landscape .drawer-content,
+body.landscape .drawer-content,
+body.is-landscape .drawer-content {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  border-top: none !important;
+  border-left: 1.5px solid var(--c-border-md) !important;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg) !important;
+  padding: 12px 22px 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.22) !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  pointer-events: auto !important;
+}
+
+.is-landscape .drawer-head,
+body.landscape .drawer-head,
+body.is-landscape .drawer-head {
+  flex-shrink: 0 !important;
+  padding: 0 0 8px !important;
+  margin-bottom: 10px !important;
+}
+
+.is-landscape .drawer-body,
+body.landscape .drawer-body,
+body.is-landscape .drawer-body {
+  flex: 1 1 0px !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  height: auto !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y pan-x auto !important;
+  overscroll-behavior: contain !important;
+  pointer-events: auto !important;
+  box-sizing: border-box !important;
+  padding-right: 6px !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(238, 99, 39, 0.45) rgba(0, 0, 0, 0.04) !important;
+}
+
+.is-landscape .drawer-handle,
+body.landscape .drawer-handle,
+body.is-landscape .drawer-handle {
+  display: none !important;
+}
+
+/* Custom Scrollbar for Drawer Body */
+.drawer-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.drawer-body::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 8px;
+}
+
+.drawer-body::-webkit-scrollbar-thumb {
+  background: rgba(238, 99, 39, 0.45);
+  border-radius: 8px;
+}
+
+.drawer-body::-webkit-scrollbar-thumb:hover {
+  background: var(--bacolod-orange);
+}
+
+.drawer,
+.drawer *,
+.drawer-content,
+.drawer-content *,
+.drawer-body,
+.drawer-body * {
+  pointer-events: auto !important;
+}
+
+/* Hide ribbons whenever the drawer is open to prevent any visual obstruction on all orientations */
+body.drawer-open .tribal-ribbon,
+body:has(#history-modal:not(.hidden)) .tribal-ribbon,
+.overlay:has(#history-modal:not(.hidden)) .tribal-ribbon,
+body:has(#history-modal:not(.hidden)) .tribal-ribbon--top,
 body:has(#history-modal:not(.hidden)) .tribal-ribbon--bottom,
+.overlay:has(#history-modal:not(.hidden)) .tribal-ribbon--top,
 .overlay:has(#history-modal:not(.hidden)) .tribal-ribbon--bottom {
   opacity: 0 !important;
+  visibility: hidden !important;
   pointer-events: none !important;
 }
 
@@ -1474,26 +2308,27 @@ body.landscape #ARButton {
 /* ──────────────────────────────────────────
    WebXR DOM Overlay Transparency
 ────────────────────────────────────────── */
+:xr-overlay,
 ::xr-overlay {
   background: transparent !important;
   background-color: transparent !important;
 }
 
+#ui-overlay:xr-overlay,
 #ui-overlay::xr-overlay {
   background: transparent !important;
   background-color: transparent !important;
 }
 
 /* ──────────────────────────────────────────
-   WebXR UI Overlay — smooth orientation rotation
+   WebXR UI Overlay — root sizing and reset
 ────────────────────────────────────────── */
 #ui-overlay {
-  transition:
-    transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    left 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    top 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  position: fixed;
+  inset: 0;
+  width: 100dvw;
+  height: 100dvh;
+  transform: none !important;
 }
 
 /* Force hide WebXR ARButton whenever QR scan screen is active */
