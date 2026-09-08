@@ -382,7 +382,7 @@ function detectAndApplyKeyModeFromUrl(url) {
   if (/(_greybg|_graybg|_grey\b|_gray\b|greybg|graybg|bg[_-]?grey|bg[_-]?gray)/i.test(decoded)) {
     console.log('Chroma Key: Detected Grey background from filename');
     hasFilenameKeyTag = true;
-    applyKeySettings(3, new THREE.Color(0.5, 0.5, 0.5), 0.28, 0.12);
+    applyKeySettings(3, new THREE.Color(0.5, 0.5, 0.5), 0.20, 0.08);
     return;
   }
 
@@ -553,14 +553,44 @@ const ChromaShader = {
         if (alpha < 0.02) discard;
         gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
       } else if (keyMode == 3) {
-        // Grey / Gray background removal (Euclidean RGB distance from keyColor)
-        float dist = distance(texColor.rgb, keyColor);
-        if (dist < similarity) {
-          discard;
+        // High-Precision Grey Screen Chroma Key
+        // 1. Calculate color saturation (chroma = max channel - min channel)
+        float maxC = max(texColor.r, max(texColor.g, texColor.b));
+        float minC = min(texColor.r, min(texColor.g, texColor.b));
+        float chroma = maxC - minC;
+
+        // 2. Calculate luminance and distance from target grey
+        float luma = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
+        float targetLuma = dot(keyColor, vec3(0.299, 0.587, 0.114));
+        float lumaDiff = abs(luma - targetLuma);
+
+        // 3. Color channel deltas from keyColor
+        vec3 colDiff = abs(texColor.rgb - keyColor);
+        float maxColDiff = max(colDiff.r, max(colDiff.g, colDiff.b));
+
+        // Thresholds tailored specifically for flat grey video backgrounds:
+        // Any pixel with color (chroma > 0.055) is protected as dancer/costume
+        float chromaTol = 0.055;
+        float lumaTol = similarity * 0.45;
+
+        // If the pixel has color, or is significantly darker/lighter than the grey background,
+        // it is 100% the dancer: keep it completely untouched and opaque!
+        if (chroma > chromaTol || lumaDiff > lumaTol || maxColDiff > lumaTol * 1.3) {
+          gl_FragColor = texColor;
+        } else {
+          // Pixel is in the neutral grey zone: compute soft edge transition
+          float chromaFactor = smoothstep(chromaTol * 0.35, chromaTol, chroma);
+          float lumaFactor = smoothstep(lumaTol * 0.5, lumaTol, lumaDiff);
+          float dancerStrength = max(chromaFactor, lumaFactor);
+
+          if (dancerStrength < 0.12) {
+            discard; // Pure background
+          }
+
+          float alpha = smoothstep(0.12, 0.75, dancerStrength);
+          if (alpha < 0.02) discard;
+          gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
         }
-        float alpha = smoothstep(similarity, similarity + smoothness, dist);
-        if (alpha < 0.05) discard;
-        gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
       } else if (keyMode == 4) {
         // White background removal
         float minVal = min(texColor.r, min(texColor.g, texColor.b));
@@ -1107,7 +1137,7 @@ function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
     cleanup();
     hideLoadingBar();
     setToast('Video loading timed out', false);
-  }, 10000);
+  }, 15000);
 }
 
 const $ = (id) => document.getElementById(id);
@@ -2569,11 +2599,19 @@ function resolveMediaUrl(raw) {
 async function loadMediaFromQR(text) {
   if (!text) return;
 
-  // ── Option C : Support Pipe-Separated "video.mp4|music.mp3" ──────────────
-  let videoSource = text.trim();
+  const raw = text.trim();
+  let videoSource = raw;
   let audioSource = null;
 
-  if (videoSource.includes('|')) {
+  // Support direct File Garden folder links (e.g. https://file.garden/aoVl-M0-p1TyFay4/masskara1)
+  const cleanFolder = raw.replace(/\/+$/, '');
+  if (/file\.garden\/[^\/]+\/masskara1$/i.test(cleanFolder) || cleanFolder.endsWith('/masskara1')) {
+    videoSource = `${cleanFolder}/Composition_greybg.mp4`;
+    audioSource = `${cleanFolder}/masskara`;
+  } else if (/file\.garden\//i.test(cleanFolder) && !/\.(mp4|webm|mov|ogg|m4v|glb|gltf|jpg|jpeg|png|webp|gif|mp3|wav)$/i.test(cleanFolder)) {
+    videoSource = `${cleanFolder}/Composition_greybg.mp4`;
+    audioSource = `${cleanFolder}/masskara`;
+  } else if (videoSource.includes('|')) {
     const parts = videoSource.split('|');
     videoSource = parts[0].trim();
     audioSource = parts[1].trim();
@@ -2590,6 +2628,11 @@ async function loadMediaFromQR(text) {
         videoSource = parsedUrl.toString();
       }
     } catch (e) {}
+  }
+
+  // If video is from masskara1 folder and audio wasn't explicitly passed, auto-pair with masskara audio
+  if (!audioSource && videoSource.includes('/masskara1/')) {
+    audioSource = videoSource.replace(/Composition_greybg\.mp4/i, 'masskara');
   }
 
   // Immediately stop any previously playing audio when scanning new media
@@ -2629,22 +2672,30 @@ async function loadMediaFromQR(text) {
     return;
   }
 
-  // If local, we can try direct video/image/3D detection by file extension without fetch
-  if (isLocal) {
-    const isGif = /\.(gif)($|\?)/i.test(resolvedUrl);
-    const isImage = /\.(jpg|jpeg|png|webp)($|\?)/i.test(resolvedUrl);
-    const isGlb = /\.(glb|gltf)($|\?)/i.test(resolvedUrl);
+  // Direct detection by media extension for BOTH local and remote URLs (prevents downloading 60MB via fetch into RAM!)
+  const isVideoExt = /\.(mp4|webm|mov|m4v|ogg)($|[?#])/i.test(resolvedUrl);
+  const isGifExt   = /\.(gif)($|[?#])/i.test(resolvedUrl);
+  const isImageExt = /\.(jpg|jpeg|png|webp)($|[?#])/i.test(resolvedUrl);
+  const isGlbExt   = /\.(glb|gltf)($|[?#])/i.test(resolvedUrl);
 
-    if (isGif) {
-      tryLoadGif(resolvedUrl, loadToken);
-    } else if (isImage) {
-      tryLoadImage(resolvedUrl, loadToken);
-    } else if (isGlb) {
-      tryLoadGlb(resolvedUrl, loadToken);
-    } else {
-      currentMediaType = 'video';
-      loadVideoMedia(resolvedUrl, loadToken);
-    }
+  if (isVideoExt) {
+    currentMediaType = 'video';
+    loadVideoMedia(resolvedUrl, loadToken);
+    return;
+  }
+
+  if (isGlbExt) {
+    tryLoadGlb(resolvedUrl, loadToken);
+    return;
+  }
+
+  if (isImageExt) {
+    tryLoadImage(resolvedUrl, loadToken);
+    return;
+  }
+
+  if (isGifExt) {
+    tryLoadGif(resolvedUrl, loadToken);
     return;
   }
 
