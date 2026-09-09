@@ -30,6 +30,29 @@
   <!-- Three.js WebGL overlay -->
   <canvas id="ar-canvas"></canvas>
 
+  <!-- ── Geolocation Gate (Exclusive to The NGC within 500m) ── -->
+  <div id="location-gate" class="location-gate">
+    <div class="location-gate-card">
+      <div class="location-gate-icon-wrapper">
+        <div class="location-radar-ring"></div>
+        <div class="location-radar-ring delay"></div>
+        <div id="location-gate-icon" class="location-gate-icon">📍</div>
+      </div>
+      <div class="location-badge">Location Restricted</div>
+      <h2 id="location-gate-title" class="location-gate-title">Verifying Location…</h2>
+      <p id="location-gate-desc" class="location-gate-desc">
+        This Augmented Reality experience is exclusively available at <strong>The NGC (New Government Center)</strong> within a 500m radius.<br><br>
+        Please allow location access to continue.
+      </p>
+      <div id="location-gate-distance" class="location-gate-distance hidden"></div>
+      <div id="location-gate-actions" class="location-gate-actions hidden">
+        <button id="location-retry-btn" class="btn btn--location" type="button">
+          <span>📍 Enable Location &amp; Verify</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── SCREEN 1 : Bacolod Tourism QR Scanner ── -->
   <div id="qr-screen" class="screen screen--qr">
     <!-- Top Bacolod Mosaic Ribbon -->

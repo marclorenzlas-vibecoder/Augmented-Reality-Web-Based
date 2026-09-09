@@ -119,92 +119,81 @@ let isAudioMuted      = false;
 let audioLoadToken    = 0;
 
 
+let dancerAudioEl = null;
+let audioSourceNode = null;
+
+function getDancerAudioElement() {
+  if (!dancerAudioEl) {
+    dancerAudioEl = document.getElementById('dancer-audio');
+    if (!dancerAudioEl) {
+      dancerAudioEl = document.createElement('audio');
+      dancerAudioEl.id = 'dancer-audio';
+      dancerAudioEl.loop = true;
+      dancerAudioEl.playsInline = true;
+      dancerAudioEl.preload = 'auto';
+      dancerAudioEl.crossOrigin = 'anonymous';
+      dancerAudioEl.style.position = 'fixed';
+      dancerAudioEl.style.top = '-9999px';
+      dancerAudioEl.style.left = '-9999px';
+      dancerAudioEl.style.width = '1px';
+      dancerAudioEl.style.height = '1px';
+      dancerAudioEl.style.opacity = '0';
+      dancerAudioEl.style.pointerEvents = 'none';
+      document.body.appendChild(dancerAudioEl);
+    }
+  }
+  return dancerAudioEl;
+}
+
 function resumeAudioContext() {
   const ctx = (audioListener && audioListener.context) || (THREE.AudioContext && THREE.AudioContext.getContext && THREE.AudioContext.getContext());
   if (ctx && ctx.state === 'suspended') {
-    ctx.resume().catch((err) => {
-      console.warn('AudioContext resume warning:', err);
-    });
+    ctx.resume().catch(() => {});
   }
 }
 
-let isSyncingAudio = false;
+let lastAudioSyncTime = 0;
 
 function syncAudioToVideo(force = false) {
-  if (isSyncingAudio || !positionalAudio || !positionalAudio.buffer || !isAudioReady || isAudioMuted) {
+  const audioEl = dancerAudioEl || document.getElementById('dancer-audio');
+  if (!audioEl || !isAudioReady || isAudioMuted) {
     return;
   }
 
   // 1. If AR has not started, object is not placed, or dancer is hidden -> stop audio immediately!
   if (!arStarted || !isPlaced || !dancerGroup || !dancerGroup.visible) {
-    if (positionalAudio.isPlaying) {
-      stopPositionalAudio();
-    }
+    if (!audioEl.paused) audioEl.pause();
     return;
   }
 
-  // 2. If dancer is a video: check playback state
-  const isVideo = (currentMediaType === 'video' || currentMediaType === 'default') && dancerVideo;
-  if (isVideo) {
-    // If video is paused, buffering, seeking, or hasn't loaded enough data -> pause audio
-    if (dancerVideo.paused || dancerVideo.seeking || dancerVideo.readyState < 2) {
-      if (positionalAudio.isPlaying) {
-        pausePositionalAudio();
-      }
-      return;
-    }
+  // 2. Check video playback state
+  if (!dancerVideo) return;
 
-    const audioDuration = positionalAudio.buffer.duration;
-    if (!audioDuration || audioDuration <= 0) return;
+  if (dancerVideo.paused || dancerVideo.seeking || dancerVideo.readyState < 2) {
+    if (!audioEl.paused) audioEl.pause();
+    return;
+  }
 
-    const targetAudioTime = dancerVideo.currentTime % audioDuration;
+  const now = performance.now();
+  // Throttle non-forced sync calls to prevent property spamming
+  if (!force && (now - lastAudioSyncTime < 300)) {
+    return;
+  }
+  lastAudioSyncTime = now;
 
-    if (positionalAudio.isPlaying) {
-      const elapsed = Math.max(0, positionalAudio.context.currentTime - (positionalAudio._startedAt || 0)) * (positionalAudio.playbackRate || 1.0);
-      const currentAudioTime = ((positionalAudio._progress || 0) + elapsed) % audioDuration;
+  const targetTime = dancerVideo.currentTime;
+  const drift = Math.abs(audioEl.currentTime - targetTime);
 
-      let drift = Math.abs(currentAudioTime - targetAudioTime);
-      if (drift > audioDuration / 2) {
-        drift = audioDuration - drift;
-      }
+  // If video looped or drift exceeds 100ms, adjust audio currentTime
+  if (force || drift > 0.10) {
+    try {
+      audioEl.currentTime = targetTime;
+    } catch (e) {}
+  }
 
-      // Re-sync if forced (loop / seek / place) or if drift exceeds ~70ms
-      if (force || drift > 0.07) {
-        isSyncingAudio = true;
-        try {
-          positionalAudio.stop();
-          positionalAudio._progress = targetAudioTime;
-          positionalAudio.play();
-        } catch (err) {
-          console.warn('Positional audio re-sync error:', err);
-        } finally {
-          isSyncingAudio = false;
-        }
-      }
-    } else {
-      // Audio was paused or stopped; start aligned to current video time
-      isSyncingAudio = true;
-      try {
-        resumeAudioContext();
-        positionalAudio.stop();
-        positionalAudio._progress = targetAudioTime;
-        positionalAudio.play();
-      } catch (err) {
-        console.warn('Positional audio start sync error:', err);
-      } finally {
-        isSyncingAudio = false;
-      }
-    }
-  } else {
-    // Non-video media (e.g. 3D GLTF model or static image)
-    if (!positionalAudio.isPlaying) {
-      resumeAudioContext();
-      try {
-        positionalAudio.play();
-      } catch (err) {
-        console.warn('Failed to play positional audio for 3D model:', err);
-      }
-    }
+  if (audioEl.paused && !dancerVideo.paused) {
+    resumeAudioContext();
+    audioEl.play().catch(() => {});
   }
 }
 
@@ -213,28 +202,33 @@ function playPositionalAudio() {
 }
 
 function pausePositionalAudio() {
+  const audioEl = dancerAudioEl || document.getElementById('dancer-audio');
+  if (audioEl && !audioEl.paused) {
+    try {
+      audioEl.pause();
+    } catch (e) {}
+  }
   if (positionalAudio && positionalAudio.isPlaying) {
     try {
       positionalAudio.pause();
-    } catch (err) {
-      console.warn('Failed to pause positional audio:', err);
-    }
+    } catch (e) {}
   }
 }
 
 function stopPositionalAudio() {
-  if (positionalAudio) {
+  const audioEl = dancerAudioEl || document.getElementById('dancer-audio');
+  if (audioEl) {
     try {
-      if (positionalAudio.isPlaying) {
-        positionalAudio.stop();
-      }
-      positionalAudio._progress = 0;
-    } catch (err) {
-      console.warn('Failed to stop positional audio:', err);
-    }
+      audioEl.pause();
+      audioEl.currentTime = 0;
+    } catch (e) {}
+  }
+  if (positionalAudio && positionalAudio.isPlaying) {
+    try {
+      positionalAudio.stop();
+    } catch (e) {}
   }
 }
-
 
 function resolveAudioUrl(raw) {
   if (!raw) return '';
@@ -246,7 +240,7 @@ function resolveAudioUrl(raw) {
 
   // Prepend slash for relative local files without scheme or leading slash
   if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
-    if (/\.(mp3|wav|ogg|m4a|aac)($|[?#])/i.test(url)) {
+    if (/\.(mp3|wav|ogg|m4a|aac|mp4|webm)($|[?#])/i.test(url)) {
       url = '/' + url;
     }
   }
@@ -259,91 +253,46 @@ async function loadPositionalAudio(rawUrl, token) {
   const resolvedAudioUrl = resolveAudioUrl(rawUrl);
   if (!resolvedAudioUrl) return;
 
+  console.log('[Audio] Streaming audio from:', resolvedAudioUrl);
   currentAudioUrl = resolvedAudioUrl;
   isAudioReady = false;
-
-  if (!audioLoader) {
-    audioLoader = new THREE.AudioLoader();
-  }
-
   stopPositionalAudio();
 
-  const handleAudioBuffer = (buffer) => {
-    if (token !== audioLoadToken) return;
-    audioBuffer = buffer;
-    isAudioReady = true;
+  const audioEl = getDancerAudioElement();
+  audioEl.src = resolvedAudioUrl;
+  audioEl.muted = false;
+  audioEl.volume = isAudioMuted ? 0 : 1.0;
+  audioEl.currentTime = 0;
+  audioEl.load();
 
-    if (positionalAudio) {
-      try {
-        if (positionalAudio.isPlaying) positionalAudio.stop();
-        positionalAudio.setBuffer(buffer);
-        positionalAudio.setLoop(true);
-        positionalAudio.setVolume(isAudioMuted ? 0 : 1.0);
-        positionalAudio.setRefDistance(1.5);
-        positionalAudio.setMaxDistance(20);
-        positionalAudio.setRolloffFactor(1.2);
-        positionalAudio.setDistanceModel('inverse');
-      } catch (err) {
-        console.warn('Error attaching audio buffer:', err);
-      }
-    }
+  const onCanPlay = () => {
+    if (token !== audioLoadToken) return;
+    audioEl.removeEventListener('canplay', onCanPlay);
+    isAudioReady = true;
+    console.log('[Audio] Audio stream ready for playback');
 
     if (arStarted && isPlaced && dancerGroup && dancerGroup.visible && !isAudioMuted) {
       syncAudioToVideo(true);
     }
   };
 
-  const isLocal = resolvedAudioUrl.startsWith('/') ||
-                  resolvedAudioUrl.startsWith('./') ||
-                  resolvedAudioUrl.startsWith('../') ||
-                  resolvedAudioUrl.startsWith(window.location.origin);
-
-  if (isLocal) {
-    audioLoader.load(
-      resolvedAudioUrl,
-      handleAudioBuffer,
-      undefined,
-      (err) => console.warn('Local AudioLoader error:', err)
-    );
-    return;
-  }
-
-  // Remote audio fetch with fallback to corsproxy
-  try {
-    const res = await fetch(resolvedAudioUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const arrayBuffer = await res.arrayBuffer();
-    if (token !== audioLoadToken) return;
-
-    const ctx = (audioListener && audioListener.context) || (THREE.AudioContext && THREE.AudioContext.getContext && THREE.AudioContext.getContext());
-    if (ctx) {
-      ctx.decodeAudioData(arrayBuffer, handleAudioBuffer, (decodeErr) => {
-        console.warn('decodeAudioData error:', decodeErr);
-      });
-    }
-  } catch (directErr) {
-    console.warn('Direct audio fetch failed, trying CORS proxy:', directErr);
-    try {
+  audioEl.addEventListener('canplay', onCanPlay);
+  audioEl.addEventListener('loadeddata', onCanPlay);
+  audioEl.addEventListener('playing', () => {
+    isAudioReady = true;
+  });
+  audioEl.addEventListener('error', (e) => {
+    console.warn('[Audio] Direct stream error, trying proxy URL:', e);
+    if (token === audioLoadToken && !resolvedAudioUrl.includes('corsproxy.io')) {
       const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(resolvedAudioUrl)}`;
-      const proxyRes = await fetch(proxyUrl);
-      if (!proxyRes.ok) throw new Error(`Proxy HTTP ${proxyRes.status}`);
-      const arrayBuffer = await proxyRes.arrayBuffer();
-      if (token !== audioLoadToken) return;
-
-      const ctx = (audioListener && audioListener.context) || (THREE.AudioContext && THREE.AudioContext.getContext && THREE.AudioContext.getContext());
-      if (ctx) {
-        ctx.decodeAudioData(arrayBuffer, handleAudioBuffer, (decodeErr) => {
-          console.warn('decodeAudioData proxy error:', decodeErr);
-        });
-      }
-    } catch (proxyErr) {
-      console.error('Failed to load audio via proxy:', proxyErr);
+      audioEl.src = proxyUrl;
+      audioEl.load();
     }
-  }
+  });
 }
 
 // ── Automatic Background / Chroma Key Configuration ─────────────────────────
-// Modes: 0 = Original/Opaque, 1 = Green/Blue Screen, 2 = Black BG Key, 3 = Grey BG Key, 4 = White BG Key
+// Modes: 0 = Original/Opaque (No removal), 1 = Green Screen Key, 2 = Black BG Key, 3 = Grey BG Key, 4 = White BG Key, 5 = Blue Screen Key
 let currentKeyMode    = 2;
 let currentKeyColor   = new THREE.Color(0x000000);
 let currentSimilarity = 0.38;
@@ -378,60 +327,60 @@ function detectAndApplyKeyModeFromUrl(url) {
   const decoded = decodeURIComponent(url).toLowerCase();
   hasFilenameKeyTag = false;
 
-  // 1. Grey / Gray background tag: _greybg, _graybg, _grey, _gray, greybg, graybg
-  if (/(_greybg|_graybg|_grey\b|_gray\b|greybg|graybg|bg[_-]?grey|bg[_-]?gray)/i.test(decoded)) {
-    console.log('Chroma Key: Detected Grey background from filename');
-    hasFilenameKeyTag = true;
-    applyKeySettings(3, new THREE.Color(0.5, 0.5, 0.5), 0.20, 0.08);
-    return;
-  }
-
-  // 2. Green background tag: _greenbg, _green, greenbg, greenscreen
-  if (/(_greenbg|_green\b|greenbg|greenscreen|chroma[_-]?green|key[_-]?green|bg[_-]?green)/i.test(decoded)) {
-    console.log('Chroma Key: Detected Green Screen from filename');
-    hasFilenameKeyTag = true;
-    applyKeySettings(1, new THREE.Color(0x00ff00), 0.38, 0.10);
-    return;
-  }
-
-  // 3. Blue background tag: _bluebg, _blue, bluebg, bluescreen
-  if (/(_bluebg|_blue\b|bluebg|bluescreen|chroma[_-]?blue|bg[_-]?blue)/i.test(decoded)) {
-    console.log('Chroma Key: Detected Blue Screen from filename');
-    hasFilenameKeyTag = true;
-    applyKeySettings(1, new THREE.Color(0x0000ff), 0.38, 0.10);
-    return;
-  }
-
-  // 4. White background tag: _whitebg, _white, whitebg
-  if (/(_whitebg|_white\b|whitebg|bg[_-]?white)/i.test(decoded)) {
-    console.log('Chroma Key: Detected White background from filename');
-    hasFilenameKeyTag = true;
-    applyKeySettings(4, new THREE.Color(1.0, 1.0, 1.0), 0.20, 0.12);
-    return;
-  }
-
-  // 5. Opaque / None tag: _nobgkey, _original, _opaque, _none, bg=none, key=none
-  if (/(_nobgkey|_original|_opaque|_none\b|bg=none|key=none)/i.test(decoded)) {
-    console.log('Chroma Key: Original / Opaque (No Keying)');
+  // 1. Original / Opaque (No background removal): original, orig, originalbg, nobgkey, opaque
+  if (/(original|_original|originalbg|orig\b|_orig\b|_nobgkey|_opaque|_none\b|bg=none|key=none)/i.test(decoded)) {
+    console.log('Chroma Key: Original / Opaque mode (No Background Removal)');
     hasFilenameKeyTag = true;
     applyKeySettings(0);
     return;
   }
 
-  // 6. Black / nobg tag: _blackbg, _nobg, nobg, blackbg
-  if (/(_blackbg|_black\b|_nobg\b|blackbg|nobg)/i.test(decoded)) {
-    console.log('Chroma Key: Detected Black/NoBG from filename');
+  // 2. Grey / Gray background: greybg, graybg, _greybg, _graybg, Composition_greybg, grey_bg, etc.
+  if (/(greybg|graybg|_greybg|_graybg|grey[_-]?bg|gray[_-]?bg|bg[_-]?grey|bg[_-]?gray|_grey\b|_gray\b)/i.test(decoded)) {
+    console.log('Chroma Key: Detected Grey background from filename (greybg)');
+    hasFilenameKeyTag = true;
+    applyKeySettings(3, new THREE.Color(0.5, 0.5, 0.5), 0.18, 0.08);
+    return;
+  }
+
+  // 3. Green background: greenbg, _greenbg, green_bg, greenscreen, etc.
+  if (/(greenbg|_greenbg|green[_-]?bg|bg[_-]?green|_green\b|greenscreen|green-screen|green_screen|chroma[_-]?green|key[_-]?green)/i.test(decoded)) {
+    console.log('Chroma Key: Detected Green Screen from filename (greenbg)');
+    hasFilenameKeyTag = true;
+    applyKeySettings(1, new THREE.Color(0x00ff00), 0.38, 0.10);
+    return;
+  }
+
+  // 4. Blue background: bluebg, _bluebg, blue_bg, bluescreen, etc.
+  if (/(bluebg|_bluebg|blue[_-]?bg|bg[_-]?blue|_blue\b|bluescreen|blue-screen|blue_screen|chroma[_-]?blue|key[_-]?blue)/i.test(decoded)) {
+    console.log('Chroma Key: Detected Blue Screen from filename (bluebg)');
+    hasFilenameKeyTag = true;
+    applyKeySettings(5, new THREE.Color(0x0000ff), 0.38, 0.10);
+    return;
+  }
+
+  // 5. White background: whitebg, _whitebg, white_bg, etc.
+  if (/(whitebg|_whitebg|white[_-]?bg|bg[_-]?white|_white\b)/i.test(decoded)) {
+    console.log('Chroma Key: Detected White background from filename (whitebg)');
+    hasFilenameKeyTag = true;
+    applyKeySettings(4, new THREE.Color(1.0, 1.0, 1.0), 0.20, 0.12);
+    return;
+  }
+
+  // 6. Black / nobg tag: blackbg, _blackbg, black_bg, nobg, _nobg, etc.
+  if (/(blackbg|_blackbg|black[_-]?bg|bg[_-]?black|_black\b|_nobg\b|nobg)/i.test(decoded)) {
+    console.log('Chroma Key: Detected Black/NoBG from filename (blackbg)');
     hasFilenameKeyTag = true;
     applyKeySettings(2, new THREE.Color(0x000000), 0.07, 0.14);
     return;
   }
 
-  // Default to Black BG keying for standard dark background videos
+  // Default fallback: Black BG keying for standard dark background assets
   applyKeySettings(2, new THREE.Color(0x000000), 0.07, 0.14);
 }
 
 function autoDetectKeyModeFromVideo() {
-  if (hasFilenameKeyTag || !dancerVideo || dancerVideo.videoWidth === 0) return;
+  if (!dancerVideo || dancerVideo.videoWidth === 0) return;
   try {
     const sampleCanvas = document.createElement('canvas');
     sampleCanvas.width = 16;
@@ -453,10 +402,25 @@ function autoDetectKeyModeFromVideo() {
     const avgG = totalG / 4;
     const avgB = totalB / 4;
 
+    // If filename explicitly specified greybg, adapt keyColor to the exact sampled background grey
+    if (hasFilenameKeyTag && currentKeyMode === 3) {
+      if (Math.abs(avgR - avgG) < 25 && Math.abs(avgG - avgB) < 25) {
+        applyKeySettings(3, new THREE.Color(avgR / 255, avgG / 255, avgB / 255));
+      }
+      return;
+    }
+
+    if (hasFilenameKeyTag) return;
+
+    // Automatic detection when no naming tag is present
     if (avgG > 80 && avgG > avgR * 1.35 && avgG > avgB * 1.35) {
       applyKeySettings(1, new THREE.Color(0x00ff00), 0.38, 0.10); // Green Screen
-    } else if (Math.abs(avgR - avgG) < 20 && Math.abs(avgG - avgB) < 20 && avgR > 60 && avgR < 200) {
-      applyKeySettings(3, new THREE.Color(avgR / 255, avgG / 255, avgB / 255), 0.28, 0.12); // Grey Screen
+    } else if (avgB > 80 && avgB > avgR * 1.35 && avgB > avgG * 1.35) {
+      applyKeySettings(5, new THREE.Color(0x0000ff), 0.38, 0.10); // Blue Screen
+    } else if (Math.abs(avgR - avgG) < 20 && Math.abs(avgG - avgB) < 20 && avgR > 50 && avgR < 210) {
+      applyKeySettings(3, new THREE.Color(avgR / 255, avgG / 255, avgB / 255), 0.18, 0.08); // Grey Screen
+    } else if (avgR > 230 && avgG > 230 && avgB > 230) {
+      applyKeySettings(4, new THREE.Color(1.0, 1.0, 1.0), 0.20, 0.12); // White Screen
     } else if (avgR < 40 && avgG < 40 && avgB < 40) {
       applyKeySettings(2, new THREE.Color(0x000000), 0.07, 0.14); // Black BG
     }
@@ -521,8 +485,11 @@ const ChromaShader = {
         discard;
       }
 
-      if (keyMode == 1) {
-        // Green Screen Chroma Key
+      if (keyMode == 0) {
+        // Original / Opaque (No background removal)
+        gl_FragColor = texColor;
+      } else if (keyMode == 1) {
+        // Green Screen Chroma Key with Green Despill
         float Y1 = 0.299 * keyColor.r + 0.587 * keyColor.g + 0.114 * keyColor.b;
         float Cb1 = -0.168736 * keyColor.r - 0.331264 * keyColor.g + 0.5 * keyColor.b;
         float Cr1 = 0.5 * keyColor.r - 0.418688 * keyColor.g - 0.081312 * keyColor.b;
@@ -537,12 +504,41 @@ const ChromaShader = {
         }
         float alpha = smoothstep(similarity, similarity + smoothness, dist);
         if (alpha < 0.05) discard;
-        gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
+
+        float maxRB = max(texColor.r, texColor.b);
+        vec3 cleanRgb = texColor.rgb;
+        if (cleanRgb.g > maxRB) {
+          cleanRgb.g = maxRB + (cleanRgb.g - maxRB) * 0.2;
+        }
+        gl_FragColor = vec4(cleanRgb, texColor.a * alpha);
+      } else if (keyMode == 5) {
+        // Blue Screen Chroma Key with Blue Despill
+        float Y1 = 0.299 * keyColor.r + 0.587 * keyColor.g + 0.114 * keyColor.b;
+        float Cb1 = -0.168736 * keyColor.r - 0.331264 * keyColor.g + 0.5 * keyColor.b;
+        float Cr1 = 0.5 * keyColor.r - 0.418688 * keyColor.g - 0.081312 * keyColor.b;
+
+        float Y2 = 0.299 * texColor.r + 0.587 * texColor.g + 0.114 * texColor.b;
+        float Cb2 = -0.168736 * texColor.r - 0.331264 * texColor.g + 0.5 * texColor.b;
+        float Cr2 = 0.5 * texColor.r - 0.418688 * texColor.g - 0.081312 * texColor.b;
+
+        float dist = distance(vec2(Cb1, Cr1), vec2(Cb2, Cr2));
+        if (dist < similarity) {
+          discard;
+        }
+        float alpha = smoothstep(similarity, similarity + smoothness, dist);
+        if (alpha < 0.05) discard;
+
+        float maxRG = max(texColor.r, texColor.g);
+        vec3 cleanRgb = texColor.rgb;
+        if (cleanRgb.b > maxRG) {
+          cleanRgb.b = maxRG + (cleanRgb.b - maxRG) * 0.2;
+        }
+        gl_FragColor = vec4(cleanRgb, texColor.a * alpha);
       } else if (keyMode == 2) {
         // Black background removal (Luminance & Color Threshold key)
         float maxVal = max(texColor.r, max(texColor.g, texColor.b));
         float luma = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
-        float metric = max(luma, maxVal * 0.9);
+        float metric = max(luma, maxVal * 0.95);
 
         float threshold = similarity;
         float feather = smoothness;
@@ -553,7 +549,7 @@ const ChromaShader = {
         if (alpha < 0.02) discard;
         gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
       } else if (keyMode == 3) {
-        // High-Precision Grey Screen Chroma Key
+        // High-Precision Grey Screen Chroma Key (e.g. Composition_greybg.mp4)
         // 1. Calculate color saturation (chroma = max channel - min channel)
         float maxC = max(texColor.r, max(texColor.g, texColor.b));
         float minC = min(texColor.r, min(texColor.g, texColor.b));
@@ -563,28 +559,28 @@ const ChromaShader = {
         float luma = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
         float targetLuma = dot(keyColor, vec3(0.299, 0.587, 0.114));
         float lumaDiff = abs(luma - targetLuma);
+        float colorDist = distance(texColor.rgb, keyColor);
 
-        // 3. Color channel deltas from keyColor
-        vec3 colDiff = abs(texColor.rgb - keyColor);
-        float maxColDiff = max(colDiff.r, max(colDiff.g, colDiff.b));
+        // In a flat grey background video (e.g. Composition_greybg.mp4):
+        // Foreground elements (costumes, feathers, skin, face, masks) have either:
+        // - Color saturation (chroma > 0.045)
+        // - Luminance clearly different from background grey (lumaDiff > similarity)
+        // - High RGB distance from grey color (colorDist > similarity * 1.25)
+        float chromaTol = 0.045;
+        float lumaTol = similarity;
 
-        // Thresholds tailored specifically for flat grey video backgrounds:
-        // Any pixel with color (chroma > 0.055) is protected as dancer/costume
-        float chromaTol = 0.055;
-        float lumaTol = similarity * 0.45;
-
-        // If the pixel has color, or is significantly darker/lighter than the grey background,
-        // it is 100% the dancer: keep it completely untouched and opaque!
-        if (chroma > chromaTol || lumaDiff > lumaTol || maxColDiff > lumaTol * 1.3) {
+        if (chroma > chromaTol || lumaDiff > lumaTol || colorDist > lumaTol * 1.25) {
+          // Foreground dancer / costume is completely preserved and opaque
           gl_FragColor = texColor;
         } else {
-          // Pixel is in the neutral grey zone: compute soft edge transition
-          float chromaFactor = smoothstep(chromaTol * 0.35, chromaTol, chroma);
-          float lumaFactor = smoothstep(lumaTol * 0.5, lumaTol, lumaDiff);
-          float dancerStrength = max(chromaFactor, lumaFactor);
+          // In neutral grey zone: smooth edge feathering
+          float chromaFactor = smoothstep(0.015, chromaTol, chroma);
+          float lumaFactor = smoothstep(lumaTol * 0.4, lumaTol, lumaDiff);
+          float distFactor = smoothstep(lumaTol * 0.4, lumaTol * 1.25, colorDist);
+          float dancerStrength = max(chromaFactor, max(lumaFactor, distFactor));
 
           if (dancerStrength < 0.12) {
-            discard; // Pure background
+            discard; // Pure grey background discarded completely
           }
 
           float alpha = smoothstep(0.12, 0.75, dancerStrength);
@@ -1599,10 +1595,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     qrControlsContainer.classList.remove('hidden');
   }
 
-  // ── Camera startup: check secure context first, then probe getUserMedia so
-  // the browser always shows its native permission dialog, then hand off to
-  // html5-qrcode. Errors are shown in #camera-error-msg with a retry button.
-  initCameraWithPermissionCheck();
+  // ── Geofence & Camera startup: verify user is within 500m of The NGC first!
+  // If user allows and is within 500m, it transitions to camera & QR scanner.
+  initLocationGateCheck();
 
   // ── Gallery QR Upload ────────────────────────────────────────────────────
   // Lets users pick a QR code image from their phone gallery.
@@ -1842,9 +1837,209 @@ function classifyCameraError(err) {
   return `Camera error: ${err.message || err}. (Try closing other apps that use the camera and refresh.)`;
 }
 
+// ── Geofence Configuration: The NGC (New Government Center) ─────────────
+const NGC_GEOFENCE = {
+  name: 'The NGC (New Government Center)',
+  latitude: 10.669337,
+  longitude: 122.969881,
+  radiusMeters: 500
+};
+
+let isLocationVerified = false;
+
 /**
- * Called once on page load. Checks for secure context, probes getUserMedia so
- * the browser shows the native permission dialog, then starts html5-qrcode.
+ * Calculates great-circle distance between two coordinates using the Haversine formula
+ * @param {number} lat1
+ * @param {number} lon1
+ * @param {number} lat2
+ * @param {number} lon2
+ * @returns {number} distance in meters
+ */
+function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // Earth's mean radius in meters
+  const phi1 = (lat1 * Math.PI) / 180;
+  const phi2 = (lat2 * Math.PI) / 180;
+  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+  const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+            Math.cos(phi1) * Math.cos(phi2) *
+            Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Startup Geofence Gate: Prompts location access immediately on app load.
+ * Strictly verifies the user is within 500m of The NGC before allowing the app to start.
+ */
+function initLocationGateCheck() {
+  const gateEl = $('location-gate');
+  const iconEl = $('location-gate-icon');
+  const titleEl = $('location-gate-title');
+  const descEl = $('location-gate-desc');
+  const distEl = $('location-gate-distance');
+  const actionsEl = $('location-gate-actions');
+  const retryBtn = $('location-retry-btn');
+
+  if (!gateEl) {
+    initCameraWithPermissionCheck();
+    return;
+  }
+
+  if (retryBtn && !retryBtn.dataset.bound) {
+    retryBtn.dataset.bound = 'true';
+    retryBtn.addEventListener('click', () => {
+      requestLocation();
+    });
+  }
+
+  function setCheckingState() {
+    gateEl.className = 'location-gate';
+    if (iconEl) iconEl.textContent = '📍';
+    if (titleEl) titleEl.textContent = 'Verifying Location…';
+    if (descEl) {
+      descEl.innerHTML = `
+        This Augmented Reality experience is exclusively available at <strong>The NGC (New Government Center)</strong> within a 500m radius.<br><br>
+        Requesting your GPS coordinates to verify your location…
+      `;
+    }
+    if (distEl) distEl.classList.add('hidden');
+    if (actionsEl) actionsEl.classList.add('hidden');
+  }
+
+  function setVerifiedState(distMeters) {
+    isLocationVerified = true;
+    gateEl.className = 'location-gate state-verified';
+    if (iconEl) iconEl.textContent = '✅';
+    if (titleEl) titleEl.textContent = 'Location Verified!';
+    const distStr = Math.round(distMeters) + 'm from The NGC center';
+    if (descEl) {
+      descEl.innerHTML = `
+        Welcome to <strong>The NGC</strong>!<br>
+        You are within the 500m festival zone (${distStr}).<br>
+        Starting your AR experience…
+      `;
+    }
+    if (distEl) {
+      distEl.textContent = `📍 Location: Inside NGC Zone (${distStr})`;
+      distEl.classList.remove('hidden');
+    }
+    if (actionsEl) actionsEl.classList.add('hidden');
+
+    // Smoothly fade out the location gate and start camera
+    setTimeout(() => {
+      gateEl.classList.add('fade-out');
+      setTimeout(() => {
+        gateEl.classList.add('hidden');
+      }, 500);
+      initCameraWithPermissionCheck();
+    }, 1100);
+  }
+
+  function setDeniedState() {
+    gateEl.className = 'location-gate state-denied';
+    if (iconEl) iconEl.textContent = '🚫';
+    if (titleEl) titleEl.textContent = 'Location Permission Denied';
+    if (descEl) {
+      descEl.innerHTML = `
+        Location access was declined. This experience is exclusive to visitors at <strong>The NGC</strong> (500m radius) and cannot start without GPS permission.<br><br>
+        Please tap the <strong>lock / site settings icon (🔒 or ⚙️)</strong> in your address bar, set <strong>Location: Allow</strong>, then tap below:
+      `;
+    }
+    if (distEl) distEl.classList.add('hidden');
+    if (actionsEl) actionsEl.classList.remove('hidden');
+    if (retryBtn) retryBtn.innerHTML = '<span>📍 Grant Permission &amp; Try Again</span>';
+  }
+
+  function setRestrictedState(distMeters) {
+    gateEl.className = 'location-gate state-restricted';
+    if (iconEl) iconEl.textContent = '📍';
+    if (titleEl) titleEl.textContent = 'Location Restricted';
+    const distStr = distMeters >= 1000
+      ? (distMeters / 1000).toFixed(2) + ' km'
+      : Math.round(distMeters) + ' meters';
+    if (descEl) {
+      descEl.innerHTML = `
+        This Augmented Reality experience is only accessible within <strong>500 meters</strong> of The New Government Center (NGC).<br><br>
+        You are currently <strong>${distStr}</strong> away. Please visit The NGC to unlock the MassKara AR dancers!
+      `;
+    }
+    if (distEl) {
+      distEl.textContent = `Current Distance: ${distStr} (Allowed: 500m)`;
+      distEl.classList.remove('hidden');
+    }
+    if (actionsEl) actionsEl.classList.remove('hidden');
+    if (retryBtn) retryBtn.innerHTML = '<span>🔄 Re-check My Location</span>';
+  }
+
+  function setErrorState(errMsg) {
+    gateEl.className = 'location-gate state-denied';
+    if (iconEl) iconEl.textContent = '⚠️';
+    if (titleEl) titleEl.textContent = 'GPS Signal Unavailable';
+    if (descEl) {
+      descEl.innerHTML = `
+        Unable to acquire GPS coordinates (${errMsg}).<br><br>
+        Please make sure your device's <strong>Location / GPS</strong> is turned ON in settings, then try again.
+      `;
+    }
+    if (distEl) distEl.classList.add('hidden');
+    if (actionsEl) actionsEl.classList.remove('hidden');
+    if (retryBtn) retryBtn.innerHTML = '<span>🔄 Try Again</span>';
+  }
+
+  function requestLocation() {
+    if (!navigator.geolocation) {
+      setErrorState('Geolocation not supported by this browser');
+      return;
+    }
+
+    setCheckingState();
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const userLat = pos.coords.latitude;
+        const userLng = pos.coords.longitude;
+        const distance = calculateDistanceMeters(
+          userLat,
+          userLng,
+          NGC_GEOFENCE.latitude,
+          NGC_GEOFENCE.longitude
+        );
+
+        if (distance <= NGC_GEOFENCE.radiusMeters) {
+          setVerifiedState(distance);
+        } else {
+          setRestrictedState(distance);
+        }
+      },
+      (err) => {
+        console.warn('[Location] Geolocation error:', err);
+        if (err.code === err.PERMISSION_DENIED) {
+          setDeniedState();
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setErrorState('Position unavailable');
+        } else if (err.code === err.TIMEOUT) {
+          setErrorState('Location request timed out');
+        } else {
+          setErrorState(err.message || 'Unknown location error');
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  }
+
+  // Request location immediately upon opening the app
+  requestLocation();
+}
+
+/**
+ * Called once location is verified within 500m of The NGC. Checks for secure context,
+ * probes getUserMedia so the browser shows the native permission dialog, then starts html5-qrcode.
  * Falls back to a visible retry button on failure.
  */
 function initCameraWithPermissionCheck() {
@@ -2128,10 +2323,10 @@ function initThreeScene() {
   renderer.xr.setFramebufferScaleFactor?.(0.8);
   renderer.xr.setFoveation?.(1);
 
-  // Create an AR Button that triggers the WebXR session with Environmental Occlusion & Depth Sensing
+  // Create an AR Button that triggers the WebXR session with Environmental Occlusion, Camera Access & Depth Sensing
   const sessionInit = {
     requiredFeatures: ['hit-test'],
-    optionalFeatures: ['dom-overlay', 'depth-sensing', 'mesh-detection', 'plane-detection'],
+    optionalFeatures: ['dom-overlay', 'camera-access', 'depth-sensing', 'mesh-detection', 'plane-detection'],
     depthSensing: {
       usagePreference: ['gpu-optimized', 'cpu-optimized'],
       dataFormatPreference: ['luminance-alpha', 'float32']
@@ -2185,7 +2380,7 @@ function initThreeScene() {
       try {
         const fallbackInit = {
           requiredFeatures: ['hit-test'],
-          optionalFeatures: ['dom-overlay'],
+          optionalFeatures: ['dom-overlay', 'camera-access'],
           domOverlay: { root: document.getElementById('ui-overlay') }
         };
         const session = await navigator.xr.requestSession('immersive-ar', fallbackInit);
@@ -2316,7 +2511,7 @@ function initThreeScene() {
         e.touches[0].clientY - e.touches[1].clientY
       );
       const factor = dist / initialPinchDist;
-      currentDancerScale = THREE.MathUtils.clamp(basePinchScale * factor, 0.4, 3.5);
+      currentDancerScale = THREE.MathUtils.clamp(basePinchScale * factor, 0.4, 5.0);
       dancerGroup.scale.set(currentDancerScale, currentDancerScale, currentDancerScale);
     }
   }, { passive: true });
@@ -2365,15 +2560,9 @@ function initThreeScene() {
       }
     }
 
-    // Continuous lock-step video and positional audio synchronization
-    if (positionalAudio && isAudioReady) {
-      if (!arStarted || !isPlaced || !dancerGroup || !dancerGroup.visible) {
-        if (positionalAudio.isPlaying) {
-          stopPositionalAudio();
-        }
-      } else if (dancerVideo && (currentMediaType === 'video' || currentMediaType === 'default')) {
-        syncAudioToVideo(false);
-      }
+    // Stop audio if dancer is hidden or AR is not active
+    if (!arStarted || !isPlaced || !dancerGroup || !dancerGroup.visible) {
+      stopPositionalAudio();
     }
 
     if (frame) {
@@ -2501,6 +2690,102 @@ function initThreeScene() {
       }
     }
 
+    // AR Snapshot Capture executing directly in WebXR animation frame
+    if (isCaptureRequested && capturePromiseResolver) {
+      const resolver = capturePromiseResolver;
+      isCaptureRequested = false;
+      capturePromiseResolver = null;
+
+      try {
+        const W = Math.min(Math.round(window.innerWidth * (window.devicePixelRatio || 1)), 1920);
+        const H = Math.min(Math.round(window.innerHeight * (window.devicePixelRatio || 1)), 1920);
+
+        if (!captureRenderTarget || captureRenderTarget.width !== W || captureRenderTarget.height !== H) {
+          if (captureRenderTarget) captureRenderTarget.dispose();
+          captureRenderTarget = new THREE.WebGLRenderTarget(W, H, {
+            format: THREE.RGBAFormat,
+            type: THREE.UnsignedByteType,
+            colorSpace: THREE.SRGBColorSpace
+          });
+        }
+
+        const prevRenderTarget = renderer.getRenderTarget();
+        renderer.setRenderTarget(captureRenderTarget);
+        renderer.clear();
+
+        // 1. Render camera background if WebXR camera texture is available
+        let hasCameraBg = false;
+        if (frame && renderer.xr.isPresenting) {
+          const pose = frame.getViewerPose(renderer.xr.getReferenceSpace());
+          if (pose && pose.views && pose.views.length > 0) {
+            const xrCam = pose.views[0].camera;
+            if (xrCam) {
+              const cameraTex = renderer.xr.getCameraTexture(xrCam);
+              if (cameraTex) {
+                const { scene: bgScene, mat: bgMat } = getCameraBackgroundMesh();
+                bgMat.uniforms.map.value = cameraTex;
+                const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+                renderer.render(bgScene, orthoCam);
+                hasCameraBg = true;
+              }
+            }
+          }
+        }
+
+        // 2. Render 3D Scene (dancer billboard + particle effects) on top
+        const xrCam = (renderer.xr && renderer.xr.isPresenting) ? renderer.xr.getCamera() : camera;
+        const activeCam = (xrCam && xrCam.cameras && xrCam.cameras.length > 0) ? xrCam.cameras[0] : (xrCam || camera);
+
+        renderer.autoClear = !hasCameraBg;
+        renderer.render(scene, activeCam);
+        renderer.autoClear = true;
+
+        // 3. Read pixel buffer from render target
+        const pixelBuffer = new Uint8Array(W * H * 4);
+        renderer.readRenderTargetPixels(captureRenderTarget, 0, 0, W, H, pixelBuffer);
+        renderer.setRenderTarget(prevRenderTarget);
+
+        // 4. Draw to Canvas 2D with WebGL bottom-left to top-left flip
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = W;
+        outCanvas.height = H;
+        const ctx = outCanvas.getContext('2d');
+        const imgData = ctx.createImageData(W, H);
+        const data = imgData.data;
+
+        for (let y = 0; y < H; y++) {
+          const srcY = H - 1 - y;
+          const srcOffset = srcY * W * 4;
+          const dstOffset = y * W * 4;
+          data.set(pixelBuffer.subarray(srcOffset, srcOffset + W * 4), dstOffset);
+        }
+        ctx.putImageData(imgData, 0, 0);
+
+        // 5. Add festive Bacolod watermark ribbon/badge
+        const badgeH = Math.round(52 * (W / 720));
+        const fontSize = Math.round(18 * (W / 720));
+        ctx.fillStyle = 'rgba(15, 15, 20, 0.65)';
+        ctx.fillRect(0, H - badgeH, W, badgeH);
+
+        ctx.fillStyle = '#fbb03b';
+        ctx.font = `bold ${Math.max(fontSize, 14)}px "Plus Jakarta Sans", "Baloo 2", sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🎭 Bacolod Tourism AR · City of Smiles', Math.round(20 * (W / 720)), H - badgeH / 2);
+
+        outCanvas.toBlob((blob) => {
+          if (blob) {
+            resolver.resolve(blob);
+          } else {
+            resolver.reject(new Error('Canvas toBlob returned null'));
+          }
+        }, 'image/jpeg', 0.95);
+
+      } catch (err) {
+        console.error('[Capture] Error during AR render snapshot:', err);
+        resolver.reject(err);
+      }
+    }
+
     renderer.render(scene, camera);
   };
 
@@ -2595,45 +2880,99 @@ function resolveMediaUrl(raw) {
   return url;
 }
 
+// ── Parse Multiple Links (Video MP4 + Audio) from Scanned QR Code ─────────
+function parseMediaAndAudioFromQr(text) {
+  if (!text) return { videoSource: '', audioSource: null };
+  const raw = text.trim();
+
+  // 1. JSON payload support: {"video": "...", "audio": "..."}
+  if (raw.startsWith('{') && raw.endsWith('}')) {
+    try {
+      const obj = JSON.parse(raw);
+      const v = obj.video || obj.mp4 || obj.url || obj.media || obj.src;
+      const a = obj.audio || obj.sound || obj.music || obj.track;
+      if (v) return { videoSource: v.trim(), audioSource: a ? a.trim() : null };
+    } catch (e) {}
+  }
+
+  // 2. Direct File Garden folder links (e.g. https://file.garden/aoVl-M0-p1TyFay4/masskara1)
+  const cleanFolder = raw.replace(/\/+$/, '');
+  if (/file\.garden\/[^\/]+\/masskara1$/i.test(cleanFolder) || cleanFolder.endsWith('/masskara1')) {
+    return {
+      videoSource: `${cleanFolder}/Composition_greybg.mp4`,
+      audioSource: `${cleanFolder}/audioclip-1788760841000-245087.mp4`
+    };
+  }
+  if (/file\.garden\//i.test(cleanFolder) && !/\.(mp4|webm|mov|ogg|m4v|glb|gltf|jpg|jpeg|png|webp|gif|mp3|wav|m4a|aac)$/i.test(cleanFolder)) {
+    return {
+      videoSource: `${cleanFolder}/Composition_greybg.mp4`,
+      audioSource: `${cleanFolder}/audioclip-1788760841000-245087.mp4`
+    };
+  }
+
+  // 3. Extract multiple URLs from text (separated by space, newlines, pipes, commas, etc.)
+  const urlMatches = raw.match(/https?:\/\/[^\s"',|]+/gi);
+  if (urlMatches && urlMatches.length >= 2) {
+    let videoUrl = null;
+    let audioUrl = null;
+
+    const isAudioPattern = /(audioclip|audio|sound|music|track|voice|masskara|\.(mp3|wav|m4a|ogg|aac))($|[?#])/i;
+    const isVideoPattern = /(composition|video|movie|greybg|graybg|blackbg|greenbg|bluebg|original|\.(webm|mov|m4v))($|[?#])/i;
+
+    for (const u of urlMatches) {
+      if (isAudioPattern.test(u) && !audioUrl) {
+        audioUrl = u;
+      } else if (isVideoPattern.test(u) && !videoUrl) {
+        videoUrl = u;
+      } else if (!videoUrl) {
+        videoUrl = u;
+      } else if (!audioUrl) {
+        audioUrl = u;
+      }
+    }
+
+    if (videoUrl && audioUrl) {
+      return { videoSource: videoUrl.trim(), audioSource: audioUrl.trim() };
+    }
+  }
+
+  // 4. Pipe separator: "videoUrl | audioUrl"
+  if (raw.includes('|')) {
+    const parts = raw.split('|');
+    let v = parts[0].trim();
+    let a = parts[1].trim();
+    if (a.toLowerCase().startsWith('audio=')) a = a.slice(6).trim();
+    return { videoSource: v, audioSource: a || null };
+  }
+
+  // 5. Query parameters (?audio=... or &audio=...)
+  try {
+    const parsedUrl = new URL(raw, window.location.href);
+    if (parsedUrl.searchParams.has('audio')) {
+      const a = parsedUrl.searchParams.get('audio');
+      parsedUrl.searchParams.delete('audio');
+      return { videoSource: parsedUrl.toString(), audioSource: a };
+    }
+  } catch (e) {}
+
+  let videoSource = raw;
+  let audioSource = null;
+
+  // 6. If video is from masskara1 folder and audio wasn't explicitly passed, auto-pair with audioclip
+  if (videoSource.includes('/masskara1/')) {
+    const baseFolder = videoSource.substring(0, videoSource.lastIndexOf('/masskara1/') + 11);
+    audioSource = `${baseFolder}/audioclip-1788760841000-245087.mp4`;
+  }
+
+  return { videoSource, audioSource };
+}
+
 // ── Load GIF / Video / Image from Scanned QR Code ──────────────────────────
 async function loadMediaFromQR(text) {
   if (!text) return;
 
-  const raw = text.trim();
-  let videoSource = raw;
-  let audioSource = null;
-
-  // Support direct File Garden folder links (e.g. https://file.garden/aoVl-M0-p1TyFay4/masskara1)
-  const cleanFolder = raw.replace(/\/+$/, '');
-  if (/file\.garden\/[^\/]+\/masskara1$/i.test(cleanFolder) || cleanFolder.endsWith('/masskara1')) {
-    videoSource = `${cleanFolder}/Composition_greybg.mp4`;
-    audioSource = `${cleanFolder}/masskara`;
-  } else if (/file\.garden\//i.test(cleanFolder) && !/\.(mp4|webm|mov|ogg|m4v|glb|gltf|jpg|jpeg|png|webp|gif|mp3|wav)$/i.test(cleanFolder)) {
-    videoSource = `${cleanFolder}/Composition_greybg.mp4`;
-    audioSource = `${cleanFolder}/masskara`;
-  } else if (videoSource.includes('|')) {
-    const parts = videoSource.split('|');
-    videoSource = parts[0].trim();
-    audioSource = parts[1].trim();
-    if (audioSource.toLowerCase().startsWith('audio=')) {
-      audioSource = audioSource.slice(6).trim();
-    }
-  } else {
-    // Also support ?audio= parameter if someone uses query string
-    try {
-      const parsedUrl = new URL(videoSource, window.location.href);
-      if (parsedUrl.searchParams.has('audio')) {
-        audioSource = parsedUrl.searchParams.get('audio');
-        parsedUrl.searchParams.delete('audio');
-        videoSource = parsedUrl.toString();
-      }
-    } catch (e) {}
-  }
-
-  // If video is from masskara1 folder and audio wasn't explicitly passed, auto-pair with masskara audio
-  if (!audioSource && videoSource.includes('/masskara1/')) {
-    audioSource = videoSource.replace(/Composition_greybg\.mp4/i, 'masskara');
-  }
+  const { videoSource, audioSource } = parseMediaAndAudioFromQr(text);
+  console.log('[QR Media] Video Source:', videoSource, '| Audio Source:', audioSource);
 
   // Immediately stop any previously playing audio when scanning new media
   stopPositionalAudio();
@@ -2973,7 +3312,7 @@ function tryLoadImage(url, loadToken = ++mediaLoadToken) {
 }
 
 const VIDEO_ASPECT = 9 / 16;
-const BILLBOARD_HEIGHT = 1.75; // Life-sized human dancer scale (matches viewer eye height)
+const BILLBOARD_HEIGHT = 5.0; // 5 meters scale
 const PLACEMENT_FLOAT_AMPLITUDE = 0.04;
 
 function applyVideoToBillboard() {
@@ -3034,12 +3373,7 @@ function applyTextureToBillboard(tex) {
   if (!videoMesh) return;
 
   if (videoMesh.material) videoMesh.material.dispose();
-  videoMesh.material = new THREE.MeshBasicMaterial({
-    map: tex,
-    side: THREE.DoubleSide,
-    transparent: true,
-    depthWrite: false
-  });
+  videoMesh.material = createBillboardMaterial(tex);
   videoMesh.material.needsUpdate = true;
 
   const aspect = (tex.image && tex.image.width && tex.image.height)
@@ -3104,12 +3438,7 @@ function buildVideoBillboard() {
   let aspect = VIDEO_ASPECT;
 
   if (currentTexture) {
-    mat = new THREE.MeshBasicMaterial({
-      map: currentTexture,
-      side: THREE.DoubleSide,
-      transparent: true,
-      depthWrite: false
-    });
+    mat = createBillboardMaterial(currentTexture);
     if (currentTexture.image && currentTexture.image.width && currentTexture.image.height) {
       aspect = currentTexture.image.width / currentTexture.image.height;
     }
@@ -3397,20 +3726,105 @@ function repositionDancer() {
 }
 
 
+let captureRenderTarget = null;
+let isCaptureRequested = false;
+let capturePromiseResolver = null;
+let cameraBackgroundScene = null;
+let cameraBackgroundQuad = null;
+let cameraBackgroundMaterial = null;
+
+function getCameraBackgroundMesh() {
+  if (!cameraBackgroundQuad) {
+    const geo = new THREE.PlaneGeometry(2, 2);
+    cameraBackgroundMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        map: { value: null }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position.xy, 1.0, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D map;
+        varying vec2 vUv;
+        void main() {
+          gl_FragColor = texture2D(map, vUv);
+        }
+      `,
+      depthTest: false,
+      depthWrite: false
+    });
+    cameraBackgroundQuad = new THREE.Mesh(geo, cameraBackgroundMaterial);
+    cameraBackgroundScene = new THREE.Scene();
+    cameraBackgroundScene.add(cameraBackgroundQuad);
+  }
+  return { scene: cameraBackgroundScene, quad: cameraBackgroundQuad, mat: cameraBackgroundMaterial };
+}
+
+function requestARSnapshot() {
+  return new Promise((resolve, reject) => {
+    isCaptureRequested = true;
+    capturePromiseResolver = { resolve, reject, timestamp: performance.now() };
+    setTimeout(() => {
+      if (isCaptureRequested && capturePromiseResolver) {
+        capturePromiseResolver.reject(new Error('Capture timeout'));
+        isCaptureRequested = false;
+        capturePromiseResolver = null;
+      }
+    }, 4000);
+  });
+}
+
+function triggerShutterFlash() {
+  try {
+    if ('vibrate' in navigator) navigator.vibrate([40, 30, 40]);
+  } catch (e) {}
+
+  const flash = document.createElement('div');
+  flash.style.position = 'fixed';
+  flash.style.inset = '0';
+  flash.style.backgroundColor = '#ffffff';
+  flash.style.opacity = '0.9';
+  flash.style.zIndex = '99999';
+  flash.style.pointerEvents = 'none';
+  flash.style.transition = 'opacity 0.25s ease-out';
+  document.body.appendChild(flash);
+
+  requestAnimationFrame(() => {
+    flash.style.opacity = '0';
+    setTimeout(() => flash.remove(), 260);
+  });
+}
+
 // ── Snapshot & Share ───────────────────────────────────────────────────────
 function setupCapture() {
   captureBtnEl?.addEventListener('click', async (e) => {
     e.stopPropagation();
+    ignorePlacementUntil = performance.now() + 1000;
+
+    triggerShutterFlash();
 
     // Temporarily hide all UI overlay elements for a clean photo
     const uiWrapper = $('ui-wrapper');
     if (uiWrapper) uiWrapper.style.opacity = '0';
 
     try {
-      setToast('Capturing photo...');
+      setToast('Capturing AR photo...', true);
 
-      // 1. Try Screen Capture API if supported by browser
-      if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+      let capturedBlob = null;
+
+      // Method 1: In-WebXR render snapshot (captures 3D models with camera texture from active frame)
+      try {
+        capturedBlob = await requestARSnapshot();
+      } catch (xrSnapErr) {
+        console.warn('Inside-loop capture fallback:', xrSnapErr);
+      }
+
+      // Method 2: Screen Capture API fallback if supported
+      if (!capturedBlob && navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
         try {
           const stream = await navigator.mediaDevices.getDisplayMedia({
             video: { displaySurface: 'browser' },
@@ -3420,78 +3834,80 @@ function setupCapture() {
           const video = document.createElement('video');
           video.srcObject = stream;
           video.muted = true;
+          video.playsInline = true;
           await video.play();
 
-          await new Promise(r => setTimeout(r, 120));
+          await new Promise((r) => setTimeout(r, 140));
 
           const W = video.videoWidth || window.innerWidth;
           const H = video.videoHeight || window.innerHeight;
 
-          const canvas = document.createElement('canvas');
-          canvas.width = W;
-          canvas.height = H;
-          const ctx = canvas.getContext('2d');
+          const outCanvas = document.createElement('canvas');
+          outCanvas.width = W;
+          outCanvas.height = H;
+          const ctx = outCanvas.getContext('2d', { alpha: false });
           ctx.drawImage(video, 0, 0, W, H);
 
-          stream.getTracks().forEach(t => t.stop());
+          stream.getTracks().forEach((t) => t.stop());
 
-          canvas.toBlob((blob) => {
-            if (blob) downloadBlob(blob);
-          }, 'image/jpeg', 0.95);
-
-          return;
-        } catch (err) {
-          console.warn('getDisplayMedia skipped/fallback:', err);
+          capturedBlob = await new Promise((res) => outCanvas.toBlob(res, 'image/jpeg', 0.95));
+        } catch (screenErr) {
+          console.warn('Screen capture skipped/declined:', screenErr);
         }
       }
 
-      // 2. High-res 3D WebGL Snapshot fallback (UI hidden)
-      const W = window.innerWidth;
-      const H = window.innerHeight;
-
-      const wasXrEnabled = renderer.xr.enabled;
-      renderer.xr.enabled = false;
-
-      if (renderer.xr && renderer.xr.isPresenting) {
-        const xrCam = renderer.xr.getCamera();
-        camera.position.copy(xrCam.position);
-        camera.quaternion.copy(xrCam.quaternion);
-        camera.scale.copy(xrCam.scale);
+      // Method 3: Direct canvas toBlob fallback
+      if (!capturedBlob) {
+        const threeCanvas = $('ar-canvas');
+        if (threeCanvas && threeCanvas.width > 0 && threeCanvas.height > 0) {
+          capturedBlob = await new Promise((res) => threeCanvas.toBlob(res, 'image/jpeg', 0.95));
+        }
       }
 
-      camera.aspect = W / H;
-      camera.updateProjectionMatrix();
-
-      renderer.render(scene, camera);
-      renderer.xr.enabled = wasXrEnabled;
-
-      renderer.domElement.toBlob((blob) => {
-        if (blob) {
-          downloadBlob(blob);
-        } else {
-          setToast('Capture failed.');
-        }
-      }, 'image/png');
+      if (capturedBlob) {
+        await handleSaveOrSharePhoto(capturedBlob, 'bacolod-tourism-ar.jpg');
+        setToast('AR Photo Saved!');
+      } else {
+        setToast('Capture failed.');
+      }
 
     } catch (err) {
-      console.error('Capture failed:', err);
-      setToast('Capture failed.');
+      console.error('AR Capture error:', err);
+      setToast('Capture failed: ' + (err.message || err));
     } finally {
       if (uiWrapper) uiWrapper.style.opacity = '1';
     }
   });
 }
 
-function downloadBlob(blob) {
+async function handleSaveOrSharePhoto(blob, filename = 'bacolod-tourism-ar.jpg') {
+  const file = new File([blob], filename, { type: 'image/jpeg' });
+
+  // 1. Try Native Web Share API (allows direct saving to phone Photos / Gallery)
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: 'Bacolod Tourism AR Photo',
+        text: 'Exploring Bacolod in Augmented Reality! 🎭✨'
+      });
+      return;
+    } catch (shareErr) {
+      if (shareErr.name !== 'AbortError') {
+        console.warn('Web Share failed, fallback to direct download:', shareErr);
+      }
+    }
+  }
+
+  // 2. Direct browser download fallback
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'tourism-ar.png';
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  setToast('Photo downloaded');
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 let toastTimer = null;
