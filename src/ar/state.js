@@ -1,0 +1,108 @@
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+export const arState = {
+  // Three.js instances
+  scene: null,
+  camera: null,
+  renderer: null,
+  controller: null,
+
+  // 3D Objects & Billboard
+  dancerGroup: null,
+  videoMesh: null,
+  videoTex: null,
+  currentGlbModel: null,
+  mixer: null,
+  gltfLoader: new GLTFLoader(),
+
+  // GIF state
+  gifCanvas: null,
+  gifTexture: null,
+  currentGifPlayer: null,
+  isGifMediaType: false,
+
+  // Media state
+  dancerVideo: null,
+  currentMediaUrl: null,
+  currentMediaType: 'default', // 'video' | 'image' | 'default' | '3d'
+  currentTexture: null,
+  isMediaReady: false,
+  mediaLoadToken: 0,
+  currentBlobUrl: null,
+
+  // Session and placement state
+  isPlaced: false,
+  arStarted: false,
+  isThreeInitialized: false,
+  ignorePlacementUntil: 0,
+  placementListenerAttached: false,
+  handlePlacementTap: null,
+
+  // WebXR Hit test & plane detection
+  hitTestSource: null,
+  hitTestSourceRequested: false,
+  floorGridMesh: null,
+  floorGridMaterial: null,
+  fallbackFloorGridMesh: null,
+  detectedFloorHeight: null,
+  lastHitPosition: new THREE.Vector3(),
+  lastHitPoseMatrix: null,
+  detectedPlaneGrids: new Map(),
+  planeDetectionAvailable: false,
+
+  // Chroma key state
+  currentKeyMode: 2,
+  currentKeyColor: new THREE.Color(0x000000),
+  currentSimilarity: 0.38,
+  currentSmoothness: 0.10,
+  hasFilenameKeyTag: false,
+
+  // Audio state
+  audioListener: null,
+  positionalAudio: null,
+  audioLoader: null,
+  currentAudioUrl: null,
+  audioBuffer: null,
+  isAudioReady: false,
+  isAudioMuted: false,
+  audioLoadToken: 0,
+  dancerAudioEl: null,
+  lastAudioSyncTime: 0,
+
+  // Touch & orientation coordinates
+  lastTapScreenX: null,
+  lastTapScreenY: null,
+  initialPinchDist: null,
+  basePinchScale: 1.0,
+  currentDancerScale: 1.0,
+  xrLastLandscape: null,
+  currentOrientationIsLandscape: null,
+  currentOrientationState: { isLandscape: false, angle: 0 },
+  isTransitioningOrientation: false,
+  pendingOrientationTarget: null,
+  orientationTransitionTimer: null,
+  lastDeviceOrientationAngle: null,
+  lastDeviceOrientationTimestamp: 0,
+  lastOrientationAngle: null,
+
+  // QR state
+  html5QrCode: null,
+  availableCameras: [],
+  selectedCameraIndex: 0,
+  qrCameraTask: Promise.resolve(),
+  isQrProcessing: false,
+  activeQrCameraId: null,
+  restartQrTimer: null,
+
+  // Geolocation state
+  isLocationVerified: false,
+
+  // Capture state
+  captureRenderTarget: null,
+  isCaptureRequested: false,
+  capturePromiseResolver: null,
+  cameraBackgroundScene: null,
+  cameraBackgroundQuad: null,
+  cameraBackgroundMaterial: null
+};

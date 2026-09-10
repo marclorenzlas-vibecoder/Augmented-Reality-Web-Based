@@ -2323,14 +2323,12 @@ body.landscape #ARButton {
 /* ──────────────────────────────────────────
    WebXR DOM Overlay Transparency
 ────────────────────────────────────────── */
-:xr-overlay,
-::xr-overlay {
+::backdrop {
   background: transparent !important;
   background-color: transparent !important;
 }
 
-#ui-overlay:xr-overlay,
-#ui-overlay::xr-overlay {
+#ui-overlay::backdrop {
   background: transparent !important;
   background-color: transparent !important;
 }

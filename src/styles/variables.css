@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Outfit:wght@600;700;800;900&display=swap');
+
+/* ──────────────────────────────────────────
+   Design Tokens - Bacolod City Tourism Palette
+   Source: Bacolod City Tourism Development Office Brand Identity
+────────────────────────────────────────── */
+:root {
+  /* ── Bacolod Festival Brand Colors ── */
+  --bacolod-yellow: #FBB03B;
+  --bacolod-orange: #EE6327;
+  --bacolod-purple: #924A96;
+  --bacolod-blue: #0C76BA;
+
+  /* ── White Base & Pure Light Surfaces ── */
+  --c-bg: #ffffff;
+  --c-bg-subtle: #f8fafc;
+  --c-surface: rgba(255, 255, 255, 0.94);
+  --c-surface-2: rgba(248, 250, 252, 0.96);
+  --c-surface-card: #ffffff;
+  --c-border: rgba(15, 23, 42, 0.08);
+  --c-border-md: rgba(15, 23, 42, 0.14);
+  --c-border-brand: rgba(12, 118, 186, 0.25);
+
+  /* ── High-Contrast Modern Typography ── */
+  --c-text: #0f172a;
+  --c-text-sub: #334155;
+  --c-muted: #64748b;
+  --c-danger: #ef4444;
+
+  /* ── Semantic Accent Variables ── */
+  --c-accent: var(--bacolod-orange);
+  --c-accent-yellow: var(--bacolod-yellow);
+  --c-accent-orange: var(--bacolod-orange);
+  --c-accent-purple: var(--bacolod-purple);
+  --c-accent-blue: var(--bacolod-blue);
+
+  /* ── Multi-Color Gradient Stripes ── */
+  --tribal-gradient: linear-gradient(90deg,
+      var(--bacolod-purple) 0%,
+      var(--bacolod-blue) 33%,
+      var(--bacolod-orange) 66%,
+      var(--bacolod-yellow) 100%);
+
+  /* ── Elevation Shadows ── */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 8px 24px rgba(12, 118, 186, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.09), 0 4px 12px rgba(238, 99, 39, 0.06);
+
+  /* ── Geometry & Layout ── */
+  --radius-sm: 10px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
+
+  --blur-sm: blur(6px);
+  --blur-md: blur(12px);
+  --blur-lg: blur(20px);
+
+  --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --orientation-fade-duration: 0.08s;
+
+  --ar-edge-l: calc(max(env(safe-area-inset-left, 0px), 0px) + 44px);
+  --ar-edge-r: calc(max(env(safe-area-inset-right, 0px), 0px) + 44px);
+  --ar-edge-t: calc(max(env(safe-area-inset-top,   0px), 8px) + 14px);
+  --ar-edge-b: calc(max(env(safe-area-inset-bottom,0px), 8px) + 16px);
+}
