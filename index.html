@@ -31,26 +31,62 @@
   <canvas id="ar-canvas"></canvas>
 
   <!-- ── Geolocation Gate (Exclusive to The NGC within 500m) ── -->
-  <div id="location-gate" class="location-gate">
-    <div class="location-gate-card">
-      <div class="location-gate-icon-wrapper">
-        <div class="location-radar-ring"></div>
-        <div class="location-radar-ring delay"></div>
-        <div id="location-gate-icon" class="location-gate-icon">📍</div>
-      </div>
-      <div class="location-badge">Location Restricted</div>
-      <h2 id="location-gate-title" class="location-gate-title">Verifying Location…</h2>
-      <p id="location-gate-desc" class="location-gate-desc">
-        This Augmented Reality experience is exclusively available at <strong>The NGC (New Government Center)</strong> within a 500m radius.<br><br>
-        Please allow location access to continue.
-      </p>
-      <div id="location-gate-distance" class="location-gate-distance hidden"></div>
-      <div id="location-gate-actions" class="location-gate-actions hidden">
-        <button id="location-retry-btn" class="btn btn--location" type="button">
-          <span>📍 Enable Location &amp; Verify</span>
-        </button>
+  <div id="location-gate" class="screen screen--location">
+    <!-- Top Bacolod Mosaic Ribbon -->
+    <div class="tribal-ribbon tribal-ribbon--top" aria-hidden="true"></div>
+
+    <div class="location-container">
+      <!-- Top Brand Header for Bacolod City (Matching main app) -->
+      <header class="qr-header location-header">
+        <img src="/src/assets/masskara2.png" alt="MassKara Festival Mask" class="qr-header-emblem" />
+        <div class="city-badge">
+          <span>Bacolod City · City of Smiles</span>
+        </div>
+        <h1 class="qr-title">
+          <span class="qr-title-text">Bacolod Tourism</span>
+          <span class="ar-badge">AR</span>
+        </h1>
+      </header>
+
+      <!-- Main Card (Matching main app white/warm card aesthetic) -->
+      <div class="location-card">
+        <div class="location-icon-wrapper">
+          <div class="location-radar-ring"></div>
+          <div class="location-radar-ring delay"></div>
+          <div id="location-gate-icon" class="location-icon">
+            <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
+          </div>
+        </div>
+
+        <div id="location-badge" class="location-badge">Location Restricted</div>
+        <h2 id="location-gate-title" class="location-title">Verifying Location…</h2>
+
+        <div id="location-gate-desc" class="location-desc-box">
+          <p class="location-desc-text">
+            This Augmented Reality experience is exclusively available at <strong>The NGC (New Government Center)</strong> or authorized team zones.
+          </p>
+          <p class="location-desc-sub">Please allow location access to continue.</p>
+        </div>
+
+        <div id="location-gate-distance" class="location-distance-pill hidden"></div>
+
+        <div id="location-gate-actions" class="location-actions hidden">
+          <button id="location-retry-btn" class="btn btn--location" type="button">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
+            <span>Enable Location &amp; Verify</span>
+          </button>
+        </div>
       </div>
     </div>
+
+    <!-- Bottom Bacolod Mosaic Ribbon -->
+    <div class="tribal-ribbon tribal-ribbon--bottom" aria-hidden="true"></div>
   </div>
 
   <!-- ── SCREEN 1 : Bacolod Tourism QR Scanner ── -->

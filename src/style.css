@@ -1189,7 +1189,8 @@ body.landscape .screen--qr .btn--gallery {
   font-size: 12px !important;
 }
 
-body.landscape .screen--qr .tribal-ribbon--top {
+body.landscape .screen--qr .tribal-ribbon--top,
+body.landscape .screen--location .tribal-ribbon--top {
   position: absolute !important;
   left: 0 !important;
   right: auto !important;
@@ -1205,7 +1206,8 @@ body.landscape .screen--qr .tribal-ribbon--top {
   transform: none !important;
 }
 
-body.landscape .screen--qr .tribal-ribbon--bottom {
+body.landscape .screen--qr .tribal-ribbon--bottom,
+body.landscape .screen--location .tribal-ribbon--bottom {
   position: absolute !important;
   right: 0 !important;
   left: auto !important;
@@ -1300,7 +1302,8 @@ body.landscape .screen--qr .tribal-ribbon--bottom {
     font-size: 12px !important;
   }
 
-  .screen--qr .tribal-ribbon--top {
+  .screen--qr .tribal-ribbon--top,
+  .screen--location .tribal-ribbon--top {
     position: absolute !important;
     left: 0 !important;
     right: auto !important;
@@ -1316,7 +1319,9 @@ body.landscape .screen--qr .tribal-ribbon--bottom {
     transform: none !important;
   }
 
-  .screen--qr .tribal-ribbon--bottom {
+  .screen--qr .tribal-ribbon--bottom,
+  .screen--location .tribal-ribbon--bottom {
+    position: absolute !important;
     right: 0 !important;
     left: auto !important;
     top: 0 !important;
@@ -1752,6 +1757,8 @@ body.is-portrait .tribal-ribbon--top,
 #ui-overlay.is-portrait .tribal-ribbon--top,
 .ui-wrapper.is-portrait .tribal-ribbon--top,
 body.is-portrait .screen--qr .tribal-ribbon--top,
+body.is-portrait .screen--location .tribal-ribbon--top,
+.screen--location .tribal-ribbon--top,
 body:not(.landscape):not(.is-landscape) .tribal-ribbon--top {
   position: absolute !important;
   top: 0 !important;
@@ -1775,6 +1782,8 @@ body.is-portrait .tribal-ribbon--bottom,
 #ui-overlay.is-portrait .tribal-ribbon--bottom,
 .ui-wrapper.is-portrait .tribal-ribbon--bottom,
 body.is-portrait .screen--qr .tribal-ribbon--bottom,
+body.is-portrait .screen--location .tribal-ribbon--bottom,
+.screen--location .tribal-ribbon--bottom,
 body:not(.landscape):not(.is-landscape) .tribal-ribbon--bottom {
   position: absolute !important;
   bottom: 0 !important;
@@ -1803,7 +1812,9 @@ body.landscape .tribal-ribbon--top,
 body.simulated-landscape .tribal-ribbon--top,
 .simulated-landscape .tribal-ribbon--top,
 body.landscape .screen--qr .tribal-ribbon--top,
-body.is-landscape .screen--qr .tribal-ribbon--top {
+body.is-landscape .screen--qr .tribal-ribbon--top,
+body.landscape .screen--location .tribal-ribbon--top,
+body.is-landscape .screen--location .tribal-ribbon--top {
   position: absolute !important;
   top: 0 !important;
   bottom: 0 !important;
@@ -1830,7 +1841,9 @@ body.landscape .tribal-ribbon--bottom,
 body.simulated-landscape .tribal-ribbon--bottom,
 .simulated-landscape .tribal-ribbon--bottom,
 body.landscape .screen--qr .tribal-ribbon--bottom,
-body.is-landscape .screen--qr .tribal-ribbon--bottom {
+body.is-landscape .screen--qr .tribal-ribbon--bottom,
+body.landscape .screen--location .tribal-ribbon--bottom,
+body.is-landscape .screen--location .tribal-ribbon--bottom {
   position: absolute !important;
   top: 0 !important;
   bottom: 0 !important;
@@ -1849,7 +1862,8 @@ body.is-landscape .screen--qr .tribal-ribbon--bottom {
 
 @media (orientation: landscape) {
   body:not(.is-portrait) .tribal-ribbon--top,
-  .screen--qr .tribal-ribbon--top {
+  .screen--qr .tribal-ribbon--top,
+  .screen--location .tribal-ribbon--top {
     position: absolute !important;
     top: 0 !important;
     bottom: 0 !important;
@@ -1867,7 +1881,8 @@ body.is-landscape .screen--qr .tribal-ribbon--bottom {
   }
 
   body:not(.is-portrait) .tribal-ribbon--bottom,
-  .screen--qr .tribal-ribbon--bottom {
+  .screen--qr .tribal-ribbon--bottom,
+  .screen--location .tribal-ribbon--bottom {
     position: absolute !important;
     top: 0 !important;
     bottom: 0 !important;
@@ -2338,93 +2353,172 @@ body:has(#qr-screen:not(.hidden)) #ARButton,
 }
 
 /* ──────────────────────────────────────────
-   Location Geofence Gate Modal (500m NGC)
+   Location Geofence Screen (Matching Main App)
 ────────────────────────────────────────── */
-.location-gate {
+.screen--location {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(251, 176, 59, 0.14) 0%, transparent 45%),
+    radial-gradient(circle at 90% 18%, rgba(146, 74, 150, 0.12) 0%, transparent 40%),
+    radial-gradient(circle at 50% 95%, rgba(12, 118, 186, 0.12) 0%, transparent 50%),
+    #ffffff;
   z-index: 9999;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
-  padding: 24px 20px;
-  background: radial-gradient(circle at 50% 30%, rgba(30, 41, 59, 0.97) 0%, rgba(15, 23, 42, 0.99) 100%);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.45s;
+  align-items: center;
+  padding: max(env(safe-area-inset-top), 38px) 18px max(env(safe-area-inset-bottom), 40px);
+  overflow-y: auto;
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.4s;
   opacity: 1;
   visibility: visible;
+  box-sizing: border-box;
 }
 
-.location-gate.fade-out {
+.screen--location.fade-out {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
 }
 
-.location-gate.hidden {
+.screen--location.hidden {
   display: none !important;
 }
 
-.location-gate-card {
+.screen--location .location-container {
   width: 100%;
-  max-width: 400px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 24px;
-  padding: 32px 24px 28px;
+  max-width: 420px;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  z-index: 2;
+}
+
+.screen--location .location-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65), 0 0 40px rgba(238, 99, 39, 0.12);
+  gap: 4px;
+}
+
+.screen--location .qr-header-emblem {
+  width: 48px;
+  height: auto;
+  filter: drop-shadow(0 4px 10px rgba(238, 99, 39, 0.25));
+  margin-bottom: 2px;
+}
+
+.screen--location .city-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 12px;
+  background: rgba(12, 118, 186, 0.08);
+  border: 1px solid rgba(12, 118, 186, 0.25);
+  border-radius: 999px;
+  color: #0c76ba;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.screen--location .qr-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 2px 0 0;
+}
+
+.screen--location .qr-title-text {
+  font-family: var(--font-heading, 'Outfit', sans-serif);
+  font-size: 26px;
+  font-weight: 800;
+  color: #8c2d08;
+  letter-spacing: -0.3px;
+}
+
+.screen--location .ar-badge {
+  background: linear-gradient(135deg, #fbb03b 0%, #ee6327 100%);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 2px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 6px rgba(238, 99, 39, 0.35);
+}
+
+/* White Card matching main app */
+.location-card {
+  width: 100%;
+  background: #ffffff;
+  border: 1.5px solid rgba(238, 99, 39, 0.2);
+  border-radius: 22px;
+  padding: 24px 20px 22px;
+  text-align: center;
+  box-shadow: 0 16px 40px -10px rgba(238, 99, 39, 0.12), 0 4px 16px rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
   align-items: center;
   position: relative;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
-.location-gate-card::before {
+.location-card::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, #ee6327, #fbb03b, #10b981, #ee6327);
-  background-size: 200% 100%;
-  animation: ribbon-slide 4s linear infinite;
+  background: linear-gradient(90deg, #ee6327, #fbb03b, #10b981, #0c76ba);
 }
 
-.location-gate-icon-wrapper {
+.location-icon-wrapper {
   position: relative;
-  width: 76px;
-  height: 76px;
+  width: 68px;
+  height: 68px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
-.location-gate-icon {
-  width: 60px;
-  height: 60px;
+.location-icon {
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
-  background: rgba(238, 99, 39, 0.18);
-  border: 2px solid rgba(238, 99, 39, 0.5);
+  background: rgba(238, 99, 39, 0.1);
+  border: 2px solid rgba(238, 99, 39, 0.4);
+  color: #ee6327;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
   position: relative;
   z-index: 2;
-  box-shadow: 0 0 20px rgba(238, 99, 39, 0.35);
+  box-shadow: 0 4px 14px rgba(238, 99, 39, 0.2);
   transition: all 0.3s ease;
+}
+
+.location-icon svg {
+  display: block;
 }
 
 .location-radar-ring {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 2px solid rgba(238, 99, 39, 0.6);
+  border: 2px solid rgba(238, 99, 39, 0.5);
   animation: location-radar-pulse 2.2s cubic-bezier(0.2, 0.8, 0.4, 1) infinite;
   pointer-events: none;
 }
@@ -2444,99 +2538,157 @@ body:has(#qr-screen:not(.hidden)) #ARButton,
   }
 }
 
-.location-gate.state-verified .location-gate-icon {
-  background: rgba(16, 185, 129, 0.2);
-  border-color: #10b981;
-  box-shadow: 0 0 24px rgba(16, 185, 129, 0.4);
+/* State Icon & Colors */
+.screen--location.state-verified .location-icon {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #10b981;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
 }
 
-.location-gate.state-verified .location-radar-ring {
-  border-color: rgba(16, 185, 129, 0.6);
+.screen--location.state-verified .location-radar-ring {
+  border-color: rgba(16, 185, 129, 0.5);
 }
 
-.location-gate.state-denied .location-gate-icon,
-.location-gate.state-restricted .location-gate-icon {
-  background: rgba(239, 68, 68, 0.18);
-  border-color: rgba(239, 68, 68, 0.6);
-  box-shadow: 0 0 24px rgba(239, 68, 68, 0.35);
+.screen--location.state-denied .location-icon {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #dc2626;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.2);
 }
 
-.location-gate.state-denied .location-radar-ring,
-.location-gate.state-restricted .location-radar-ring {
-  animation: none;
-  display: none;
+.screen--location.state-denied .location-radar-ring,
+.screen--location.state-restricted .location-radar-ring {
+  display: none !important;
+}
+
+.screen--location.state-restricted .location-icon {
+  background: rgba(238, 99, 39, 0.1);
+  border-color: rgba(238, 99, 39, 0.45);
+  color: #ee6327;
+  box-shadow: 0 4px 14px rgba(238, 99, 39, 0.2);
 }
 
 .location-badge {
   display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 10.5px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  padding: 4px 12px;
+  letter-spacing: 0.8px;
+  padding: 3px 12px;
   border-radius: 999px;
-  background: rgba(251, 176, 59, 0.15);
-  color: #fbb03b;
-  border: 1px solid rgba(251, 176, 59, 0.35);
-  margin-bottom: 12px;
+  background: rgba(238, 99, 39, 0.08);
+  color: #c2410c;
+  border: 1px solid rgba(238, 99, 39, 0.22);
+  margin-bottom: 8px;
 }
 
-.location-gate-title {
-  font-family: 'Outfit', sans-serif;
-  font-size: 1.35rem;
+.screen--location.state-verified .location-badge {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.screen--location.state-denied .location-badge {
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.location-title {
+  font-family: var(--font-heading, 'Outfit', sans-serif);
+  font-size: 1.25rem;
   font-weight: 800;
-  color: #ffffff;
+  color: #1e293b;
   margin: 0 0 10px;
   line-height: 1.3;
 }
 
-.location-gate-desc {
-  font-size: 0.88rem;
-  line-height: 1.55;
-  color: rgba(255, 255, 255, 0.78);
-  margin: 0 0 16px;
-}
-
-.location-gate-desc strong {
-  color: #ffffff;
-}
-
-.location-gate-distance {
+.location-desc-box {
   width: 100%;
-  padding: 10px 14px;
-  background: rgba(238, 99, 39, 0.1);
-  border: 1px solid rgba(238, 99, 39, 0.35);
-  border-radius: 12px;
-  color: #fbb03b;
-  font-size: 0.86rem;
-  font-weight: 600;
-  margin-bottom: 18px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  margin-bottom: 14px;
+  background: rgba(238, 99, 39, 0.06);
+  border: 1px solid rgba(238, 99, 39, 0.2);
+  color: #9a3412;
+}
+
+.screen--location.state-denied .location-desc-box {
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #b91c1c;
+}
+
+.screen--location.state-verified .location-desc-box {
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #065f46;
+}
+
+.location-desc-box p {
+  margin: 0 0 6px;
+}
+
+.location-desc-box p:last-child {
+  margin-bottom: 0;
+}
+
+.location-desc-box strong {
+  font-weight: 700;
+  color: inherit;
+}
+
+.location-desc-box .inline-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin: 0 2px;
+}
+
+.location-distance-pill {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  background: rgba(251, 176, 59, 0.12);
+  border: 1px solid rgba(251, 176, 59, 0.35);
+  border-radius: 10px;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
 }
 
-.location-gate-actions {
+.location-distance-pill svg {
+  flex-shrink: 0;
+}
+
+.location-actions {
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
 .btn--location {
   width: 100%;
-  padding: 13px 20px;
-  background: linear-gradient(135deg, #ee6327 0%, #d84b0d 100%);
+  padding: 12px 18px;
+  background: linear-gradient(135deg, #ee6327 0%, #e05215 100%);
   color: #ffffff;
   border: none;
   border-radius: 14px;
-  font-family: 'Outfit', sans-serif;
-  font-size: 0.95rem;
+  font-family: var(--font-heading, 'Outfit', sans-serif);
+  font-size: 0.92rem;
   font-weight: 700;
-  letter-spacing: 0.25px;
+  letter-spacing: 0.2px;
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(238, 99, 39, 0.38);
+  box-shadow: 0 6px 18px rgba(238, 99, 39, 0.32);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2546,4 +2698,95 @@ body:has(#qr-screen:not(.hidden)) #ARButton,
 
 .btn--location:active {
   transform: scale(0.98);
+}
+
+.btn--location svg {
+  flex-shrink: 0;
+}
+
+/* ──────────────────────────────────────────
+   Location Geofence Screen — Landscape Mode
+────────────────────────────────────────── */
+@media (orientation: landscape) {
+  .screen--location {
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding: max(env(safe-area-inset-top), 16px) max(env(safe-area-inset-right), 40px) max(env(safe-area-inset-bottom), 16px) max(env(safe-area-inset-left), 40px) !important;
+    overflow-y: auto !important;
+  }
+
+  .screen--location .location-container {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: clamp(14px, 3.5vw, 28px) !important;
+    max-width: 720px !important;
+    width: 100% !important;
+  }
+
+  .screen--location .location-header {
+    flex: 0 0 auto !important;
+    max-width: 220px !important;
+    text-align: center !important;
+    gap: 2px !important;
+  }
+
+  .screen--location .qr-header-emblem {
+    width: clamp(28px, 6.5vh, 40px) !important;
+    margin-bottom: 0 !important;
+  }
+
+  .screen--location .city-badge {
+    padding: 2px 8px !important;
+    font-size: 9.5px !important;
+  }
+
+  .screen--location .qr-title-text {
+    font-size: clamp(17px, 4vh, 21px) !important;
+  }
+
+  .screen--location .location-card {
+    flex: 1 1 320px !important;
+    max-width: 380px !important;
+    padding: clamp(12px, 2.5vh, 18px) clamp(14px, 2.5vw, 20px) !important;
+  }
+
+  .screen--location .location-icon-wrapper {
+    width: 50px !important;
+    height: 50px !important;
+    margin-bottom: 6px !important;
+  }
+
+  .screen--location .location-icon {
+    width: 42px !important;
+    height: 42px !important;
+  }
+
+  .screen--location .location-icon svg {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  .screen--location .location-title {
+    font-size: 1.1rem !important;
+    margin-bottom: 6px !important;
+  }
+
+  .screen--location .location-desc-box {
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .screen--location .location-distance-pill {
+    padding: 6px 10px !important;
+    font-size: 11.5px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .screen--location .btn--location {
+    padding: 9px 14px !important;
+    font-size: 0.85rem !important;
+  }
 }
