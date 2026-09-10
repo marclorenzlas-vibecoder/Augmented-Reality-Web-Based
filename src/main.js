@@ -150,10 +150,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     resetArSessionState();
     dom.uiOverlay?.classList.add('hidden');
-    dom.qrScreen?.classList.remove('hidden');
 
     const arBtn = document.getElementById('ARButton');
-    if (arBtn) arBtn.style.display = 'none';
+    if (arBtn && arState.isMediaReady) arBtn.style.display = 'block';
     arState.dancerVideo?.pause();
     stopPositionalAudio();
 
@@ -161,8 +160,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     dom.captureBtn?.classList.add('hidden');
     dom.recenterBtn?.classList.add('hidden');
     dom.toast?.classList.add('hidden');
-
-    restartQrCameraSoon();
   });
 
   // 7. Geofence & Camera Startup Check (Exclusive to NGC within 500m)

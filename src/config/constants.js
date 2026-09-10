@@ -3,6 +3,8 @@ import * as THREE from 'three';
 export const RETICLE_ACCENT = 0xee6327; // Bacolod Orange
 export const RETICLE_LIGHT = 0xfbb03b;  // Bacolod Yellow
 
+export const DEFAULT_MEDIA_URL = import.meta.env.VITE_DEFAULT_MEDIA_URL || 'https://file.garden/aoVl-M0-p1TyFay4/masskara1';
+
 export const VIDEO_ASPECT = 9 / 16;
 export const BILLBOARD_HEIGHT = 5.0;    // 5 meters scale
 export const PLACEMENT_FLOAT_AMPLITUDE = 0.04;

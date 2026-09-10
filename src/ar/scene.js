@@ -9,6 +9,23 @@ import { setupWebXR, handleSessionEndCleanup } from './webxrManager.js';
 import { updateUILayout, getEffectiveOrientation } from '../ui/orientationController.js';
 import { executeCaptureFrame } from '../ui/captureController.js';
 import { stopPositionalAudio } from '../audio/audioController.js';
+import { loadMediaFromQR } from '../media/mediaLoader.js';
+import { DEFAULT_MEDIA_URL } from '../config/constants.js';
+
+export async function launchDirectAR() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetMedia = urlParams.get('media') || urlParams.get('model') || urlParams.get('url') || urlParams.get('qr') || DEFAULT_MEDIA_URL;
+
+  if (dom.qrScreen) dom.qrScreen.classList.add('hidden');
+
+  if (!arState.isThreeInitialized) {
+    initThreeScene();
+    arState.isThreeInitialized = true;
+  }
+
+  loadMediaFromQR(targetMedia);
+  dom.uiOverlay?.classList.remove('hidden');
+}
 
 export async function startUniversalAR() {
   resetArSessionState();

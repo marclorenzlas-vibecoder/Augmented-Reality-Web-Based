@@ -144,9 +144,8 @@ export function handleSessionEndCleanup() {
   document.body.classList.remove('landscape');
 
   uiOverlayEl?.classList.add('hidden');
-  dom.qrScreen?.classList.remove('hidden');
   const arBtn = document.getElementById('ARButton');
-  if (arBtn) arBtn.style.display = 'none';
+  if (arBtn && arState.isMediaReady) arBtn.style.display = 'block';
 
   const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
   dancerVideo?.pause();
@@ -157,6 +156,4 @@ export function handleSessionEndCleanup() {
   dom.captureBtn?.classList.add('hidden');
   dom.recenterBtn?.classList.add('hidden');
   dom.toast?.classList.add('hidden');
-
-  restartQrCameraSoon();
 }

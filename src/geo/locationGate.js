@@ -1,7 +1,7 @@
 import { arState } from '../ar/state.js';
 import { $ } from '../ui/domElements.js';
 import { ALLOWED_LOCATIONS, GEO_ICONS } from '../config/locations.js';
-import { initCameraWithPermissionCheck } from '../scanner/qrScanner.js';
+import { launchDirectAR } from '../ar/scene.js';
 
 export function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371e3; // Earth's mean radius in meters
@@ -28,7 +28,7 @@ export function initLocationGateCheck() {
   const retryBtn = $('location-retry-btn');
 
   if (!gateEl) {
-    initCameraWithPermissionCheck();
+    launchDirectAR();
     return;
   }
 
@@ -71,7 +71,7 @@ export function initLocationGateCheck() {
     if (descEl) {
       descEl.innerHTML = `
         <p>You are inside the authorized <strong>${radiusLabel} geofence zone</strong>.</p>
-        <p>Starting camera &amp; AR scanner…</p>
+        <p>Loading Augmented Reality experience…</p>
       `;
     }
     if (distEl) {
@@ -85,7 +85,7 @@ export function initLocationGateCheck() {
       setTimeout(() => {
         gateEl.classList.add('hidden');
       }, 500);
-      initCameraWithPermissionCheck();
+      launchDirectAR();
     }, 1100);
   }
 
