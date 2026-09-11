@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { arState } from '../ar/state.js';
 import { dom, $ } from './domElements.js';
+import ribbonSvg from '../assets/bacolod-mosaic-ribbon.svg';
 
 export function setupDeviceOrientationListeners() {
   window.addEventListener('deviceorientation', (e) => {
@@ -155,6 +156,11 @@ function _applyARControlsLandscape(deg) {
   // Restore any reparented elements back into uiWrapper
   _unpinARControls();
 
+  // If AR is not actively running, never show AR controls
+  if (!arState.arStarted) {
+    return;
+  }
+
   // Hide information drawer when rotating so it never blocks the screen
   const historyModal = document.getElementById('history-modal');
   if (historyModal) {
@@ -271,44 +277,8 @@ function _applyARControlsLandscape(deg) {
     dock.style.setProperty('z-index', '140', 'important');
   }
 
-  // 5) Tribal ribbons: running along top and bottom of the landscape view
-  const ribbonsTop = document.querySelectorAll('#ui-wrapper .tribal-ribbon--top, .tribal-ribbon--top');
-  ribbonsTop.forEach(r => {
-    r.style.setProperty('position', 'absolute', 'important');
-    r.style.setProperty('top', '0', 'important');
-    r.style.setProperty('left', '0', 'important');
-    r.style.setProperty('right', '0', 'important');
-    r.style.setProperty('bottom', 'auto', 'important');
-    r.style.setProperty('width', '100%', 'important');
-    r.style.setProperty('height', '30px', 'important');
-    r.style.setProperty('background-image', "url('/bacolod-mosaic-ribbon.svg')", 'important');
-    r.style.setProperty('background-repeat', 'repeat-x', 'important');
-    r.style.setProperty('background-size', '360px 30px', 'important');
-    r.style.setProperty('display', 'block', 'important');
-    r.style.setProperty('opacity', '1', 'important');
-    r.style.setProperty('visibility', 'visible', 'important');
-    r.style.setProperty('z-index', '100', 'important');
-    r.style.setProperty('pointer-events', 'none', 'important');
-  });
-
-  const ribbonsBottom = document.querySelectorAll('#ui-wrapper .tribal-ribbon--bottom, .tribal-ribbon--bottom');
-  ribbonsBottom.forEach(r => {
-    r.style.setProperty('position', 'absolute', 'important');
-    r.style.setProperty('bottom', '0', 'important');
-    r.style.setProperty('top', 'auto', 'important');
-    r.style.setProperty('left', '0', 'important');
-    r.style.setProperty('right', '0', 'important');
-    r.style.setProperty('width', '100%', 'important');
-    r.style.setProperty('height', '30px', 'important');
-    r.style.setProperty('background-image', "url('/bacolod-mosaic-ribbon.svg')", 'important');
-    r.style.setProperty('background-repeat', 'repeat-x', 'important');
-    r.style.setProperty('background-size', '360px 30px', 'important');
-    r.style.setProperty('display', 'block', 'important');
-    r.style.setProperty('opacity', '1', 'important');
-    r.style.setProperty('visibility', 'visible', 'important');
-    r.style.setProperty('z-index', '100', 'important');
-    r.style.setProperty('pointer-events', 'none', 'important');
-  });
+  // 5) Bacolod Mosaic Ribbons: Top and Bottom in landscape view
+  _ensureARRibbons();
 
   // 6) Toast: Top-center of landscape screen
   const toast = document.getElementById('toast');
@@ -324,6 +294,52 @@ function _applyARControlsLandscape(deg) {
   }
 }
 
+function _ensureARRibbons() {
+  if (!arState.arStarted) return;
+
+  const ribbonsTop = document.querySelectorAll('#ui-overlay > .tribal-ribbon--top, #ui-overlay .tribal-ribbon--top');
+  ribbonsTop.forEach(r => {
+    r.style.setProperty('position', 'absolute', 'important');
+    r.style.setProperty('top', '0', 'important');
+    r.style.setProperty('left', '0', 'important');
+    r.style.setProperty('right', '0', 'important');
+    r.style.setProperty('bottom', 'auto', 'important');
+    r.style.setProperty('width', '100%', 'important');
+    r.style.setProperty('height', '30px', 'important');
+    r.style.setProperty('background-image', `url("${ribbonSvg}")`, 'important');
+    r.style.setProperty('background-repeat', 'repeat-x', 'important');
+    r.style.setProperty('background-size', '360px 30px', 'important');
+    r.style.setProperty('background-position', 'left center', 'important');
+    r.style.setProperty('display', 'block', 'important');
+    r.style.setProperty('opacity', '1', 'important');
+    r.style.setProperty('visibility', 'visible', 'important');
+    r.style.setProperty('z-index', '120', 'important');
+    r.style.setProperty('pointer-events', 'none', 'important');
+    r.style.setProperty('transform', 'none', 'important');
+  });
+
+  const ribbonsBottom = document.querySelectorAll('#ui-overlay > .tribal-ribbon--bottom, #ui-overlay .tribal-ribbon--bottom');
+  ribbonsBottom.forEach(r => {
+    r.style.setProperty('position', 'absolute', 'important');
+    r.style.setProperty('bottom', '0', 'important');
+    r.style.setProperty('top', 'auto', 'important');
+    r.style.setProperty('left', '0', 'important');
+    r.style.setProperty('right', '0', 'important');
+    r.style.setProperty('width', '100%', 'important');
+    r.style.setProperty('height', '30px', 'important');
+    r.style.setProperty('background-image', `url("${ribbonSvg}")`, 'important');
+    r.style.setProperty('background-repeat', 'repeat-x', 'important');
+    r.style.setProperty('background-size', '360px 30px', 'important');
+    r.style.setProperty('background-position', 'left center', 'important');
+    r.style.setProperty('display', 'block', 'important');
+    r.style.setProperty('opacity', '1', 'important');
+    r.style.setProperty('visibility', 'visible', 'important');
+    r.style.setProperty('z-index', '120', 'important');
+    r.style.setProperty('pointer-events', 'none', 'important');
+    r.style.setProperty('transform', 'none', 'important');
+  });
+}
+
 function _unpinARControls() {
   const topBarEl = document.querySelector('.top-bar') || document.querySelector('.top-actions');
   const elements = [
@@ -334,8 +350,6 @@ function _unpinARControls() {
     document.getElementById('capture-btn'),
     document.getElementById('info-toggle-btn'),
     document.querySelector('.dock'),
-    document.querySelector('.tribal-ribbon--top'),
-    document.querySelector('.tribal-ribbon--bottom'),
     document.getElementById('toast'),
   ];
 
@@ -366,6 +380,10 @@ function _unpinARControls() {
   _movedEls.clear();
 }
 
+export function unpinARControls() {
+  _unpinARControls();
+}
+
 export function applyOrientationClasses(orientationInfo) {
   const isLandscape = !!orientationInfo?.isLandscape;
   const angle = orientationInfo?.angle ?? 90;
@@ -377,7 +395,6 @@ export function applyOrientationClasses(orientationInfo) {
     document.body.classList.remove('drawer-open');
   }
 
-
   arState.currentOrientationIsLandscape = isLandscape;
   arState.currentOrientationState = { isLandscape, angle };
 
@@ -386,11 +403,24 @@ export function applyOrientationClasses(orientationInfo) {
 
   const isNativeLandscape = window.innerWidth > window.innerHeight;
 
-  // Keep overlay hidden if AR hasn't started yet
-  if (!arState.arStarted && overlay?.classList.contains('hidden')) {
-    overlay.style.setProperty('visibility', 'hidden', 'important');
-    overlay.style.setProperty('opacity', '0', 'important');
-    overlay.style.setProperty('pointer-events', 'none', 'important');
+  // Keep overlay and all AR controls strictly hidden if AR is not actively running
+  if (!arState.arStarted) {
+    _unpinARControls();
+    if (overlay) {
+      overlay.classList.add('hidden');
+      overlay.style.setProperty('visibility', 'hidden', 'important');
+      overlay.style.setProperty('opacity', '0', 'important');
+      overlay.style.setProperty('pointer-events', 'none', 'important');
+      overlay.style.setProperty('display', 'none', 'important');
+    }
+    const exitBtn = document.getElementById('exit-ar-btn');
+    if (exitBtn) {
+      exitBtn.classList.add('hidden');
+      exitBtn.style.setProperty('display', 'none', 'important');
+      exitBtn.style.setProperty('visibility', 'hidden', 'important');
+      exitBtn.style.setProperty('opacity', '0', 'important');
+      exitBtn.style.setProperty('pointer-events', 'none', 'important');
+    }
     return;
   }
 
@@ -511,6 +541,9 @@ export function applyOrientationClasses(orientationInfo) {
       uiWrapper.style.setProperty('pointer-events', 'none', 'important');
       uiWrapper.style.setProperty('overflow', '', 'important');
     }
+
+    // Ensure Bacolod Mosaic Ribbons: Top and Bottom in portrait view
+    _ensureARRibbons();
   }
 
   const width = window.innerWidth;

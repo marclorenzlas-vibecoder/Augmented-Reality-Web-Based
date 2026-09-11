@@ -46,6 +46,22 @@
           <span class="qr-title-text">Bacolod Tourism</span>
           <span class="ar-badge">AR</span>
         </h1>
+        <!-- Geofence Gate Toggle (Enable/Disable Restriction) -->
+        <div class="geofence-toggle-wrap">
+          <label class="geofence-toggle-label" title="Enable or disable 500m NGC geofence gate">
+            <span class="geofence-toggle-icon">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </span>
+            <span class="geofence-toggle-text">Geofence: <strong class="geofence-status-text">Active</strong></span>
+            <span class="toggle-switch">
+              <input type="checkbox" class="geofence-toggle-input" checked aria-label="Toggle Geofence Restriction" />
+              <span class="toggle-switch-slider"></span>
+            </span>
+          </label>
+        </div>
       </header>
 
       <!-- Centered Card Anchor (Matching landing-button-anchor) -->
@@ -108,10 +124,61 @@
           <span class="qr-title-text">Bacolod Tourism</span>
           <span class="ar-badge">AR</span>
         </h1>
+        <!-- Geofence Gate Toggle (Enable/Disable Restriction) -->
+        <div class="geofence-toggle-wrap">
+          <label class="geofence-toggle-label" title="Enable or disable 500m NGC geofence gate">
+            <span class="geofence-toggle-icon">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </span>
+            <span class="geofence-toggle-text">Geofence: <strong class="geofence-status-text">Active</strong></span>
+            <span class="toggle-switch">
+              <input type="checkbox" class="geofence-toggle-input" checked aria-label="Toggle Geofence Restriction" />
+              <span class="toggle-switch-slider"></span>
+            </span>
+          </label>
+        </div>
       </header>
 
       <!-- Container for central Start AR button -->
-      <div class="landing-button-anchor"></div>
+      <div class="landing-button-anchor">
+        <!-- Circular Loading Progress Bar (Visible while media buffers/downloads) -->
+        <div id="landing-loader" class="landing-loader">
+          <div class="circular-progress-wrap">
+            <svg class="circular-progress-svg" viewBox="0 0 120 120">
+              <defs>
+                <linearGradient id="loader-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#ee6327" />
+                  <stop offset="50%" stop-color="#fbb03b" />
+                  <stop offset="100%" stop-color="#e91e63" />
+                </linearGradient>
+              </defs>
+              <circle class="progress-ring-bg" cx="60" cy="60" r="50" />
+              <circle id="landing-loader-circle" class="progress-ring-fill" cx="60" cy="60" r="50" />
+            </svg>
+            <div class="circular-progress-center">
+              <span id="landing-loader-percent" class="loader-percent">0%</span>
+            </div>
+          </div>
+          <span id="landing-loader-status" class="loader-status">Buffering festival dancer…</span>
+        </div>
+
+        <!-- Incompatible Browser Notice (Hidden by default, shown if WebXR unsupported or in-app browser) -->
+        <div id="landing-compat-card" class="compat-card hidden">
+          <div class="compat-icon">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+          <h3 id="landing-compat-title" class="compat-title">AR Browser Required</h3>
+          <p id="landing-compat-desc" class="compat-desc">WebXR Augmented Reality requires Google Chrome on Android.</p>
+          <div id="landing-compat-action" class="compat-action hidden"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Bottom Bacolod Mosaic Ribbon -->
@@ -183,10 +250,11 @@
 
   <!-- ── SCREEN 2 : AR Interactive Overlay (Launched Automatically on Scan) ── -->
   <div id="ui-overlay" class="overlay is-portrait hidden">
-    <div id="ui-wrapper" class="ui-wrapper is-portrait">
-      <!-- Bacolod Mosaic Ribbon Strips (Top in portrait, Left in landscape) -->
-      <div class="tribal-ribbon tribal-ribbon--top banner-top" aria-hidden="true"></div>
+    <!-- Bacolod Mosaic Ribbon Strips (Top and Bottom in both portrait and landscape) -->
+    <div class="tribal-ribbon tribal-ribbon--top banner-top" aria-hidden="true"></div>
+    <div class="tribal-ribbon tribal-ribbon--bottom banner-bottom" aria-hidden="true"></div>
 
+    <div id="ui-wrapper" class="ui-wrapper is-portrait">
       <!-- Top bar with Controls -->
       <div class="top-bar top-actions">
         <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
@@ -197,7 +265,7 @@
             </svg>
             Reposition
           </button>
-          <button id="exit-ar-btn" class="btn btn--ghost btn--exit" aria-label="Exit AR">
+          <button id="exit-ar-btn" class="btn btn--ghost btn--exit hidden" aria-label="Exit AR">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
               stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -288,9 +356,6 @@
           </svg>
         </button>
       </div>
-
-      <!-- Bottom Mosaic Ribbon -->
-      <div class="tribal-ribbon tribal-ribbon--bottom banner-bottom" aria-hidden="true"></div>
     </div>
   </div>
 </body>
