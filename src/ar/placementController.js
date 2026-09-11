@@ -11,6 +11,7 @@ import {
 import { applyOrientationClasses, getEffectiveOrientation } from '../ui/orientationController.js';
 
 export function resetArSessionState() {
+  clearVideoStartDelay();
   arState.arStarted = false;
   arState.isPlaced = false;
   disablePlacementListener();
@@ -170,7 +171,22 @@ export function handleFloorTap(screenX = null, screenY = null) {
   }
 }
 
-export function spawnDancerInFrontOfCamera(distance = 1.9) {
+let countdownInterval = null;
+let startDelayTimeout = null;
+
+export function clearVideoStartDelay() {
+  if (countdownInterval) {
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+  if (startDelayTimeout) {
+    clearTimeout(startDelayTimeout);
+    startDelayTimeout = null;
+  }
+}
+
+export function spawnDancerInFrontOfCamera(distance = 1.9, startDelaySeconds = 0) {
+  clearVideoStartDelay();
   if (!arState.dancerGroup) return;
 
   const cam = arState.camera;
@@ -203,14 +219,75 @@ export function spawnDancerInFrontOfCamera(distance = 1.9) {
   arState.dancerGroup.rotation.set(0, angle, 0);
 
   const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
-  if (dancerVideo) {
-    dancerVideo.play().catch(() => {});
-  }
+  const audioEl = arState.dancerAudioEl || document.getElementById('dancer-audio');
 
-  placeDancer('MassKara Dancer placed in front of you');
+  resumeAudioContext();
+
+  if (startDelaySeconds > 0) {
+    // Prime video and audio in the user gesture context so subsequent play() is authorized on iOS/Firefox
+    if (dancerVideo) {
+      dancerVideo.play().then(() => {
+        dancerVideo.pause();
+        dancerVideo.currentTime = 0;
+      }).catch(() => {
+        dancerVideo.pause();
+        dancerVideo.currentTime = 0;
+      });
+    }
+    if (audioEl) {
+      audioEl.play().then(() => {
+        audioEl.pause();
+        audioEl.currentTime = 0;
+      }).catch(() => {});
+    }
+    stopPositionalAudio();
+
+    placeDancer(`Get ready! MassKara Dancer starts in ${startDelaySeconds}s...`, false);
+
+    let remaining = startDelaySeconds;
+    countdownInterval = setInterval(() => {
+      remaining -= 1;
+      if (remaining > 0) {
+        setToast(`Get ready! MassKara Dancer starts in ${remaining}s...`);
+      } else {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+      }
+    }, 1000);
+
+    startDelayTimeout = setTimeout(() => {
+      clearVideoStartDelay();
+      if (!arState.arStarted || !arState.isPlaced) return;
+
+      if (dancerVideo) {
+        dancerVideo.currentTime = 0;
+        dancerVideo.play().catch(err => console.warn('Delayed video play error:', err));
+      }
+      if (audioEl && arState.isAudioReady && !arState.isAudioMuted) {
+        audioEl.play().catch(err => console.warn('Delayed audio play error:', err));
+      }
+      if (arState.isAudioReady && !arState.isAudioMuted) {
+        syncAudioToVideo(true);
+      }
+      setToast('Enjoy the MassKara Festival Dance!');
+      setTimeout(() => {
+        dom.toast?.classList.add('hidden');
+      }, 2000);
+    }, startDelaySeconds * 1000);
+
+  } else {
+    // Immediate playback (e.g. on native WebXR or repositioning)
+    if (dancerVideo) {
+      if (dancerVideo.paused) {
+        dancerVideo.currentTime = 0;
+        dancerVideo.play().catch(() => {});
+      }
+    }
+    placeDancer('MassKara Dancer placed in front of you', true);
+  }
 }
 
-export function placeDancer(customToast = 'MassKara Dancer placed in front of you') {
+export function placeDancer(customToast = 'MassKara Dancer placed in front of you', autoPlayMedia = true) {
   arState.isPlaced = true;
   arState.isSurfaceDetected = true;
   disablePlacementListener();
@@ -230,26 +307,28 @@ export function placeDancer(customToast = 'MassKara Dancer placed in front of yo
   const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
   const audioEl = arState.dancerAudioEl || document.getElementById('dancer-audio');
 
-  if (dancerVideo) {
-    if (dancerVideo.paused) {
-      dancerVideo.currentTime = 0;
-      dancerVideo.play().catch(() => { });
+  if (autoPlayMedia) {
+    if (dancerVideo) {
+      if (dancerVideo.paused) {
+        dancerVideo.currentTime = 0;
+        dancerVideo.play().catch(() => { });
+      }
     }
-  }
 
-  resumeAudioContext();
-  if (audioEl) {
+    resumeAudioContext();
+    if (audioEl) {
+      if (arState.isAudioReady && !arState.isAudioMuted) {
+        audioEl.play().catch(() => {});
+      }
+    }
+
     if (arState.isAudioReady && !arState.isAudioMuted) {
-      audioEl.play().catch(() => {});
+      if (arState.positionalAudio) {
+        arState.positionalAudio.stop();
+        arState.positionalAudio._progress = 0;
+      }
+      syncAudioToVideo(true);
     }
-  }
-
-  if (arState.isAudioReady && !arState.isAudioMuted) {
-    if (arState.positionalAudio) {
-      arState.positionalAudio.stop();
-      arState.positionalAudio._progress = 0;
-    }
-    syncAudioToVideo(true);
   }
 
   setToast(customToast);
@@ -305,14 +384,16 @@ export function placeDancer(customToast = 'MassKara Dancer placed in front of yo
 
   applyOrientationClasses(arState.currentOrientationState || getEffectiveOrientation());
 
-  setTimeout(() => {
-    dom.toast?.classList.add('hidden');
-  }, 2200);
+  if (autoPlayMedia) {
+    setTimeout(() => {
+      dom.toast?.classList.add('hidden');
+    }, 2200);
+  }
 }
 
 export function repositionDancer() {
   arState.ignorePlacementUntil = performance.now() + 600;
-  spawnDancerInFrontOfCamera(1.9);
+  spawnDancerInFrontOfCamera(1.9, 0);
   setToast('Dancer repositioned in front of camera');
   setTimeout(() => {
     dom.toast?.classList.add('hidden');

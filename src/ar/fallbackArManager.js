@@ -4,7 +4,7 @@ import { dom, $ } from '../ui/domElements.js';
 import { setToast } from '../ui/toast.js';
 import { updateUILayout, unpinARControls } from '../ui/orientationController.js';
 import { stopPositionalAudio } from '../audio/audioController.js';
-import { enablePlacementListener, disablePlacementListener, spawnDancerInFrontOfCamera } from './placementController.js';
+import { enablePlacementListener, disablePlacementListener, spawnDancerInFrontOfCamera, clearVideoStartDelay } from './placementController.js';
 
 // Pre-allocated vectors & quaternions for device orientation
 const zee = new THREE.Vector3(0, 0, 1);
@@ -191,8 +191,8 @@ export async function startFallbackAR() {
       arState.camera.rotation.set(0, 0, 0);
     }
 
-    // 10. Automatically spawn MassKara dancer directly in front of camera!
-    spawnDancerInFrontOfCamera(1.9);
+    // 10. Automatically spawn MassKara dancer directly in front of camera with 4-second pause before video play!
+    spawnDancerInFrontOfCamera(1.9, 4);
 
     // 11. Update UI layout to show controls and Bacolod mosaic ribbons
     updateUILayout(null, true);
@@ -210,6 +210,7 @@ export async function startFallbackAR() {
  * Clean up and exit fallback Camera AR mode
  */
 export function stopFallbackAR() {
+  clearVideoStartDelay();
   arState.isFallbackMode = false;
   arState.arStarted = false;
   arState.isPlaced = false;
