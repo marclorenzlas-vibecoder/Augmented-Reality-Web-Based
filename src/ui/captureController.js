@@ -120,7 +120,7 @@ export function executeCaptureFrame(frame) {
 export function triggerShutterFlash() {
   try {
     if ('vibrate' in navigator) navigator.vibrate([40, 30, 40]);
-  } catch (e) {}
+  } catch (e) { }
 
   const flash = document.createElement('div');
   flash.style.position = 'fixed';

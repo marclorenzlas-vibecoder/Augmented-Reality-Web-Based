@@ -211,7 +211,7 @@ export function setupWebXR(renderer, scene) {
         'Your Android device does not currently support WebXR AR sessions.<br><br>Please install or update <strong>Google Play Services for AR (ARCore)</strong> from the Google Play Store.'
       );
     }
-  }).catch(() => {});
+  }).catch(() => { });
 
   const overlayRoot = document.getElementById('ui-overlay');
 

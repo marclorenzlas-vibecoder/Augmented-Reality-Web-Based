@@ -365,11 +365,11 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-.geofence-toggle-input:checked + .toggle-switch-slider {
+.geofence-toggle-input:checked+.toggle-switch-slider {
   background: linear-gradient(135deg, var(--bacolod-orange, #ee6327), var(--bacolod-yellow, #fbb03b));
 }
 
-.geofence-toggle-input:checked + .toggle-switch-slider::before {
+.geofence-toggle-input:checked+.toggle-switch-slider::before {
   transform: translateX(14px);
 }
 
@@ -446,6 +446,7 @@ body {
     opacity: 0;
     transform: scale(0.9);
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -612,6 +613,7 @@ body {
     width: 140px;
     height: 140px;
   }
+
   .loader-percent {
     font-size: 1.7rem;
   }
@@ -1218,8 +1220,8 @@ body {
   transition: opacity 0.2s ease;
 }
 
-.top-bar > div,
-.top-actions > div {
+.top-bar>div,
+.top-actions>div {
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
@@ -1805,12 +1807,13 @@ body.landscape .screen--qr .btn--gallery {
 :root {
   --ar-edge-l: calc(max(env(safe-area-inset-left, 0px), 0px) + 16px);
   --ar-edge-r: calc(max(env(safe-area-inset-right, 0px), 0px) + 16px);
-  --ar-edge-t: calc(max(env(safe-area-inset-top,   0px), 0px) + 38px);
-  --ar-edge-b: calc(max(env(safe-area-inset-bottom,0px), 0px) + 38px);
+  --ar-edge-t: calc(max(env(safe-area-inset-top, 0px), 0px) + 38px);
+  --ar-edge-b: calc(max(env(safe-area-inset-bottom, 0px), 0px) + 38px);
 }
 
 /* ── Landscape: make #ui-overlay fill the whole screen ────────────────────── */
 @media (orientation: landscape) {
+
   .overlay,
   #ui-overlay {
     position: fixed !important;
@@ -1897,8 +1900,8 @@ body.landscape .top-bar {
   visibility: visible !important;
 }
 
-.is-landscape .top-actions > div,
-body.is-landscape .top-actions > div {
+.is-landscape .top-actions>div,
+body.is-landscape .top-actions>div {
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
@@ -2218,10 +2221,10 @@ body.is-portrait .top-bar {
   z-index: 150 !important;
 }
 
-.is-portrait .top-actions > div,
-.is-portrait .top-bar > div,
-body.is-portrait .top-actions > div,
-body.is-portrait .top-bar > div {
+.is-portrait .top-actions>div,
+.is-portrait .top-bar>div,
+body.is-portrait .top-actions>div,
+body.is-portrait .top-bar>div {
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
@@ -2313,6 +2316,7 @@ body.is-portrait .toast {
    Wider layout (480px) & fully scrollable container
 ────────────────────────────────────────── */
 @media (orientation: landscape) {
+
   .drawer,
   .is-landscape .drawer,
   body.landscape .drawer,
@@ -2632,6 +2636,7 @@ body.is-landscape .drawer-handle {
     transform: scale(0.96);
     opacity: 0.95;
   }
+
   100% {
     transform: scale(1.48);
     opacity: 0;
@@ -2762,12 +2767,12 @@ body:has(#location-gate:not(.hidden)) #exit-ar-btn,
 body:has(#location-gate:not(.hidden)) #ui-overlay,
 body:has(#qr-screen:not(.hidden)) #exit-ar-btn,
 body:has(#qr-screen:not(.hidden)) #ui-overlay,
-#landing-screen:not(.hidden) ~ #exit-ar-btn,
-#landing-screen:not(.hidden) ~ #ui-overlay,
-#location-gate:not(.hidden) ~ #exit-ar-btn,
-#location-gate:not(.hidden) ~ #ui-overlay,
-#qr-screen:not(.hidden) ~ #exit-ar-btn,
-#qr-screen:not(.hidden) ~ #ui-overlay {
+#landing-screen:not(.hidden)~#exit-ar-btn,
+#landing-screen:not(.hidden)~#ui-overlay,
+#location-gate:not(.hidden)~#exit-ar-btn,
+#location-gate:not(.hidden)~#ui-overlay,
+#qr-screen:not(.hidden)~#exit-ar-btn,
+#qr-screen:not(.hidden)~#ui-overlay {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -2922,6 +2927,7 @@ body:has(#qr-screen:not(.hidden)) #ui-overlay,
     transform: scale(0.7);
     opacity: 0.9;
   }
+
   100% {
     transform: scale(1.65);
     opacity: 0;
@@ -3119,6 +3125,7 @@ body:has(#qr-screen:not(.hidden)) #ui-overlay,
    Location & Landing Screens — Landscape Mode
 ────────────────────────────────────────── */
 @media (orientation: landscape) {
+
   .screen--location,
   .screen--landing {
     flex-direction: column !important;

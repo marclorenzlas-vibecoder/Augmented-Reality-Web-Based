@@ -96,13 +96,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     dancerVideo.addEventListener('ended', () => {
       if (arState.arStarted && arState.isPlaced && arState.dancerGroup && arState.dancerGroup.visible) {
         dancerVideo.currentTime = 0;
-        dancerVideo.play().catch(() => {});
+        dancerVideo.play().catch(() => { });
         const audioEl = arState.dancerAudioEl || document.getElementById('dancer-audio');
         if (audioEl) {
           try {
             audioEl.currentTime = 0;
-            if (!arState.isAudioMuted) audioEl.play().catch(() => {});
-          } catch (e) {}
+            if (!arState.isAudioMuted) audioEl.play().catch(() => { });
+          } catch (e) { }
         }
         syncAudioToVideo(true);
       }
@@ -117,8 +117,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (audioEl) {
             try {
               audioEl.currentTime = dancerVideo.currentTime;
-              if (audioEl.paused) audioEl.play().catch(() => {});
-            } catch (e) {}
+              if (audioEl.paused) audioEl.play().catch(() => { });
+            } catch (e) { }
           }
           syncAudioToVideo(true);
         }
@@ -197,7 +197,7 @@ document.addEventListener('visibilitychange', () => {
   } else {
     if (arState.arStarted && arState.isPlaced && arState.dancerGroup && arState.dancerGroup.visible && !arState.isAudioMuted) {
       if (arState.dancerVideo) {
-        arState.dancerVideo.play().catch(() => {});
+        arState.dancerVideo.play().catch(() => { });
       }
       syncAudioToVideo(true);
     }
