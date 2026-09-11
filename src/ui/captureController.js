@@ -184,11 +184,75 @@ export function setupCapture() {
 
       let capturedBlob = null;
 
+      // Method 0: Fallback Camera AR composited snapshot (Firefox & iOS)
+      if (arState.isFallbackMode) {
+        const cameraVideo = dom.arCameraFeed || $('ar-camera-feed');
+        const threeCanvas = dom.arCanvas || $('ar-canvas');
+
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = W;
+        outCanvas.height = H;
+        const ctx = outCanvas.getContext('2d');
+
+        // Draw camera video with object-fit: cover cropping
+        if (cameraVideo && cameraVideo.videoWidth > 0) {
+          const vw = cameraVideo.videoWidth;
+          const vh = cameraVideo.videoHeight;
+          const videoRatio = vw / vh;
+          const screenRatio = W / H;
+          let sx = 0;
+          let sy = 0;
+          let sw = vw;
+          let sh = vh;
+
+          if (videoRatio > screenRatio) {
+            sw = vh * screenRatio;
+            sx = (vw - sw) / 2;
+          } else {
+            sh = vw / screenRatio;
+            sy = (vh - sh) / 2;
+          }
+          ctx.drawImage(cameraVideo, sx, sy, sw, sh, 0, 0, W, H);
+        } else {
+          ctx.fillStyle = '#050508';
+          ctx.fillRect(0, 0, W, H);
+        }
+
+        // Draw 3D dancer layer
+        if (threeCanvas && threeCanvas.width > 0) {
+          ctx.drawImage(threeCanvas, 0, 0, W, H);
+        }
+
+        // Add festive Bacolod watermark ribbon/badge
+        const badgeH = Math.max(Math.round(48 * (W / 720)), 36);
+        const fontSize = Math.max(Math.round(16 * (W / 720)), 13);
+        ctx.fillStyle = 'rgba(15, 15, 20, 0.65)';
+        ctx.fillRect(0, H - badgeH, W, badgeH);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Bacolod Tourism AR', 18, H - badgeH / 2);
+
+        ctx.font = `500 ${Math.round(fontSize * 0.85)}px "Plus Jakarta Sans", sans-serif`;
+        ctx.fillStyle = '#FBB03B';
+        const rightText = 'City of Smiles';
+        const textWidth = ctx.measureText(rightText).width;
+        ctx.fillText(rightText, W - textWidth - 18, H - badgeH / 2);
+
+        capturedBlob = await new Promise((res) => outCanvas.toBlob(res, 'image/jpeg', 0.95));
+      }
+
       // Method 1: In-WebXR render snapshot
-      try {
-        capturedBlob = await requestARSnapshot();
-      } catch (xrSnapErr) {
-        console.warn('Inside-loop capture fallback:', xrSnapErr);
+      if (!capturedBlob) {
+        try {
+          capturedBlob = await requestARSnapshot();
+        } catch (xrSnapErr) {
+          console.warn('Inside-loop capture fallback:', xrSnapErr);
+        }
       }
 
       // Method 2: Screen Capture API fallback if supported

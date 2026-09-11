@@ -11,6 +11,7 @@ import { setupHistoryDrawer } from './ui/drawer.js';
 import { setupCapture } from './ui/captureController.js';
 import { repositionDancer, resetArSessionState } from './ar/placementController.js';
 import { handleSessionEndCleanup } from './ar/webxrManager.js';
+import { repositionFallbackDancer, stopFallbackAR } from './ar/fallbackArManager.js';
 
 // ── Application Initialization ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -143,7 +144,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const onRecenterTrigger = (e) => {
     e.stopPropagation();
     arState.ignorePlacementUntil = performance.now() + 800;
-    repositionDancer();
+    if (arState.isFallbackMode) {
+      repositionFallbackDancer();
+    } else {
+      repositionDancer();
+    }
   };
   recenterBtnEl?.addEventListener('click', onRecenterTrigger);
   recenterBtnEl?.addEventListener('pointerdown', (e) => {
@@ -167,6 +172,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     isExitingAR = true;
 
     try {
+      if (arState.isFallbackMode) {
+        stopFallbackAR();
+        return;
+      }
       const session = arState.renderer?.xr?.getSession();
       if (session) {
         await session.end();
@@ -174,7 +183,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       console.warn('Session end error:', err);
     } finally {
-      handleSessionEndCleanup();
+      if (!arState.isFallbackMode) {
+        handleSessionEndCleanup();
+      }
       setTimeout(() => { isExitingAR = false; }, 500);
     }
   };

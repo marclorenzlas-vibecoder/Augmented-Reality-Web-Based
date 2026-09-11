@@ -27,6 +27,9 @@
     style="position: fixed; top: -9999px; left: -9999px; width: 10px; height: 10px; opacity: 0; pointer-events: none;">
   </video>
 
+  <!-- Live camera video feed for Mozilla Firefox, iOS, and non-WebXR fallback AR -->
+  <video id="ar-camera-feed" class="ar-camera-feed hidden" autoplay playsinline webkit-playsinline muted></video>
+
   <!-- Three.js WebGL overlay -->
   <canvas id="ar-canvas"></canvas>
 

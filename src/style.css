@@ -1161,6 +1161,41 @@ body {
 }
 
 /* ──────────────────────────────────────────
+   AR Canvas & Camera Feed Layering
+────────────────────────────────────────── */
+#ar-canvas {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+  display: block;
+}
+
+.ar-camera-feed {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  object-fit: cover !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  background: #050508;
+  display: block;
+}
+
+.ar-camera-feed.hidden {
+  display: none !important;
+}
+
+/* ──────────────────────────────────────────
    AR Overlay
 ────────────────────────────────────────── */
 .overlay,

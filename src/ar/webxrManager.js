@@ -11,6 +11,7 @@ import {
   onSelect
 } from './placementController.js';
 import { stopPositionalAudio } from '../audio/audioController.js';
+import { startFallbackAR, stopFallbackAR, repositionFallbackDancer } from './fallbackArManager.js';
 
 export function restoreArButtonContent() {
   const arButton = document.getElementById('ARButton');
@@ -175,7 +176,7 @@ export function setupWebXR(renderer, scene) {
   if (window.isSecureContext === false) {
     showBrowserIncompatibleNotice(
       'HTTPS Connection Required',
-      'WebXR Augmented Reality requires a secure HTTPS connection to access your camera and AR sensors. Please access this website using <strong>https://</strong>.'
+      'Augmented Reality requires a secure HTTPS connection to access your camera and sensors. Please access this website using <strong>https://</strong>.'
     );
     return;
   }
@@ -183,36 +184,12 @@ export function setupWebXR(renderer, scene) {
   if (isInApp) {
     showBrowserIncompatibleNotice(
       'In-App Browser Detected',
-      'Facebook/Messenger in-app browsers do not support WebXR Augmented Reality.<br><br>Please tap the <strong>three dots (⋮ or ⋯)</strong> in your screen corner and choose <strong>"Open in Chrome"</strong> or <strong>"Open in external browser"</strong>.'
+      'Facebook/Messenger in-app browsers do not support AR camera features.<br><br>Please tap the <strong>three dots (⋮ or ⋯)</strong> in your screen corner and choose <strong>"Open in Chrome"</strong> or <strong>"Open in Safari / Firefox / external browser"</strong>.'
     );
     return;
   }
 
-  if (isIOS) {
-    showBrowserIncompatibleNotice(
-      'iOS Browser Incompatible',
-      'Apple iOS browsers (Safari & Chrome on iPhone/iPad) do not support the WebXR Augmented Reality standard.<br><br>Please use an <strong>Android smartphone with Google Chrome</strong> to experience this AR tour.'
-    );
-    return;
-  }
-
-  if (!('xr' in navigator)) {
-    showBrowserIncompatibleNotice(
-      'WebXR AR Not Supported',
-      'This browser does not support the WebXR Device API.<br><br>Please open this site using <strong>Google Chrome on Android</strong> with <strong>Google Play Services for AR</strong> installed.'
-    );
-    return;
-  }
-
-  navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-    if (!supported) {
-      showBrowserIncompatibleNotice(
-        'ARCore Required',
-        'Your Android device does not currently support WebXR AR sessions.<br><br>Please install or update <strong>Google Play Services for AR (ARCore)</strong> from the Google Play Store.'
-      );
-    }
-  }).catch(() => { });
-
+  const supportsWebXR = ('xr' in navigator) && !isIOS;
   const overlayRoot = document.getElementById('ui-overlay');
 
   // Standard safe WebXR features supported across Chrome, Brave, and Edge
@@ -222,7 +199,22 @@ export function setupWebXR(renderer, scene) {
     domOverlay: overlayRoot ? { root: overlayRoot } : undefined
   };
 
-  const arButton = ARButton.createButton(renderer, sessionInit);
+  let arButton = null;
+  if (supportsWebXR) {
+    try {
+      arButton = ARButton.createButton(renderer, sessionInit);
+    } catch (err) {
+      console.warn('ARButton creation fallback:', err);
+      arButton = document.createElement('button');
+      arButton.id = 'ARButton';
+      arButton.type = 'button';
+    }
+  } else {
+    arButton = document.createElement('button');
+    arButton.id = 'ARButton';
+    arButton.type = 'button';
+  }
+
   arButton.style.display = 'none';
   const landingAnchor = document.querySelector('.landing-button-anchor');
   if (landingAnchor) {
@@ -246,8 +238,9 @@ export function setupWebXR(renderer, scene) {
     e.preventDefault();
     e.stopImmediatePropagation();
 
-    if (!navigator.xr) {
-      setToast('WebXR is not supported on this browser', true);
+    // On Firefox, iOS, or browsers without native WebXR, activate the Camera + Gyro Fallback AR
+    if (!supportsWebXR || !navigator.xr) {
+      await startFallbackAR();
       return;
     }
 
@@ -280,8 +273,8 @@ export function setupWebXR(renderer, scene) {
             requiredFeatures: ['hit-test']
           });
         } catch (err3) {
-          console.error('[WebXR] All WebXR session attempts failed:', err3);
-          setToast('Could not start AR: ' + (err3.message || 'Session rejected by browser'), true);
+          console.warn('[WebXR] Native WebXR session rejected, transitioning to camera fallback AR:', err3);
+          await startFallbackAR();
           return;
         }
       }
@@ -293,9 +286,8 @@ export function setupWebXR(renderer, scene) {
         await renderer.xr.setSession(session);
         updateUILayout();
       } catch (setSessionErr) {
-        console.error('[WebXR] setSession error:', setSessionErr);
-        setToast('Failed to initialize AR session: ' + (setSessionErr.message || setSessionErr), true);
-        handleSessionEndCleanup();
+        console.warn('[WebXR] setSession error, transitioning to camera fallback AR:', setSessionErr);
+        await startFallbackAR();
       }
     }
   }, true); // useCapture = true ensures this fires first!

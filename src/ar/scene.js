@@ -212,8 +212,8 @@ export function initThreeScene() {
       }
     }
 
-    // Real-time orientation sync in WebXR
-    if (arState.renderer.xr.isPresenting) {
+    // Real-time orientation sync in WebXR or Fallback mode
+    if (arState.renderer?.xr?.isPresenting || arState.isFallbackMode) {
       const orient = getEffectiveOrientation();
       if (
         orient && (
