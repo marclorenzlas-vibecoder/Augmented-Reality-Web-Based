@@ -15,7 +15,8 @@ const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -PI/2
 let deviceOrientationListener = null;
 let currentCameraStream = null;
 let initialOrientationYaw = null;
-let scanScore = 0;
+let accumulatedScanTime = 0;
+let lastScanTimestamp = 0;
 let lastPitch = null;
 let lastYaw = null;
 let autoScanTimeout = null;
@@ -107,34 +108,55 @@ function onDeviceOrientation(e) {
   if (arState.camera && arState.isFallbackMode) {
     arState.camera.quaternion.copy(q);
 
-    // SURFACE SCANNING LOGIC
+    // SURFACE SCANNING LOGIC (Requires 2.8 seconds of deliberate sweeping across floor)
     if (!arState.isPlaced && !arState.isSurfaceDetected) {
+      // Force grid to stay strictly hidden while scanning
+      if (arState.fallbackFloorGridMesh) arState.fallbackFloorGridMesh.visible = false;
+      if (arState.floorGridMesh) arState.floorGridMesh.visible = false;
+
+      const now = performance.now();
+      const dt = Math.min((now - (lastScanTimestamp || now)) / 1000, 0.1);
+      lastScanTimestamp = now;
+
       const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
 
-      // forward.y indicates vertical pitch:
-      // forward.y ≈ 0 is horizontal horizon
-      // forward.y < -0.22 means user is pointing downward toward a floor surface
+      // Check vertical pitch:
+      // forward.y indicates tilt: forward.y ≈ 0 is looking straight ahead at walls
+      // forward.y < -0.20 means user is tilting camera downward at the floor
       if (forward.y > -0.20) {
-        // User is aiming straight at walls or ceiling, not at the floor
+        // User is aiming straight at walls or ceiling, not down at the floor!
         setToast('Tilt camera downward toward the floor...', true);
         const scannerText = dom.surfaceScannerReticle?.querySelector('.scanner-text');
         if (scannerText) scannerText.textContent = 'Aim camera at the floor';
       } else {
-        // User is aiming downward at a floor surface!
-        // Measure motion across floor surface
+        // User is aiming downward at the floor!
         const deltaYaw = (lastYaw !== null) ? Math.abs(e.alpha - lastYaw) : 0;
         const deltaPitch = (lastPitch !== null) ? Math.abs(e.beta - lastPitch) : 0;
         lastYaw = e.alpha;
         lastPitch = e.beta;
 
-        // Progress scanning when sweeping gently over floor
-        const motionBonus = Math.min((deltaYaw + deltaPitch) * 0.02, 0.05);
-        scanScore += 0.035 + motionBonus;
+        // Measure angular motion (degrees per second)
+        const motionSpeed = (deltaYaw + deltaPitch) / (dt || 0.016);
+
+        // Progress scanning: full speed if gently moving phone (motionSpeed > 2.5 deg/s),
+        // or slow crawl if held stationary to prompt the user to sweep across the floor
+        const moveFactor = motionSpeed > 2.0 ? 1.0 : 0.25;
+        accumulatedScanTime += dt * moveFactor;
+
+        // Require 2.8 seconds of active scanning!
+        const targetScanDuration = 2.8;
+        const progress = Math.min(accumulatedScanTime / targetScanDuration, 1.0);
+        const percent = Math.round(progress * 100);
 
         const scannerText = dom.surfaceScannerReticle?.querySelector('.scanner-text');
-        if (scannerText) scannerText.textContent = 'Scanning flat surface...';
+        if (scannerText) {
+          scannerText.textContent = `Scanning floor surface... ${percent}%`;
+        }
 
-        if (scanScore >= 1.0) {
+        if (percent < 100) {
+          setToast(`Move phone slowly to scan floor surface (${percent}%)`, true);
+        } else {
+          // 100% REACHED: SURFACE DETECTED!
           triggerSurfaceDetected();
         }
       }
@@ -174,7 +196,8 @@ export function repositionFallbackDancer() {
   arState.ignorePlacementUntil = performance.now() + 800;
   arState.isPlaced = false;
   arState.isSurfaceDetected = false;
-  scanScore = 0;
+  accumulatedScanTime = 0;
+  lastScanTimestamp = performance.now();
   lastPitch = null;
   lastYaw = null;
 
@@ -198,6 +221,9 @@ export function repositionFallbackDancer() {
   }
   if (arState.floorGridMesh) {
     arState.floorGridMesh.visible = false;
+    arState.floorGridMesh.traverse((child) => {
+      if (child.isMesh) child.visible = false;
+    });
   }
 
   dom.historyModal?.classList.add('hidden');
@@ -221,10 +247,10 @@ export function repositionFallbackDancer() {
 
   if (autoScanTimeout) clearTimeout(autoScanTimeout);
   autoScanTimeout = setTimeout(() => {
-    if (arState.arStarted && !arState.isPlaced && !arState.isSurfaceDetected) {
+    if (arState.arStarted && !arState.isPlaced && !arState.isSurfaceDetected && !arState.deviceOrientationActive) {
       triggerSurfaceDetected();
     }
-  }, 3800);
+  }, 8000);
 
   setTimeout(() => {
     if (arState.arStarted && !arState.isPlaced) {
@@ -280,7 +306,8 @@ export async function startFallbackAR() {
     arState.isPlaced = false;
     arState.isSurfaceDetected = false;
     arState.detectedFloorHeight = -1.3;
-    scanScore = 0;
+    accumulatedScanTime = 0;
+    lastScanTimestamp = performance.now();
     lastPitch = null;
     lastYaw = null;
     document.body.classList.add('ar-active', 'ar-fallback-active');
@@ -358,6 +385,9 @@ export async function startFallbackAR() {
 
     if (arState.floorGridMesh) {
       arState.floorGridMesh.visible = false;
+      arState.floorGridMesh.traverse((child) => {
+        if (child.isMesh) child.visible = false;
+      });
     }
 
     // 11. Instruction toast & scanning reticle
@@ -367,13 +397,13 @@ export async function startFallbackAR() {
 
     setToast('Point camera at the floor and move slowly to scan', true);
 
-    // Auto-detection timer for desktop / non-gyro environments (3.8s)
+    // Auto-detection timer ONLY for desktop / non-gyro environments (8s)
     if (autoScanTimeout) clearTimeout(autoScanTimeout);
     autoScanTimeout = setTimeout(() => {
-      if (arState.arStarted && !arState.isPlaced && !arState.isSurfaceDetected) {
+      if (arState.arStarted && !arState.isPlaced && !arState.isSurfaceDetected && !arState.deviceOrientationActive) {
         triggerSurfaceDetected();
       }
-    }, 3800);
+    }, 8000);
 
     enablePlacementListener();
     setTimeout(() => {
@@ -402,7 +432,9 @@ export function stopFallbackAR() {
   arState.arStarted = false;
   arState.isPlaced = false;
   arState.isSurfaceDetected = false;
-  scanScore = 0;
+  accumulatedScanTime = 0;
+  lastPitch = null;
+  lastYaw = null;
 
   if (autoScanTimeout) {
     clearTimeout(autoScanTimeout);

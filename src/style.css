@@ -2345,6 +2345,38 @@ body.is-portrait .toast {
   pointer-events: none !important;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   AR Screen Orientation Display Rules:
+   - PORTRAIT: Ribbon strips and camera button strictly hide.
+   - LANDSCAPE: Ribbon strips and camera button show up!
+───────────────────────────────────────────────────────────────────────────── */
+body.is-portrait #ui-overlay .tribal-ribbon,
+body:not(.is-landscape):not(.landscape) #ui-overlay .tribal-ribbon,
+#ui-overlay.is-portrait .tribal-ribbon,
+.overlay.is-portrait .tribal-ribbon {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body.is-portrait #capture-btn,
+body:not(.is-landscape):not(.landscape) #capture-btn,
+.is-portrait #capture-btn {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body.is-landscape #ui-overlay .tribal-ribbon,
+body.landscape #ui-overlay .tribal-ribbon,
+#ui-overlay.is-landscape .tribal-ribbon {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
 
 /* ──────────────────────────────────────────
    Drawer Landscape Sidebar (Slides in from the RIGHT)

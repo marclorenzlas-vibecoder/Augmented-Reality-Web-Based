@@ -336,6 +336,16 @@ function _applyARControlsLandscape(deg) {
   }
 }
 
+function _hideARRibbons() {
+  const ribbons = document.querySelectorAll('#ui-overlay > .tribal-ribbon, #ui-overlay .tribal-ribbon');
+  ribbons.forEach(r => {
+    r.style.setProperty('display', 'none', 'important');
+    r.style.setProperty('opacity', '0', 'important');
+    r.style.setProperty('visibility', 'hidden', 'important');
+    r.style.setProperty('pointer-events', 'none', 'important');
+  });
+}
+
 function _ensureARRibbons() {
   if (!arState.arStarted) return;
 
@@ -581,20 +591,23 @@ export function applyOrientationClasses(orientationInfo) {
     // Remove landscape inline pins so portrait CSS takes over
     _unpinARControls();
 
-    // Controls visibility in portrait: only show when placed
+    // Controls visibility in portrait: only show placed controls (camera button and ribbons strictly only show up in landscape)
     const topBarEl = document.querySelector('.top-bar') || document.querySelector('.top-actions');
     const captureBtnEl = dom.captureBtn || document.getElementById('capture-btn');
+
+    // Camera button is strictly hidden in portrait
+    if (captureBtnEl) {
+      captureBtnEl.classList.add('hidden');
+      captureBtnEl.style.setProperty('display', 'none', 'important');
+      captureBtnEl.style.setProperty('visibility', 'hidden', 'important');
+      captureBtnEl.style.setProperty('opacity', '0', 'important');
+      captureBtnEl.style.setProperty('pointer-events', 'none', 'important');
+    }
+
     if (arState.isPlaced) {
       dom.exitArBtn?.classList.remove('hidden');
       dom.recenterBtn?.classList.remove('hidden');
       dom.infoToggleBtn?.classList.remove('hidden');
-      if (captureBtnEl) {
-        captureBtnEl.classList.remove('hidden');
-        captureBtnEl.style.removeProperty('display');
-        captureBtnEl.style.removeProperty('visibility');
-        captureBtnEl.style.removeProperty('opacity');
-        captureBtnEl.style.removeProperty('pointer-events');
-      }
       if (topBarEl) {
         topBarEl.classList.remove('hidden');
         topBarEl.style.removeProperty('display');
@@ -603,10 +616,6 @@ export function applyOrientationClasses(orientationInfo) {
       dom.exitArBtn?.classList.add('hidden');
       dom.recenterBtn?.classList.add('hidden');
       dom.infoToggleBtn?.classList.add('hidden');
-      if (captureBtnEl) {
-        captureBtnEl.classList.add('hidden');
-        captureBtnEl.style.setProperty('display', 'none', 'important');
-      }
       if (topBarEl) {
         topBarEl.classList.add('hidden');
         topBarEl.style.setProperty('display', 'none', 'important');
@@ -641,8 +650,8 @@ export function applyOrientationClasses(orientationInfo) {
       uiWrapper.style.setProperty('overflow', '', 'important');
     }
 
-    // Ensure Bacolod Mosaic Ribbons: Top and Bottom in portrait view
-    _ensureARRibbons();
+    // Hide Bacolod Mosaic Ribbons in portrait view (only shows up in landscape)
+    _hideARRibbons();
   }
 
   const width = window.innerWidth;
