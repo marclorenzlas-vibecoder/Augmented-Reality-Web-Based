@@ -199,6 +199,12 @@ export function placeDancer() {
     dom.infoToggleBtn?.classList.remove('hidden');
     dom.captureBtn?.classList.remove('hidden');
     dom.recenterBtn?.classList.remove('hidden');
+    dom.exitArBtn?.classList.remove('hidden');
+    const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+    if (topBar) {
+      topBar.classList.remove('hidden');
+      topBar.style.removeProperty('display');
+    }
   }, 1500);
 }
 
@@ -230,6 +236,12 @@ export function repositionDancer() {
   dom.infoToggleBtn?.classList.add('hidden');
   dom.captureBtn?.classList.add('hidden');
   dom.recenterBtn?.classList.add('hidden');
+  dom.exitArBtn?.classList.add('hidden');
+  const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+  if (topBar) {
+    topBar.classList.add('hidden');
+    topBar.style.setProperty('display', 'none', 'important');
+  }
 
   setToast('Point at floor plane and tap anywhere on grid to place');
 
