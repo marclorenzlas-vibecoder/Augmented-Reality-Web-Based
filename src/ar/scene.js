@@ -43,6 +43,10 @@ export async function startUniversalAR() {
   }
 }
 
+// Reusable static vectors & throttles to eliminate garbage collection stutter and CPU drain
+const _billboardCamPos = new THREE.Vector3();
+let _lastOrientSyncTime = 0;
+
 export function initThreeScene() {
   const canvas = dom.arCanvas || $('ar-canvas');
 
@@ -121,7 +125,7 @@ export function initThreeScene() {
     const delta = clock.getDelta();
     const elapsed = clock.getElapsedTime();
 
-    if (arState.floorGridMaterial) {
+    if (arState.floorGridMaterial && arState.floorGridMesh?.visible) {
       arState.floorGridMaterial.uniforms.uTime.value = elapsed;
     }
 
@@ -141,7 +145,8 @@ export function initThreeScene() {
       stopPositionalAudio();
     }
 
-    if (frame) {
+    // Performance optimization: only compute WebXR SLAM hit-tests and plane geometry before the dancer is placed
+    if (frame && (!arState.isPlaced || !arState.arStarted)) {
       const referenceSpace = arState.renderer.xr.getReferenceSpace();
       const session = arState.renderer.xr.getSession();
 
@@ -192,11 +197,10 @@ export function initThreeScene() {
           ? xrCam.cameras[0]
           : (xrCam || arState.camera);
         if (activeCam) {
-          const camPos = new THREE.Vector3();
-          activeCam.getWorldPosition(camPos);
+          activeCam.getWorldPosition(_billboardCamPos);
           const angle = Math.atan2(
-            camPos.x - arState.dancerGroup.position.x,
-            camPos.z - arState.dancerGroup.position.z
+            _billboardCamPos.x - arState.dancerGroup.position.x,
+            _billboardCamPos.z - arState.dancerGroup.position.z
           );
           arState.dancerGroup.rotation.y = angle;
         }
@@ -213,8 +217,9 @@ export function initThreeScene() {
       }
     }
 
-    // Real-time orientation sync in WebXR or Fallback mode
-    if (arState.renderer?.xr?.isPresenting || arState.isFallbackMode) {
+    // Real-time orientation sync in WebXR or Fallback mode (throttled to 10Hz to prevent CPU lag)
+    if ((elapsed - _lastOrientSyncTime > 0.1) && (arState.renderer?.xr?.isPresenting || arState.isFallbackMode)) {
+      _lastOrientSyncTime = elapsed;
       const orient = getEffectiveOrientation();
       if (
         orient && (
