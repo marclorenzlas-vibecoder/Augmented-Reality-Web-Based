@@ -59,14 +59,15 @@ export function handleSessionStart() {
     uiOverlayEl.style.pointerEvents = '';
   }
 
-  // 4. Show Exit AR button
-  const exitBtn = dom.exitArBtn || $('exit-ar-btn');
-  if (exitBtn) {
-    exitBtn.classList.remove('hidden');
-    exitBtn.style.display = '';
-    exitBtn.style.visibility = '';
-    exitBtn.style.opacity = '';
-    exitBtn.style.pointerEvents = '';
+  // 4. Hide placed-only controls until dancer is placed (Exit, Reposition, Info, Shutter)
+  dom.exitArBtn?.classList.add('hidden');
+  dom.recenterBtn?.classList.add('hidden');
+  dom.infoToggleBtn?.classList.add('hidden');
+  dom.captureBtn?.classList.add('hidden');
+  const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+  if (topBar) {
+    topBar.classList.add('hidden');
+    topBar.style.setProperty('display', 'none', 'important');
   }
 
   // 5. Show initial floor detection toast
@@ -74,11 +75,6 @@ export function handleSessionStart() {
   if (toast) {
     toast.classList.remove('hidden');
   }
-
-  // 6. Hide placed-only controls until dancer is placed
-  dom.infoToggleBtn?.classList.add('hidden');
-  dom.captureBtn?.classList.add('hidden');
-  dom.recenterBtn?.classList.add('hidden');
 
   // 7. Layout orientation & enable placement listeners
   updateUILayout();
@@ -159,10 +155,16 @@ export function handleSessionEndCleanup() {
   dancerVideo?.pause();
   stopPositionalAudio();
 
+  dom.exitArBtn?.classList.add('hidden');
   dom.infoToggleBtn?.classList.add('hidden');
   dom.captureBtn?.classList.add('hidden');
   dom.recenterBtn?.classList.add('hidden');
   dom.toast?.classList.add('hidden');
+  const topBarCleanup = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+  if (topBarCleanup) {
+    topBarCleanup.classList.add('hidden');
+    topBarCleanup.style.setProperty('display', 'none', 'important');
+  }
 
   updateUILayout();
 }

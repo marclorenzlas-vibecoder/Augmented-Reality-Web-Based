@@ -174,89 +174,129 @@ function _applyARControlsLandscape(deg) {
 
   const isCCW = (deg !== -90); // true for CCW tilt (rotate left), false for CW tilt (rotate right)
 
-  // 1) Top Bar: [Reposition] + [✕ Exit]
-  // In CCW: top-right of landscape screen. In CW: top-left of landscape screen.
+  // Controls visibility based on placement state:
+  // Before placement (surface scanning phase): strictly hide [Reposition], [Exit], [About Pill], [Shutter]
+  // Only display them after the surface is scanned and tapped (placed)
   const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
-  if (topBar) {
-    topBar.style.setProperty('position', 'absolute', 'important');
-    topBar.style.setProperty('top', '38px', 'important');
-    topBar.style.setProperty('bottom', 'auto', 'important');
-    topBar.style.setProperty('left', isCCW ? 'auto' : '44px', 'important');
-    topBar.style.setProperty('right', isCCW ? '44px' : 'auto', 'important');
-    topBar.style.setProperty('z-index', '150', 'important');
-    topBar.style.setProperty('display', 'flex', 'important');
-    topBar.style.setProperty('flex-direction', isCCW ? 'row' : 'row-reverse', 'important');
-    topBar.style.setProperty('align-items', 'center', 'important');
-    topBar.style.setProperty('gap', '10px', 'important');
-    topBar.style.setProperty('opacity', '1', 'important');
-    topBar.style.setProperty('visibility', 'visible', 'important');
-    topBar.style.setProperty('pointer-events', 'auto', 'important');
-    topBar.style.setProperty('transform', 'none', 'important');
-    topBar.style.setProperty('width', 'auto', 'important');
-
-    const topBarInner = topBar.querySelector('div') || topBar;
-    if (topBarInner && topBarInner !== topBar) {
-      topBarInner.style.setProperty('display', 'flex', 'important');
-      topBarInner.style.setProperty('flex-direction', isCCW ? 'row' : 'row-reverse', 'important');
-      topBarInner.style.setProperty('align-items', 'center', 'important');
-      topBarInner.style.setProperty('gap', '8px', 'important');
-      topBarInner.style.setProperty('margin', '0', 'important');
-      topBarInner.style.setProperty('opacity', '1', 'important');
-      topBarInner.style.setProperty('visibility', 'visible', 'important');
-      topBarInner.style.setProperty('pointer-events', 'auto', 'important');
-    }
-  }
-
   const exitBtn = document.getElementById('exit-ar-btn');
-  if (exitBtn) {
-    exitBtn.classList.remove('hidden');
-    exitBtn.style.setProperty('display', 'inline-flex', 'important');
-    exitBtn.style.setProperty('opacity', '1', 'important');
-    exitBtn.style.setProperty('visibility', 'visible', 'important');
-    exitBtn.style.setProperty('pointer-events', 'auto', 'important');
-    exitBtn.style.setProperty('z-index', '155', 'important');
-  }
-
   const recenterBtn = document.getElementById('recenter-btn');
-  if (recenterBtn) {
-    recenterBtn.classList.remove('hidden');
-    recenterBtn.style.setProperty('display', 'inline-flex', 'important');
-    recenterBtn.style.setProperty('opacity', '1', 'important');
-    recenterBtn.style.setProperty('visibility', 'visible', 'important');
-    recenterBtn.style.setProperty('pointer-events', 'auto', 'important');
-    recenterBtn.style.setProperty('z-index', '155', 'important');
-  }
-
-  // 2) Camera Shutter:
-  // Same fixed bottom-center position in both portrait and landscape (never repositioned or transformed)
   const captureBtn = document.getElementById('capture-btn');
-  if (captureBtn && arState.isPlaced) {
-    captureBtn.classList.remove('hidden');
-    captureBtn.style.setProperty('opacity', '1', 'important');
-    captureBtn.style.setProperty('visibility', 'visible', 'important');
-    captureBtn.style.setProperty('pointer-events', 'auto', 'important');
-  }
-
-  // 3) About MassKara Festival Pill:
-  // In CCW: bottom-right of landscape screen. In CW: bottom-left of landscape screen.
-  // Oriented horizontally, completely readable and beautifully positioned above the 30px bottom ribbon strip.
   const infoBtn = document.getElementById('info-toggle-btn');
-  if (infoBtn) {
-    infoBtn.classList.remove('hidden');
-    infoBtn.style.setProperty('position', 'absolute', 'important');
-    infoBtn.style.setProperty('top', 'auto', 'important');
-    infoBtn.style.setProperty('bottom', '44px', 'important');
-    infoBtn.style.setProperty('left', isCCW ? 'auto' : '44px', 'important');
-    infoBtn.style.setProperty('right', isCCW ? '44px' : 'auto', 'important');
-    infoBtn.style.setProperty('transform', 'none', 'important');
-    infoBtn.style.setProperty('display', 'inline-flex', 'important');
-    infoBtn.style.setProperty('opacity', '1', 'important');
-    infoBtn.style.setProperty('visibility', 'visible', 'important');
-    infoBtn.style.setProperty('pointer-events', 'auto', 'important');
-    infoBtn.style.setProperty('z-index', '150', 'important');
-    infoBtn.style.setProperty('white-space', 'nowrap', 'important');
-    infoBtn.style.setProperty('width', 'auto', 'important');
-    infoBtn.style.setProperty('margin', '0', 'important');
+
+  if (arState.isPlaced) {
+    // 1) Top Bar: [Reposition] + [✕ Exit]
+    if (topBar) {
+      topBar.classList.remove('hidden');
+      topBar.style.setProperty('position', 'absolute', 'important');
+      topBar.style.setProperty('top', '38px', 'important');
+      topBar.style.setProperty('bottom', 'auto', 'important');
+      topBar.style.setProperty('left', isCCW ? 'auto' : '44px', 'important');
+      topBar.style.setProperty('right', isCCW ? '44px' : 'auto', 'important');
+      topBar.style.setProperty('z-index', '150', 'important');
+      topBar.style.setProperty('display', 'flex', 'important');
+      topBar.style.setProperty('flex-direction', isCCW ? 'row' : 'row-reverse', 'important');
+      topBar.style.setProperty('align-items', 'center', 'important');
+      topBar.style.setProperty('gap', '10px', 'important');
+      topBar.style.setProperty('opacity', '1', 'important');
+      topBar.style.setProperty('visibility', 'visible', 'important');
+      topBar.style.setProperty('pointer-events', 'auto', 'important');
+      topBar.style.setProperty('transform', 'none', 'important');
+      topBar.style.setProperty('width', 'auto', 'important');
+
+      const topBarInner = topBar.querySelector('div') || topBar;
+      if (topBarInner && topBarInner !== topBar) {
+        topBarInner.style.setProperty('display', 'flex', 'important');
+        topBarInner.style.setProperty('flex-direction', isCCW ? 'row' : 'row-reverse', 'important');
+        topBarInner.style.setProperty('align-items', 'center', 'important');
+        topBarInner.style.setProperty('gap', '8px', 'important');
+        topBarInner.style.setProperty('margin', '0', 'important');
+        topBarInner.style.setProperty('opacity', '1', 'important');
+        topBarInner.style.setProperty('visibility', 'visible', 'important');
+        topBarInner.style.setProperty('pointer-events', 'auto', 'important');
+      }
+    }
+
+    if (exitBtn) {
+      exitBtn.classList.remove('hidden');
+      exitBtn.style.setProperty('display', 'inline-flex', 'important');
+      exitBtn.style.setProperty('opacity', '1', 'important');
+      exitBtn.style.setProperty('visibility', 'visible', 'important');
+      exitBtn.style.setProperty('pointer-events', 'auto', 'important');
+      exitBtn.style.setProperty('z-index', '155', 'important');
+    }
+
+    if (recenterBtn) {
+      recenterBtn.classList.remove('hidden');
+      recenterBtn.style.setProperty('display', 'inline-flex', 'important');
+      recenterBtn.style.setProperty('opacity', '1', 'important');
+      recenterBtn.style.setProperty('visibility', 'visible', 'important');
+      recenterBtn.style.setProperty('pointer-events', 'auto', 'important');
+      recenterBtn.style.setProperty('z-index', '155', 'important');
+    }
+
+    // 2) Camera Shutter:
+    if (captureBtn) {
+      captureBtn.classList.remove('hidden');
+      captureBtn.style.setProperty('opacity', '1', 'important');
+      captureBtn.style.setProperty('visibility', 'visible', 'important');
+      captureBtn.style.setProperty('pointer-events', 'auto', 'important');
+    }
+
+    // 3) About MassKara Festival Pill:
+    if (infoBtn) {
+      infoBtn.classList.remove('hidden');
+      infoBtn.style.setProperty('position', 'absolute', 'important');
+      infoBtn.style.setProperty('top', 'auto', 'important');
+      infoBtn.style.setProperty('bottom', '44px', 'important');
+      infoBtn.style.setProperty('left', isCCW ? 'auto' : '44px', 'important');
+      infoBtn.style.setProperty('right', isCCW ? '44px' : 'auto', 'important');
+      infoBtn.style.setProperty('transform', 'none', 'important');
+      infoBtn.style.setProperty('display', 'inline-flex', 'important');
+      infoBtn.style.setProperty('opacity', '1', 'important');
+      infoBtn.style.setProperty('visibility', 'visible', 'important');
+      infoBtn.style.setProperty('pointer-events', 'auto', 'important');
+      infoBtn.style.setProperty('z-index', '150', 'important');
+      infoBtn.style.setProperty('white-space', 'nowrap', 'important');
+      infoBtn.style.setProperty('width', 'auto', 'important');
+      infoBtn.style.setProperty('margin', '0', 'important');
+    }
+  } else {
+    // Before placement: keep all placed controls strictly hidden
+    if (topBar) {
+      topBar.classList.add('hidden');
+      topBar.style.setProperty('display', 'none', 'important');
+      topBar.style.setProperty('visibility', 'hidden', 'important');
+      topBar.style.setProperty('opacity', '0', 'important');
+      topBar.style.setProperty('pointer-events', 'none', 'important');
+    }
+    if (exitBtn) {
+      exitBtn.classList.add('hidden');
+      exitBtn.style.setProperty('display', 'none', 'important');
+      exitBtn.style.setProperty('visibility', 'hidden', 'important');
+      exitBtn.style.setProperty('opacity', '0', 'important');
+      exitBtn.style.setProperty('pointer-events', 'none', 'important');
+    }
+    if (recenterBtn) {
+      recenterBtn.classList.add('hidden');
+      recenterBtn.style.setProperty('display', 'none', 'important');
+      recenterBtn.style.setProperty('visibility', 'hidden', 'important');
+      recenterBtn.style.setProperty('opacity', '0', 'important');
+      recenterBtn.style.setProperty('pointer-events', 'none', 'important');
+    }
+    if (captureBtn) {
+      captureBtn.classList.add('hidden');
+      captureBtn.style.setProperty('display', 'none', 'important');
+      captureBtn.style.setProperty('visibility', 'hidden', 'important');
+      captureBtn.style.setProperty('opacity', '0', 'important');
+      captureBtn.style.setProperty('pointer-events', 'none', 'important');
+    }
+    if (infoBtn) {
+      infoBtn.classList.add('hidden');
+      infoBtn.style.setProperty('display', 'none', 'important');
+      infoBtn.style.setProperty('visibility', 'hidden', 'important');
+      infoBtn.style.setProperty('opacity', '0', 'important');
+      infoBtn.style.setProperty('pointer-events', 'none', 'important');
+    }
   }
 
   // 4) Dock container: transparent full-bleed layer inside uiWrapper
@@ -358,6 +398,18 @@ function _unpinARControls() {
     if (!el) continue;
     for (const prop of propsToClear) {
       el.style.removeProperty(prop);
+    }
+  }
+
+  // If not placed yet, strictly re-enforce hidden state on placed-only controls
+  if (!arState.isPlaced) {
+    document.getElementById('exit-ar-btn')?.classList.add('hidden');
+    document.getElementById('recenter-btn')?.classList.add('hidden');
+    document.getElementById('info-toggle-btn')?.classList.add('hidden');
+    document.getElementById('capture-btn')?.classList.add('hidden');
+    const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+    if (topBar) {
+      topBar.classList.add('hidden');
     }
   }
 
@@ -487,14 +539,20 @@ export function applyOrientationClasses(orientationInfo) {
       }
     }
 
-    // Always make exit button visible during AR
-    dom.exitArBtn?.classList.remove('hidden');
-
-    // If dancer placed, unhide placed-only controls
+    // Controls visibility in landscape: only show when placed
+    const topBarEl = document.querySelector('.top-bar') || document.querySelector('.top-actions');
     if (arState.isPlaced) {
+      dom.exitArBtn?.classList.remove('hidden');
       dom.recenterBtn?.classList.remove('hidden');
       dom.infoToggleBtn?.classList.remove('hidden');
       dom.captureBtn?.classList.remove('hidden');
+      topBarEl?.classList.remove('hidden');
+    } else {
+      dom.exitArBtn?.classList.add('hidden');
+      dom.recenterBtn?.classList.add('hidden');
+      dom.infoToggleBtn?.classList.add('hidden');
+      dom.captureBtn?.classList.add('hidden');
+      topBarEl?.classList.add('hidden');
     }
 
     // ── Apply landscape controls placement inside uiWrapper ──
@@ -507,6 +565,28 @@ export function applyOrientationClasses(orientationInfo) {
 
     // Remove landscape inline pins so portrait CSS takes over
     _unpinARControls();
+
+    // Controls visibility in portrait: only show when placed
+    const topBarEl = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+    if (arState.isPlaced) {
+      dom.exitArBtn?.classList.remove('hidden');
+      dom.recenterBtn?.classList.remove('hidden');
+      dom.infoToggleBtn?.classList.remove('hidden');
+      dom.captureBtn?.classList.remove('hidden');
+      if (topBarEl) {
+        topBarEl.classList.remove('hidden');
+        topBarEl.style.removeProperty('display');
+      }
+    } else {
+      dom.exitArBtn?.classList.add('hidden');
+      dom.recenterBtn?.classList.add('hidden');
+      dom.infoToggleBtn?.classList.add('hidden');
+      dom.captureBtn?.classList.add('hidden');
+      if (topBarEl) {
+        topBarEl.classList.add('hidden');
+        topBarEl.style.setProperty('display', 'none', 'important');
+      }
+    }
 
     if (overlay) {
       overlay.classList.add('is-portrait');
