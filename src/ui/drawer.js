@@ -1,6 +1,12 @@
 import { arState } from '../ar/state.js';
 import { dom } from './domElements.js';
 
+export function closeHistoryDrawer() {
+  const historyModalEl = dom.historyModal || document.getElementById('history-modal');
+  historyModalEl?.classList.add('hidden');
+  document.body.classList.remove('drawer-open');
+}
+
 export function setupHistoryDrawer() {
   const infoToggleBtnEl = dom.infoToggleBtn;
   const historyModalEl = dom.historyModal;
@@ -16,8 +22,7 @@ export function setupHistoryDrawer() {
   closeHistoryBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
     arState.ignorePlacementUntil = performance.now() + 800;
-    historyModalEl?.classList.add('hidden');
-    document.body.classList.remove('drawer-open');
+    closeHistoryDrawer();
   });
 
   const drawerBodyEl = historyModalEl?.querySelector('.drawer-body');

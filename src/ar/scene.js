@@ -213,9 +213,11 @@ export function initThreeScene() {
     if (arState.renderer.xr.isPresenting) {
       const orient = getEffectiveOrientation();
       if (
-        arState.currentOrientationIsLandscape === null ||
-        orient.isLandscape !== arState.currentOrientationIsLandscape ||
-        (orient.isLandscape && orient.angle !== arState.currentOrientationState.angle)
+        orient && (
+          arState.currentOrientationIsLandscape === null ||
+          orient.isLandscape !== arState.currentOrientationIsLandscape ||
+          (orient.isLandscape && Math.abs((orient.angle || 0) - (arState.currentOrientationState?.angle ?? 0)) > 45)
+        )
       ) {
         updateUILayout(orient);
       }
