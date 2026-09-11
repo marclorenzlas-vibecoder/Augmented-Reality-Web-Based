@@ -170,8 +170,49 @@ export function handleFloorTap(screenX = null, screenY = null) {
   }
 }
 
-export function placeDancer() {
+export function spawnDancerInFrontOfCamera(distance = 1.9) {
+  if (!arState.dancerGroup) return;
+
+  const cam = arState.camera;
+  const camPos = new THREE.Vector3();
+  let forward = new THREE.Vector3(0, 0, -1);
+
+  if (cam) {
+    cam.getWorldPosition(camPos);
+    forward.applyQuaternion(cam.quaternion);
+  }
+
+  // Calculate horizontal forward direction so the dancer stands upright on the floor
+  const horizontal = new THREE.Vector3(forward.x, 0, forward.z).normalize();
+  if (horizontal.lengthSq() < 0.001) {
+    horizontal.set(0, 0, -1);
+  }
+
+  const floorY = (arState.detectedFloorHeight !== undefined && arState.detectedFloorHeight !== null)
+    ? arState.detectedFloorHeight
+    : (camPos.y - 1.25);
+
+  const targetX = camPos.x + horizontal.x * distance;
+  const targetZ = camPos.z + horizontal.z * distance;
+
+  arState.dancerGroup.position.set(targetX, floorY, targetZ);
+  arState.dancerGroup.userData.baseY = floorY;
+
+  const angle = Math.atan2(camPos.x - targetX, camPos.z - targetZ);
+  arState.dancerGroup.userData.baseRotY = angle;
+  arState.dancerGroup.rotation.set(0, angle, 0);
+
+  const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
+  if (dancerVideo) {
+    dancerVideo.play().catch(() => {});
+  }
+
+  placeDancer('MassKara Dancer placed in front of you');
+}
+
+export function placeDancer(customToast = 'MassKara Dancer placed in front of you') {
   arState.isPlaced = true;
+  arState.isSurfaceDetected = true;
   disablePlacementListener();
 
   if (arState.dancerGroup) {
@@ -190,13 +231,14 @@ export function placeDancer() {
   const audioEl = arState.dancerAudioEl || document.getElementById('dancer-audio');
 
   if (dancerVideo) {
-    dancerVideo.currentTime = 0;
-    dancerVideo.play().catch(() => { });
+    if (dancerVideo.paused) {
+      dancerVideo.currentTime = 0;
+      dancerVideo.play().catch(() => { });
+    }
   }
 
   resumeAudioContext();
   if (audioEl) {
-    audioEl.currentTime = 0;
     if (arState.isAudioReady && !arState.isAudioMuted) {
       audioEl.play().catch(() => {});
     }
@@ -210,7 +252,7 @@ export function placeDancer() {
     syncAudioToVideo(true);
   }
 
-  setToast('3D Object placed on floor');
+  setToast(customToast);
 
   const captureBtn = dom.captureBtn || document.getElementById('capture-btn');
   if (captureBtn) {
@@ -265,54 +307,16 @@ export function placeDancer() {
 
   setTimeout(() => {
     dom.toast?.classList.add('hidden');
-  }, 1800);
+  }, 2200);
 }
 
 export function repositionDancer() {
-  arState.ignorePlacementUntil = performance.now() + 800;
-  arState.isPlaced = false;
-  if (arState.dancerGroup) {
-    arState.dancerGroup.visible = false;
-    arState.dancerGroup.scale.set(1, 1, 1);
-  }
-  disablePlacementListener();
-
-  stopPositionalAudio();
-  const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
-  if (dancerVideo) {
-    dancerVideo.pause();
-    dancerVideo.currentTime = 0;
-  }
-
-  if (arState.floorGridMesh) {
-    arState.floorGridMesh.visible = true;
-    arState.floorGridMesh.traverse((child) => {
-      if (child.isMesh) child.visible = true;
-    });
-  }
-  if (arState.fallbackFloorGridMesh) {
-    arState.fallbackFloorGridMesh.visible = true;
-  }
-
-  dom.historyModal?.classList.add('hidden');
-  document.body.classList.remove('drawer-open');
-  dom.infoToggleBtn?.classList.add('hidden');
-  dom.captureBtn?.classList.add('hidden');
-  dom.recenterBtn?.classList.add('hidden');
-  dom.exitArBtn?.classList.add('hidden');
-  const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
-  if (topBar) {
-    topBar.classList.add('hidden');
-    topBar.style.setProperty('display', 'none', 'important');
-  }
-
-  setToast('Point at floor plane and tap anywhere on grid to place');
-
+  arState.ignorePlacementUntil = performance.now() + 600;
+  spawnDancerInFrontOfCamera(1.9);
+  setToast('Dancer repositioned in front of camera');
   setTimeout(() => {
-    if (arState.arStarted && !arState.isPlaced) {
-      enablePlacementListener();
-    }
-  }, 600);
+    dom.toast?.classList.add('hidden');
+  }, 1800);
 }
 
 export function setupPlacementInputListeners() {

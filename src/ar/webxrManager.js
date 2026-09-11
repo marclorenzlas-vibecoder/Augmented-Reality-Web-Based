@@ -8,7 +8,8 @@ import { updateUILayout, unpinARControls } from '../ui/orientationController.js'
 import {
   enablePlacementListener,
   resetArSessionState,
-  onSelect
+  onSelect,
+  spawnDancerInFrontOfCamera
 } from './placementController.js';
 import { stopPositionalAudio } from '../audio/audioController.js';
 import { startFallbackAR, stopFallbackAR, repositionFallbackDancer } from './fallbackArManager.js';
@@ -36,7 +37,8 @@ export function restoreArButtonContent() {
 
 export function handleSessionStart() {
   arState.arStarted = true;
-  arState.isPlaced = false;
+  arState.isPlaced = true;
+  arState.isSurfaceDetected = true;
   arState.hitTestSourceRequested = false;
   arState.hitTestSource = null;
   document.body.classList.add('ar-active');
@@ -59,34 +61,18 @@ export function handleSessionStart() {
     uiOverlayEl.style.pointerEvents = '';
   }
 
-  // 4. Hide placed-only controls until dancer is placed (Exit, Reposition, Info, Shutter)
-  dom.exitArBtn?.classList.add('hidden');
-  dom.recenterBtn?.classList.add('hidden');
-  dom.infoToggleBtn?.classList.add('hidden');
-  dom.captureBtn?.classList.add('hidden');
-  const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
-  if (topBar) {
-    topBar.classList.add('hidden');
-    topBar.style.setProperty('display', 'none', 'important');
-  }
+  // 4. Hide floor grids and surface scanner reticle
+  if (arState.floorGridMesh) arState.floorGridMesh.visible = false;
+  if (arState.fallbackFloorGridMesh) arState.fallbackFloorGridMesh.visible = false;
+  dom.surfaceScannerReticle?.classList.add('hidden');
 
-  // 5. Show initial floor detection toast
-  const toast = dom.toast || $('toast');
-  if (toast) {
-    toast.classList.remove('hidden');
-  }
+  // 5. Automatically spawn dancer directly in front of camera
+  spawnDancerInFrontOfCamera(1.9);
 
-  // 7. Layout orientation & enable placement listeners
+  // 6. Layout orientation
   updateUILayout(null, true);
   requestAnimationFrame(() => updateUILayout(null, true));
   setTimeout(() => updateUILayout(null, true), 150);
-
-  enablePlacementListener();
-  setTimeout(() => {
-    if (arState.arStarted && !arState.isPlaced) {
-      enablePlacementListener();
-    }
-  }, 400);
 }
 
 export function handleSessionEndCleanup() {
