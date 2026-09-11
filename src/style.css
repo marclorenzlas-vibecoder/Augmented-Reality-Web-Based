@@ -383,7 +383,8 @@ body {
   justify-content: center;
   pointer-events: auto;
   margin: 0 auto;
-  padding: 8px 0;
+  padding: 0;
+  padding-bottom: clamp(10px, 2.5vh, 24px);
   position: relative;
   text-align: center;
 }
@@ -397,8 +398,16 @@ body {
   pointer-events: none !important;
 }
 
-.landing-button-anchor.is-ready #landing-loader {
+/* Ensure hidden loader and compat-card never take up layout space in the anchor */
+.landing-loader.hidden,
+#landing-loader.hidden,
+.landing-button-anchor.is-ready #landing-loader,
+.compat-card.hidden,
+#landing-compat-card.hidden {
   display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 .landing-button-anchor.is-ready #ARButton:not(.hidden) {
@@ -1025,13 +1034,17 @@ body {
 .btn--ghost {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   background: rgba(255, 255, 255, 0.90);
   backdrop-filter: var(--blur-sm);
   -webkit-backdrop-filter: var(--blur-sm);
   border: 1px solid var(--c-border-md);
   color: var(--c-text);
-  padding: 8px 16px;
+  padding: 0 14px;
+  height: 36px;
+  min-height: 36px;
+  box-sizing: border-box;
   font-size: 12.5px;
   font-weight: 700;
   pointer-events: auto;
@@ -1049,10 +1062,10 @@ body {
 }
 
 .btn--exit {
-  width: 46px;
-  height: 46px;
-  min-width: 46px;
-  min-height: 46px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   padding: 0;
   display: flex;
   align-items: center;
@@ -1069,6 +1082,7 @@ body {
   touch-action: manipulation;
   z-index: 100;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
 }
 
 .btn--exit:hover {
@@ -1085,8 +1099,8 @@ body {
 }
 
 .btn--exit svg {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   stroke-width: 2.5;
   display: block;
   pointer-events: none;
@@ -1189,7 +1203,7 @@ body {
 .top-bar,
 .top-actions {
   position: absolute !important;
-  top: calc(max(env(safe-area-inset-top, 0px), 0px) + 36px) !important;
+  top: 38px !important;
   right: 16px !important;
   left: auto !important;
   bottom: auto !important;
@@ -1495,23 +1509,39 @@ body {
   transition: opacity 0.2s ease;
 }
 
-/* Shutter Button */
+/* Shutter Button — Fixed stationary position across both portrait and landscape */
 .shutter-btn,
-.camera-button {
-  align-self: center;
-  position: relative;
-  width: 74px;
-  height: 74px;
+.camera-button,
+#capture-btn {
+  position: absolute !important;
+  bottom: calc(max(env(safe-area-inset-bottom, 0px), 0px) + 38px) !important;
+  left: 50% !important;
+  right: auto !important;
+  top: auto !important;
+  transform: translateX(-50%) !important;
+  width: 74px !important;
+  height: 74px !important;
   background: none;
   border: none;
   cursor: pointer;
   outline: none;
-  display: flex;
+  display: flex !important;
   align-items: center;
   justify-content: center;
   padding: 0;
+  margin: 0 !important;
   pointer-events: auto;
-  transition: opacity 0.2s ease, transform 0.15s ease;
+  z-index: 150 !important;
+  transition: opacity 0.2s ease !important;
+}
+
+#capture-btn.hidden,
+.shutter-btn.hidden,
+.camera-button.hidden {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 .shutter-ring {
@@ -1813,10 +1843,10 @@ body.landscape #ui-overlay {
 }
 
 body.simulated-landscape {
-  --ar-edge-l: 24px;
-  --ar-edge-r: 24px;
-  --ar-edge-t: 38px;
-  --ar-edge-b: 38px;
+  --ar-edge-l: 68px;
+  --ar-edge-r: 68px;
+  --ar-edge-t: 42px;
+  --ar-edge-b: 44px;
 }
 
 body.simulated-landscape #ui-overlay {
@@ -1882,12 +1912,13 @@ body.ar-active.is-landscape .btn--exit:not(.hidden) {
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: auto !important;
-  width: 44px !important;
-  height: 44px !important;
-  min-width: 44px !important;
-  min-height: 44px !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
   border-radius: 50% !important;
   z-index: 105 !important;
+  box-sizing: border-box !important;
 }
 
 .is-landscape #recenter-btn:not(.hidden),
@@ -1896,38 +1927,17 @@ body.is-landscape #recenter-btn:not(.hidden) {
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: auto !important;
-  padding: 8px 16px !important;
+  padding: 0 14px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  box-sizing: border-box !important;
   font-size: 12.5px !important;
   z-index: 105 !important;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   ② LANDSCAPE — Middle-right: Camera button (vertically centred for right thumb)
+   ② LANDSCAPE — Bottom-left / Bottom-right: About MassKara pill
 ────────────────────────────────────────────────────────────────────────────── */
-.is-landscape .camera-button,
-.is-landscape .shutter-btn,
-body.is-landscape .camera-button,
-body.is-landscape .shutter-btn,
-body.landscape .camera-button,
-body.landscape .shutter-btn {
-  position: absolute !important;
-  top: 50% !important;
-  right: var(--ar-edge-r, 20px) !important;
-  transform: translateY(-50%) !important;
-  left: auto !important;
-  bottom: auto !important;
-  margin: 0 !important;
-  pointer-events: auto !important;
-  z-index: 95 !important;
-}
-
-.is-landscape #capture-btn:not(.hidden),
-body.is-landscape #capture-btn:not(.hidden) {
-  display: flex !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  pointer-events: auto !important;
-}
 
 /* ──────────────────────────────────────────────────────────────────────────────
    ③ LANDSCAPE — Bottom-left: About MassKara pill (accessible for left thumb)
@@ -1969,13 +1979,7 @@ body.simulated-landscape--90 .top-bar {
   flex-direction: row-reverse !important;
 }
 
-.simulated-landscape--90 .camera-button,
-.simulated-landscape--90 .shutter-btn,
-body.simulated-landscape--90 .camera-button,
-body.simulated-landscape--90 .shutter-btn {
-  left: var(--ar-edge-l, 20px) !important;
-  right: auto !important;
-}
+
 
 .simulated-landscape--90 .info-pill,
 .simulated-landscape--90 .btn--info,
@@ -2100,22 +2104,7 @@ body.simulated-landscape .ui-wrapper,
     z-index: 70 !important;
   }
 
-  body:not(.is-portrait) .camera-button,
-  body:not(.is-portrait) .shutter-btn,
-  body.landscape:not(.is-portrait) .camera-button,
-  body.landscape:not(.is-portrait) .shutter-btn,
-  body.is-landscape:not(.is-portrait) .camera-button,
-  body.is-landscape:not(.is-portrait) .shutter-btn {
-    position: absolute !important;
-    top: 50% !important;
-    right: var(--ar-edge-r) !important;
-    transform: translateY(-50%) !important;
-    left: auto !important;
-    bottom: auto !important;
-    margin: 0 !important;
-    pointer-events: auto !important;
-    z-index: 60 !important;
-  }
+
 
   body:not(.is-portrait) .info-pill,
   body:not(.is-portrait) .btn--info,
@@ -2174,36 +2163,19 @@ body.simulated-landscape .ui-wrapper,
 /* Portrait dock: bottom-anchored column, centred */
 .is-portrait .dock,
 body.is-portrait .dock {
-  position: absolute;
-  bottom: calc(max(env(safe-area-inset-bottom, 0px), 0px) + 38px);
-  left: 0;
-  right: 0;
-  width: 100%;
-  transform: none;
-  display: flex;
-  flex-direction: column-reverse;  /* camera on bottom, about on top */
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0 0 12px;
-  gap: 12px;
-  pointer-events: none;
-}
-
-/* Portrait: camera button — in flow, centred */
-.is-portrait .camera-button,
-.is-portrait .shutter-btn,
-body.is-portrait .camera-button,
-body.is-portrait .shutter-btn {
-  position: relative;
-  top: auto;
-  right: auto;
-  bottom: auto;
-  left: auto;
-  transform: none;
-  align-self: center;
-  margin: 0;
-  pointer-events: auto;
-  z-index: 60;
+  position: absolute !important;
+  bottom: calc(max(env(safe-area-inset-bottom, 0px), 0px) + 124px) !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  transform: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Portrait: About MassKara pill — in flow, centred, above camera */
@@ -2232,7 +2204,7 @@ body.is-portrait .btn--info {
 body.is-portrait .top-actions,
 body.is-portrait .top-bar {
   position: absolute !important;
-  top: calc(max(env(safe-area-inset-top, 0px), 0px) + 36px) !important;
+  top: 38px !important;
   right: 16px !important;
   left: auto !important;
   bottom: auto !important;
