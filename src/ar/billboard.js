@@ -23,7 +23,6 @@ export function buildVideoBillboard() {
     arState.videoTex.minFilter = THREE.LinearFilter;
     arState.videoTex.magFilter = THREE.LinearFilter;
     arState.videoTex.generateMipmaps = false;
-    arState.videoTex.colorSpace = THREE.SRGBColorSpace;
 
     mat = createBillboardMaterial(arState.videoTex);
 
@@ -41,6 +40,12 @@ export function buildVideoBillboard() {
   arState.videoMesh.visible = arState.isMediaReady;
   arState.videoMesh.position.set(0, BILLBOARD_HEIGHT / 2, 0);
   group.add(arState.videoMesh);
+
+  // Soft Ground Occlusion Shadow (strictly for GIFs & GLB models)
+  arState.groundShadowMesh = createGroundOcclusionShadow(w * 0.9, 1.8, 0.65);
+  arState.groundShadowMesh.visible = false;
+  group.add(arState.groundShadowMesh);
+
   return group;
 }
 
@@ -60,6 +65,10 @@ export function updateVideoBillboardGeometry() {
   }
   videoMesh.geometry = new THREE.PlaneGeometry(w, h);
   videoMesh.position.set(0, h / 2, 0);
+
+  if (arState.groundShadowMesh) {
+    arState.groundShadowMesh.visible = false;
+  }
 }
 
 export function applyVideoToBillboard() {
@@ -70,6 +79,11 @@ export function applyVideoToBillboard() {
   arState.mixer = null;
   if (arState.videoMesh) {
     arState.videoMesh.visible = arState.isMediaReady;
+  }
+
+  // Never show ground shadow for MP4 videos
+  if (arState.groundShadowMesh) {
+    arState.groundShadowMesh.visible = false;
   }
 
   const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
@@ -83,7 +97,6 @@ export function applyVideoToBillboard() {
   arState.videoTex.minFilter = THREE.LinearFilter;
   arState.videoTex.magFilter = THREE.LinearFilter;
   arState.videoTex.generateMipmaps = false;
-  arState.videoTex.colorSpace = THREE.SRGBColorSpace;
 
   if (arState.videoMesh) {
     if (arState.videoMesh.material) arState.videoMesh.material.dispose();
@@ -103,6 +116,13 @@ export function applyTextureToBillboard(tex) {
     arState.videoMesh.visible = arState.isMediaReady;
   }
 
+  if (arState.groundShadowMesh) {
+    arState.groundShadowMesh.visible = true;
+    if (arState.dancerGroup && !arState.dancerGroup.children.includes(arState.groundShadowMesh)) {
+      arState.dancerGroup.add(arState.groundShadowMesh);
+    }
+  }
+
   if (!arState.videoMesh) return;
 
   if (arState.videoMesh.material) arState.videoMesh.material.dispose();
@@ -118,16 +138,20 @@ export function applyTextureToBillboard(tex) {
   if (arState.videoMesh.geometry) arState.videoMesh.geometry.dispose();
   arState.videoMesh.geometry = new THREE.PlaneGeometry(w, h);
   arState.videoMesh.position.set(0, h / 2, 0);
+
+  if (arState.groundShadowMesh) {
+    arState.groundShadowMesh.scale.set(w * 0.45, 0.9, 1);
+  }
 }
 
-export function createGroundOcclusionShadow() {
-  const geo = new THREE.PlaneGeometry(1.5, 1.5);
+export function createGroundOcclusionShadow(w = 2.4, d = 2.0, opacity = 0.65) {
+  const geo = new THREE.PlaneGeometry(w, d);
   geo.rotateX(-Math.PI / 2);
 
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       uColor: { value: new THREE.Color(0x000000) },
-      uOpacity: { value: 0.55 }
+      uOpacity: { value: opacity }
     },
     vertexShader: `
       varying vec2 vUv;
@@ -147,8 +171,8 @@ export function createGroundOcclusionShadow() {
 
         if (dist > 0.5) discard;
 
-        float coreShadow = (1.0 - smoothstep(0.0, 0.16, dist)) * 0.7;
-        float outerShadow = (1.0 - smoothstep(0.1, 0.5, dist)) * 0.35;
+        float coreShadow = (1.0 - smoothstep(0.0, 0.20, dist)) * 0.75;
+        float outerShadow = (1.0 - smoothstep(0.10, 0.5, dist)) * 0.35;
 
         float alpha = (coreShadow + outerShadow) * uOpacity;
         gl_FragColor = vec4(uColor, alpha);
@@ -160,7 +184,7 @@ export function createGroundOcclusionShadow() {
   });
 
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(0, 0.002, 0);
+  mesh.position.set(0, 0.003, 0);
   return mesh;
 }
 

@@ -7,7 +7,7 @@ export function getDancerAudioElement() {
     if (!arState.dancerAudioEl) {
       arState.dancerAudioEl = document.createElement('audio');
       arState.dancerAudioEl.id = 'dancer-audio';
-      arState.dancerAudioEl.loop = true;
+      arState.dancerAudioEl.loop = false; // Controlled strictly by video loop sync
       arState.dancerAudioEl.playsInline = true;
       arState.dancerAudioEl.preload = 'auto';
       arState.dancerAudioEl.crossOrigin = 'anonymous';
@@ -18,6 +18,20 @@ export function getDancerAudioElement() {
       arState.dancerAudioEl.style.height = '1px';
       arState.dancerAudioEl.style.opacity = '0';
       arState.dancerAudioEl.style.pointerEvents = 'none';
+
+      // If audio file ends before video loops, loop audio in lockstep with video
+      arState.dancerAudioEl.addEventListener('ended', () => {
+        if (arState.arStarted && arState.isPlaced && arState.dancerGroup && arState.dancerGroup.visible && !arState.isAudioMuted) {
+          const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
+          if (dancerVideo && !dancerVideo.paused) {
+            try {
+              arState.dancerAudioEl.currentTime = 0;
+              arState.dancerAudioEl.play().catch(() => {});
+            } catch (e) {}
+          }
+        }
+      });
+
       document.body.appendChild(arState.dancerAudioEl);
     }
   }
@@ -45,31 +59,32 @@ export function syncAudioToVideo(force = false) {
   }
 
   // 2. Check video playback state
-  if (!arState.dancerVideo) return;
+  const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
+  if (!dancerVideo) return;
 
-  if (arState.dancerVideo.paused || arState.dancerVideo.seeking || arState.dancerVideo.readyState < 2) {
+  if (dancerVideo.paused || dancerVideo.seeking || dancerVideo.readyState < 2) {
     if (!audioEl.paused) audioEl.pause();
     return;
   }
 
   const now = performance.now();
-  // Throttle non-forced sync calls to prevent property spamming
-  if (!force && (now - arState.lastAudioSyncTime < 300)) {
+  // Throttle non-forced sync calls to avoid performance overhead
+  if (!force && (now - arState.lastAudioSyncTime < 200)) {
     return;
   }
   arState.lastAudioSyncTime = now;
 
-  const targetTime = arState.dancerVideo.currentTime;
+  const targetTime = dancerVideo.currentTime;
   const drift = Math.abs(audioEl.currentTime - targetTime);
 
-  // If video looped or drift exceeds 100ms, adjust audio currentTime
-  if (force || drift > 0.10) {
+  // If video looped or drift exceeds 60ms, lock audio currentTime to video
+  if (force || drift > 0.06) {
     try {
       audioEl.currentTime = targetTime;
     } catch (e) {}
   }
 
-  if (audioEl.paused && !arState.dancerVideo.paused) {
+  if (audioEl.paused && !dancerVideo.paused) {
     resumeAudioContext();
     audioEl.play().catch(() => {});
   }

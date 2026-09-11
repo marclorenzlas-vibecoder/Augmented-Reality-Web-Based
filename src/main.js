@@ -10,6 +10,7 @@ import { setupQrGalleryUpload, restartQrCameraSoon } from './scanner/qrScanner.j
 import { setupHistoryDrawer } from './ui/drawer.js';
 import { setupCapture } from './ui/captureController.js';
 import { repositionDancer, resetArSessionState } from './ar/placementController.js';
+import { handleSessionEndCleanup } from './ar/webxrManager.js';
 
 // ── Application Initialization ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -93,15 +94,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     dancerVideo.addEventListener('ended', () => {
-      if (arState.arStarted && arState.isPlaced && arState.dancerGroup && arState.dancerGroup.visible && !arState.isAudioMuted) {
+      if (arState.arStarted && arState.isPlaced && arState.dancerGroup && arState.dancerGroup.visible) {
+        dancerVideo.currentTime = 0;
+        dancerVideo.play().catch(() => {});
+        const audioEl = arState.dancerAudioEl || document.getElementById('dancer-audio');
+        if (audioEl) {
+          try {
+            audioEl.currentTime = 0;
+            if (!arState.isAudioMuted) audioEl.play().catch(() => {});
+          } catch (e) {}
+        }
         syncAudioToVideo(true);
       }
     });
 
     let lastVideoSyncTime = 0;
     dancerVideo.addEventListener('timeupdate', () => {
-      if (dancerVideo.currentTime < lastVideoSyncTime - 0.25) {
+      // Loop boundary detection: when video rewinds to start
+      if (dancerVideo.currentTime < lastVideoSyncTime - 0.25 || (dancerVideo.currentTime < 0.35 && lastVideoSyncTime > 1.0)) {
         if (arState.arStarted && arState.isPlaced && arState.dancerGroup && arState.dancerGroup.visible && !arState.isAudioMuted) {
+          const audioEl = arState.dancerAudioEl || document.getElementById('dancer-audio');
+          if (audioEl) {
+            try {
+              audioEl.currentTime = dancerVideo.currentTime;
+              if (audioEl.paused) audioEl.play().catch(() => {});
+            } catch (e) {}
+          }
           syncAudioToVideo(true);
         }
       }
@@ -139,28 +157,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 6. Exit AR button
   const exitArBtnEl = dom.exitArBtn;
-  exitArBtnEl?.addEventListener('click', async (e) => {
-    e.stopPropagation();
+  let isExitingAR = false;
+  const triggerExitAR = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (isExitingAR) return;
+    isExitingAR = true;
+
     try {
-      if (arState.renderer && arState.renderer.xr && arState.renderer.xr.getSession()) {
-        await arState.renderer.xr.getSession().end();
+      const session = arState.renderer?.xr?.getSession();
+      if (session) {
+        await session.end();
       }
     } catch (err) {
-      console.warn('Session already ended or error:', err);
+      console.warn('Session end error:', err);
+    } finally {
+      handleSessionEndCleanup();
+      setTimeout(() => { isExitingAR = false; }, 500);
     }
-    resetArSessionState();
-    dom.uiOverlay?.classList.add('hidden');
+  };
 
-    const arBtn = document.getElementById('ARButton');
-    if (arBtn && arState.isMediaReady) arBtn.style.display = 'block';
-    arState.dancerVideo?.pause();
-    stopPositionalAudio();
-
-    dom.infoToggleBtn?.classList.add('hidden');
-    dom.captureBtn?.classList.add('hidden');
-    dom.recenterBtn?.classList.add('hidden');
-    dom.toast?.classList.add('hidden');
-  });
+  if (exitArBtnEl) {
+    exitArBtnEl.addEventListener('click', triggerExitAR);
+    exitArBtnEl.addEventListener('touchend', triggerExitAR);
+    exitArBtnEl.addEventListener('pointerup', triggerExitAR);
+  }
 
   // 7. Geofence & Camera Startup Check (Exclusive to NGC within 500m)
   initLocationGateCheck();

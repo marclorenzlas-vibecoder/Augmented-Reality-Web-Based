@@ -24,8 +24,9 @@ export const ChromaShader = {
       }
 
       if (keyMode == 0) {
-        // Original / Opaque (No background removal)
-        gl_FragColor = texColor;
+        // Mode 0: GIF / Image native transparency with vibrant sRGB gamma correction
+        vec3 col = pow(texColor.rgb, vec3(1.0 / 2.2));
+        gl_FragColor = vec4(col, texColor.a);
       } else if (keyMode == 1) {
         // Green Screen Chroma Key with Green Despill
         float Y1 = 0.299 * keyColor.r + 0.587 * keyColor.g + 0.114 * keyColor.b;
@@ -185,6 +186,14 @@ export function detectAndApplyKeyModeFromUrl(url) {
   const decoded = decodeURIComponent(url).toLowerCase();
   arState.hasFilenameKeyTag = false;
 
+  // 0. GIF, PNG, WebP, GLB have native alpha transparency (Do NOT chroma key them)
+  if (/\.(gif|png|webp|glb|gltf)($|[?#])/i.test(decoded)) {
+    console.log('Chroma Key: Asset has native alpha transparency. Mode 0 (Pass-through).');
+    arState.hasFilenameKeyTag = true;
+    applyKeySettings(0);
+    return;
+  }
+
   // 1. Original / Opaque (No background removal)
   if (/(original|_original|originalbg|orig\b|_orig\b|_nobgkey|_opaque|_none\b|bg=none|key=none)/i.test(decoded)) {
     console.log('Chroma Key: Original / Opaque mode (No Background Removal)');
@@ -262,7 +271,7 @@ export function autoDetectKeyModeFromVideo() {
     const avgB = totalB / 4;
 
     if (arState.hasFilenameKeyTag && arState.currentKeyMode === 3) {
-      if (Math.abs(avgR - avgG) < 25 && Math.abs(avgG - avgB) < 25) {
+      if (Math.abs(avgR - avgG) < 25 && Math.abs(avgG - avgB) < 25 && avgR > 30) {
         applyKeySettings(3, new THREE.Color(avgR / 255, avgG / 255, avgB / 255));
       }
       return;

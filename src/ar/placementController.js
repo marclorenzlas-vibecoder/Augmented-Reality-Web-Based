@@ -118,29 +118,19 @@ export function handleFloorTap(screenX = null, screenY = null) {
     }
   }
 
-  // 2. Intersect with horizontal ground plane at detected floor height
-  const floorY = arState.detectedFloorHeight !== null
-    ? arState.detectedFloorHeight
-    : (arState.lastHitPosition ? arState.lastHitPosition.y : (activeCam.position.y - 1.2));
-
-  if (!foundIntersection) {
+  // 2. If fallback grid is active on detected surface, ensure tap is inside grid bounds (max 3m radius)
+  if (!foundIntersection && arState.fallbackFloorGridMesh && arState.fallbackFloorGridMesh.visible && arState.detectedFloorHeight !== null) {
+    const floorY = arState.detectedFloorHeight;
     const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorY);
-    if (raycaster.ray.intersectPlane(groundPlane, targetPoint)) {
-      const camDir = new THREE.Vector3();
-      activeCam.getWorldDirection(camDir);
-      const toHit = targetPoint.clone().sub(activeCam.position);
-      if (toHit.dot(camDir) > 0.05 && toHit.length() < 25) {
+    const hitIntersection = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(groundPlane, hitIntersection)) {
+      const distFromGridCenter = hitIntersection.distanceTo(arState.fallbackFloorGridMesh.position);
+      if (distFromGridCenter <= 3.0) {
+        targetPoint.copy(hitIntersection);
+        targetPoint.y = floorY;
         foundIntersection = true;
       }
     }
-  }
-
-  // 3. Fallback: project along user's tapped ray direction at current depth
-  if (!foundIntersection) {
-    const dist = arState.lastHitPosition ? activeCam.position.distanceTo(arState.lastHitPosition) : 1.8;
-    targetPoint.copy(raycaster.ray.direction).multiplyScalar(dist).add(raycaster.ray.origin);
-    targetPoint.y = floorY;
-    foundIntersection = true;
   }
 
   if (foundIntersection && arState.dancerGroup) {
@@ -149,7 +139,7 @@ export function handleFloorTap(screenX = null, screenY = null) {
       dancerVideo.play().catch(() => { });
     }
 
-    arState.dancerGroup.position.copy(targetPoint);
+    arState.dancerGroup.position.set(targetPoint.x, targetPoint.y, targetPoint.z);
     arState.dancerGroup.userData.baseY = targetPoint.y;
 
     const cameraPos = new THREE.Vector3();
@@ -163,7 +153,7 @@ export function handleFloorTap(screenX = null, screenY = null) {
 
     placeDancer();
   } else {
-    setToast('Point at floor to detect flat surface, then tap anywhere on grid');
+    setToast('Point camera at floor and tap directly on the floor grid to place');
   }
 }
 
@@ -180,12 +170,21 @@ export function placeDancer() {
   }
 
   const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
+  const audioEl = arState.dancerAudioEl || document.getElementById('dancer-audio');
+
   if (dancerVideo) {
     dancerVideo.currentTime = 0;
     dancerVideo.play().catch(() => { });
   }
 
   resumeAudioContext();
+  if (audioEl) {
+    audioEl.currentTime = 0;
+    if (arState.isAudioReady && !arState.isAudioMuted) {
+      audioEl.play().catch(() => {});
+    }
+  }
+
   if (arState.isAudioReady && !arState.isAudioMuted) {
     if (arState.positionalAudio) {
       arState.positionalAudio.stop();

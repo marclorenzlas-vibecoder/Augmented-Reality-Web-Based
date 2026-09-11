@@ -24,7 +24,7 @@ export async function launchDirectAR() {
   }
 
   loadMediaFromQR(targetMedia);
-  dom.uiOverlay?.classList.remove('hidden');
+  dom.landingScreen?.classList.remove('hidden');
 }
 
 export async function startUniversalAR() {
@@ -141,16 +141,16 @@ export function initThreeScene() {
       const referenceSpace = arState.renderer.xr.getReferenceSpace();
       const session = arState.renderer.xr.getSession();
 
-      if (arState.hitTestSourceRequested === false) {
+      if (arState.hitTestSourceRequested === false && session) {
         session.requestReferenceSpace('viewer').then((viewerSpace) => {
           session.requestHitTestSource({ space: viewerSpace }).then((source) => {
             arState.hitTestSource = source;
-          });
-        });
+          }).catch(err => console.warn('Hit test source error:', err));
+        }).catch(err => console.warn('Viewer space error:', err));
 
         session.addEventListener('end', async () => {
           handleSessionEndCleanup();
-        });
+        }, { once: true });
 
         arState.hitTestSourceRequested = true;
       }

@@ -176,6 +176,73 @@ body {
 }
 
 /* ──────────────────────────────────────────
+   Screen 0 — Bacolod Tourism Start AR Landing
+────────────────────────────────────────── */
+.screen--landing {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(251, 176, 59, 0.16) 0%, transparent 48%),
+    radial-gradient(circle at 90% 18%, rgba(146, 74, 150, 0.13) 0%, transparent 45%),
+    radial-gradient(circle at 50% 95%, rgba(12, 118, 186, 0.13) 0%, transparent 55%),
+    radial-gradient(circle at 50% 50%, rgba(238, 99, 39, 0.05) 0%, transparent 60%),
+    url("data:image/svg+xml,%3Csvg width='48' height='48' viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ee6327' fill-opacity='0.022' fill-rule='evenodd'%3E%3Cpath d='M24 0L0 24l24 24 24-24L24 0zm0 6.83L41.17 24 24 41.17 6.83 24 24 6.83z'/%3E%3C/g%3E%3C/svg%3E"),
+    #fffdfb;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  padding: calc(max(env(safe-area-inset-top), 0px) + 38px) 18px calc(max(env(safe-area-inset-bottom), 0px) + 38px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.screen--landing.hidden {
+  display: none !important;
+}
+
+.screen--landing .landing-container {
+  width: 100%;
+  max-width: 420px;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.screen--landing .landing-header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.landing-button-anchor {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  margin: 0;
+  padding: 8px 0;
+}
+
+/* ──────────────────────────────────────────
    Screen 1 — Bacolod Tourism QR Scanner
 ────────────────────────────────────────── */
 .screen--qr {
@@ -616,13 +683,47 @@ body {
 }
 
 .btn--exit {
-  width: 36px;
-  height: 36px;
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  min-height: 46px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(15, 23, 42, 0.16);
+  color: #1e293b;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  pointer-events: auto !important;
+  touch-action: manipulation;
+  z-index: 100;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn--exit:hover {
+  background: #ffffff;
+  border-color: var(--bacolod-orange);
+  color: var(--bacolod-orange);
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(238, 99, 39, 0.25);
+}
+
+.btn--exit:active {
+  transform: scale(0.92);
+  background: #f1f5f9;
+}
+
+.btn--exit svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.5;
+  display: block;
+  pointer-events: none;
 }
 
 .btn--info,
@@ -682,10 +783,16 @@ body {
 ────────────────────────────────────────── */
 .overlay,
 #ui-overlay {
-  position: fixed;
-  inset: 0;
-  width: 100dvw;
-  height: 100dvh;
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  min-height: -webkit-fill-available !important;
   z-index: 50;
   pointer-events: none;
   overflow: hidden;
@@ -693,10 +800,15 @@ body {
 }
 
 .ui-wrapper {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  position: absolute !important;
+  inset: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
   pointer-events: none;
   display: flex;
   flex-direction: column;
@@ -719,13 +831,14 @@ body .ui-wrapper.ui-transitioning,
 .top-bar,
 .top-actions {
   position: absolute;
-  top: max(env(safe-area-inset-top), 45px);
+  top: calc(max(env(safe-area-inset-top), 0px) + 50px);
   left: 18px;
   right: 18px;
   display: flex;
   justify-content: flex-end;
   align-items: center;
   pointer-events: auto;
+  z-index: 90;
   transition: opacity 0.2s ease;
 }
 
@@ -1116,7 +1229,7 @@ body.landscape .screen--qr {
   justify-content: center !important;
   align-items: center !important;
   gap: clamp(4px, 1.2vh, 8px) !important;
-  padding: max(env(safe-area-inset-top), 24px) 16px max(env(safe-area-inset-bottom), 24px) !important;
+  padding: max(env(safe-area-inset-top), 38px) 16px max(env(safe-area-inset-bottom), 38px) !important;
   overflow-y: auto !important;
 }
 
@@ -1189,47 +1302,13 @@ body.landscape .screen--qr .btn--gallery {
   font-size: 12px !important;
 }
 
-body.landscape .screen--qr .tribal-ribbon--top,
-body.landscape .screen--location .tribal-ribbon--top {
-  position: absolute !important;
-  left: 0 !important;
-  right: auto !important;
-  top: 0 !important;
-  bottom: 0 !important;
-  width: 30px !important;
-  height: 100% !important;
-  background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
-  background-repeat: repeat-y !important;
-  background-size: 30px 360px !important;
-  background-position: center top !important;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.12) !important;
-  transform: none !important;
-}
-
-body.landscape .screen--qr .tribal-ribbon--bottom,
-body.landscape .screen--location .tribal-ribbon--bottom {
-  position: absolute !important;
-  right: 0 !important;
-  left: auto !important;
-  top: 0 !important;
-  bottom: 0 !important;
-  width: 30px !important;
-  height: 100% !important;
-  background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
-  background-repeat: repeat-y !important;
-  background-size: 30px 360px !important;
-  background-position: center top !important;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.12) !important;
-  transform: none !important;
-}
-
 @media (orientation: landscape) {
   .screen--qr {
     flex-direction: column !important;
     justify-content: center !important;
     align-items: center !important;
     gap: clamp(4px, 1.2vh, 8px) !important;
-    padding: max(env(safe-area-inset-top), 20px) max(env(safe-area-inset-right), 36px) max(env(safe-area-inset-bottom), 20px) max(env(safe-area-inset-left), 36px) !important;
+    padding: max(env(safe-area-inset-top), 38px) 16px max(env(safe-area-inset-bottom), 38px) !important;
     overflow-y: auto !important;
   }
 
@@ -1301,40 +1380,6 @@ body.landscape .screen--location .tribal-ribbon--bottom {
     padding: 7px 16px !important;
     font-size: 12px !important;
   }
-
-  .screen--qr .tribal-ribbon--top,
-  .screen--location .tribal-ribbon--top {
-    position: absolute !important;
-    left: 0 !important;
-    right: auto !important;
-    top: 0 !important;
-    bottom: 0 !important;
-    width: 30px !important;
-    height: 100% !important;
-    background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
-    background-repeat: repeat-y !important;
-    background-size: 30px 360px !important;
-    background-position: center top !important;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.12) !important;
-    transform: none !important;
-  }
-
-  .screen--qr .tribal-ribbon--bottom,
-  .screen--location .tribal-ribbon--bottom {
-    position: absolute !important;
-    right: 0 !important;
-    left: auto !important;
-    top: 0 !important;
-    bottom: 0 !important;
-    width: 30px !important;
-    height: 100% !important;
-    background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
-    background-repeat: repeat-y !important;
-    background-size: 30px 360px !important;
-    background-position: center top !important;
-    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.12) !important;
-    transform: none !important;
-  }
 }
 
 /* ──────────────────────────────────────────
@@ -1352,22 +1397,26 @@ body.landscape .screen--location .tribal-ribbon--bottom {
 ────────────────────────────────────────── */
 
 /* ─── Shared edge variables for AR Overlay ──────────────────────────────────
-   Side ribbons in landscape are 30px wide, so we keep 44px on left/right to clear them cleanly. */
+   Top and bottom horizontal ribbons are 30px tall, so we keep 38px on top/bottom to clear them cleanly. */
 :root {
-  --ar-edge-l: calc(max(env(safe-area-inset-left, 0px), 0px) + 44px);
-  --ar-edge-r: calc(max(env(safe-area-inset-right, 0px), 0px) + 44px);
-  --ar-edge-t: calc(max(env(safe-area-inset-top,   0px), 8px) + 14px);
-  --ar-edge-b: calc(max(env(safe-area-inset-bottom,0px), 8px) + 16px);
+  --ar-edge-l: calc(max(env(safe-area-inset-left, 0px), 0px) + 16px);
+  --ar-edge-r: calc(max(env(safe-area-inset-right, 0px), 0px) + 16px);
+  --ar-edge-t: calc(max(env(safe-area-inset-top,   0px), 0px) + 38px);
+  --ar-edge-b: calc(max(env(safe-area-inset-bottom,0px), 0px) + 38px);
 }
 
 /* ── Landscape: make #ui-overlay fill the whole screen ────────────────────── */
 @media (orientation: landscape) {
   .overlay,
   #ui-overlay {
-    position: fixed;
-    inset: 0;
-    width: 100dvw;
-    height: 100dvh;
+    position: fixed !important;
+    inset: 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
     padding: 0;
     pointer-events: none;
     transform: none !important;
@@ -1377,10 +1426,14 @@ body.landscape .screen--location .tribal-ribbon--bottom {
 .is-landscape.overlay,
 .is-landscape #ui-overlay,
 body.landscape #ui-overlay {
-  position: fixed;
-  inset: 0;
-  width: 100dvw;
-  height: 100dvh;
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
   padding: 0;
   pointer-events: none;
 }
@@ -1404,7 +1457,7 @@ body.landscape .dock {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   ① LANDSCAPE — Top-right: [Reposition] [✕]
+   ① LANDSCAPE — Top-right: [Reposition] [✕ Exit]
 ────────────────────────────────────────────────────────────────────────────── */
 .is-landscape .top-actions,
 .is-landscape .top-bar,
@@ -1428,7 +1481,7 @@ body.landscape .top-bar {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   ② LANDSCAPE — Middle-right: Camera button (vertically centred)
+   ② LANDSCAPE — Middle-right: Camera button (vertically centred for right thumb)
 ────────────────────────────────────────────────────────────────────────────── */
 .is-landscape .camera-button,
 .is-landscape .shutter-btn,
@@ -1448,7 +1501,7 @@ body.landscape .shutter-btn {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   ③ LANDSCAPE — Bottom-right: About MassKara pill
+   ③ LANDSCAPE — Bottom-left: About MassKara pill (accessible for left thumb)
 ────────────────────────────────────────────────────────────────────────────── */
 .is-landscape .info-pill,
 .is-landscape .btn--info,
@@ -1458,37 +1511,38 @@ body.landscape .info-pill,
 body.landscape .btn--info {
   position: absolute;
   bottom: var(--ar-edge-b);
-  right: var(--ar-edge-r);
-  left: auto;
+  left: var(--ar-edge-l);
+  right: auto;
   top: auto;
   transform: none;
   margin: 0;
   pointer-events: auto;
   z-index: 60;
   width: auto;
-  min-width: 270px;
-  max-width: min(400px, 58vw);
-  padding: 11px 32px;
-  font-size: 13.5px;
-  letter-spacing: 0.25px;
+  min-width: 220px;
+  max-width: min(340px, 45vw);
+  padding: 10px 22px;
+  font-size: 13px;
+  letter-spacing: 0.2px;
   white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
 }
 
-/* ── Landscape: toast floats bottom-center ───────────────────────────────── */
+/* ── Landscape: toast floats top-center ─────────────────────────────────── */
 .is-landscape .toast,
 body.is-landscape .toast,
 body.landscape .toast {
   position: absolute;
-  bottom: var(--ar-edge-b);
+  top: calc(var(--ar-edge-t) + 4px);
+  bottom: auto;
   left: 50%;
   right: auto;
   transform: translateX(-50%);
-  max-width: min(520px, 55vw);
-  font-size: 12.5px;
+  max-width: min(480px, 52vw);
+  font-size: 12px;
   text-align: center;
   z-index: 65;
 }
@@ -1609,37 +1663,37 @@ body.simulated-landscape .ui-wrapper,
   body.is-landscape:not(.is-portrait) .btn--info {
     position: absolute !important;
     bottom: var(--ar-edge-b) !important;
-    right: var(--ar-edge-r) !important;
-    left: auto !important;
+    left: var(--ar-edge-l) !important;
+    right: auto !important;
     top: auto !important;
     transform: none !important;
     margin: 0 !important;
     pointer-events: auto !important;
     z-index: 60 !important;
     width: auto !important;
-    min-width: 270px !important;
-    max-width: min(400px, 58vw) !important;
-    padding: 11px 32px !important;
-    font-size: 13.5px !important;
-    letter-spacing: 0.25px !important;
+    min-width: 220px !important;
+    max-width: min(340px, 45vw) !important;
+    padding: 10px 22px !important;
+    font-size: 13px !important;
+    letter-spacing: 0.2px !important;
     white-space: nowrap !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 12px !important;
+    gap: 10px !important;
   }
 
   body:not(.is-portrait) .toast,
   body.landscape:not(.is-portrait) .toast,
   body.is-landscape:not(.is-portrait) .toast {
     position: absolute !important;
-    top: auto !important;
-    bottom: var(--ar-edge-b) !important;
+    top: calc(var(--ar-edge-t) + 4px) !important;
+    bottom: auto !important;
     left: 50% !important;
     right: auto !important;
     transform: translateX(-50%) !important;
-    max-width: min(520px, 55vw) !important;
-    font-size: 12.5px !important;
+    max-width: min(480px, 52vw) !important;
+    font-size: 12px !important;
     text-align: center !important;
     z-index: 65 !important;
   }
@@ -1750,16 +1804,16 @@ body.is-portrait .toast {
    - LANDSCAPE: Ribbons on LEFT and RIGHT edges (vertical, 30px wide, running full height)
 ────────────────────────────────────────────────────────────────────────────── */
 
-/* ── PORTRAIT MODE (Top & Bottom) ── */
-.is-portrait .tribal-ribbon--top,
-body.is-portrait .tribal-ribbon--top,
-.overlay.is-portrait .tribal-ribbon--top,
-#ui-overlay.is-portrait .tribal-ribbon--top,
-.ui-wrapper.is-portrait .tribal-ribbon--top,
-body.is-portrait .screen--qr .tribal-ribbon--top,
-body.is-portrait .screen--location .tribal-ribbon--top,
+/* ── Universal Bacolod Mosaic Ribbons (Always full-width top & bottom horizontal strips) ── */
+.tribal-ribbon--top,
+.tribal-ribbon.tribal-ribbon--top,
+.overlay .tribal-ribbon--top,
+#ui-overlay .tribal-ribbon--top,
+.ui-wrapper .tribal-ribbon--top,
+.screen--qr .tribal-ribbon--top,
 .screen--location .tribal-ribbon--top,
-body:not(.landscape):not(.is-landscape) .tribal-ribbon--top {
+.screen--landing .tribal-ribbon--top,
+#landing-screen .tribal-ribbon--top {
   position: absolute !important;
   top: 0 !important;
   bottom: auto !important;
@@ -1771,20 +1825,22 @@ body:not(.landscape):not(.is-landscape) .tribal-ribbon--top {
   background-repeat: repeat-x !important;
   background-size: 360px 30px !important;
   background-position: left center !important;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.14) !important;
   transform: none !important;
   display: block !important;
+  z-index: 80 !important;
+  pointer-events: none !important;
 }
 
-.is-portrait .tribal-ribbon--bottom,
-body.is-portrait .tribal-ribbon--bottom,
-.overlay.is-portrait .tribal-ribbon--bottom,
-#ui-overlay.is-portrait .tribal-ribbon--bottom,
-.ui-wrapper.is-portrait .tribal-ribbon--bottom,
-body.is-portrait .screen--qr .tribal-ribbon--bottom,
-body.is-portrait .screen--location .tribal-ribbon--bottom,
+.tribal-ribbon--bottom,
+.tribal-ribbon.tribal-ribbon--bottom,
+.overlay .tribal-ribbon--bottom,
+#ui-overlay .tribal-ribbon--bottom,
+.ui-wrapper .tribal-ribbon--bottom,
+.screen--qr .tribal-ribbon--bottom,
 .screen--location .tribal-ribbon--bottom,
-body:not(.landscape):not(.is-landscape) .tribal-ribbon--bottom {
+.screen--landing .tribal-ribbon--bottom,
+#landing-screen .tribal-ribbon--bottom {
   position: absolute !important;
   bottom: 0 !important;
   top: auto !important;
@@ -1796,108 +1852,11 @@ body:not(.landscape):not(.is-landscape) .tribal-ribbon--bottom {
   background-repeat: repeat-x !important;
   background-size: 360px 30px !important;
   background-position: left center !important;
-  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.14) !important;
   transform: none !important;
   display: block !important;
-}
-
-/* ── LANDSCAPE MODE (Left & Right Sides) ── */
-.is-landscape .tribal-ribbon--top,
-.landscape .tribal-ribbon--top,
-body.is-landscape .tribal-ribbon--top,
-body.landscape .tribal-ribbon--top,
-.overlay.is-landscape .tribal-ribbon--top,
-#ui-overlay.is-landscape .tribal-ribbon--top,
-.ui-wrapper.is-landscape .tribal-ribbon--top,
-body.simulated-landscape .tribal-ribbon--top,
-.simulated-landscape .tribal-ribbon--top,
-body.landscape .screen--qr .tribal-ribbon--top,
-body.is-landscape .screen--qr .tribal-ribbon--top,
-body.landscape .screen--location .tribal-ribbon--top,
-body.is-landscape .screen--location .tribal-ribbon--top {
-  position: absolute !important;
-  top: 0 !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  right: auto !important;
-  width: 30px !important;
-  height: 100% !important;
-  background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
-  background-repeat: repeat-y !important;
-  background-size: 30px 360px !important;
-  background-position: center top !important;
-  box-shadow: 3px 0 12px rgba(0, 0, 0, 0.18) !important;
-  transform: none !important;
-  display: block !important;
-}
-
-.is-landscape .tribal-ribbon--bottom,
-.landscape .tribal-ribbon--bottom,
-body.is-landscape .tribal-ribbon--bottom,
-body.landscape .tribal-ribbon--bottom,
-.overlay.is-landscape .tribal-ribbon--bottom,
-#ui-overlay.is-landscape .tribal-ribbon--bottom,
-.ui-wrapper.is-landscape .tribal-ribbon--bottom,
-body.simulated-landscape .tribal-ribbon--bottom,
-.simulated-landscape .tribal-ribbon--bottom,
-body.landscape .screen--qr .tribal-ribbon--bottom,
-body.is-landscape .screen--qr .tribal-ribbon--bottom,
-body.landscape .screen--location .tribal-ribbon--bottom,
-body.is-landscape .screen--location .tribal-ribbon--bottom {
-  position: absolute !important;
-  top: 0 !important;
-  bottom: 0 !important;
-  right: 0 !important;
-  left: auto !important;
-  width: 30px !important;
-  height: 100% !important;
-  background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
-  background-repeat: repeat-y !important;
-  background-size: 30px 360px !important;
-  background-position: center top !important;
-  box-shadow: -3px 0 12px rgba(0, 0, 0, 0.18) !important;
-  transform: none !important;
-  display: block !important;
-}
-
-@media (orientation: landscape) {
-  body:not(.is-portrait) .tribal-ribbon--top,
-  .screen--qr .tribal-ribbon--top,
-  .screen--location .tribal-ribbon--top {
-    position: absolute !important;
-    top: 0 !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: auto !important;
-    width: 30px !important;
-    height: 100% !important;
-    background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
-    background-repeat: repeat-y !important;
-    background-size: 30px 360px !important;
-    background-position: center top !important;
-    box-shadow: 3px 0 12px rgba(0, 0, 0, 0.18) !important;
-    transform: none !important;
-    display: block !important;
-  }
-
-  body:not(.is-portrait) .tribal-ribbon--bottom,
-  .screen--qr .tribal-ribbon--bottom,
-  .screen--location .tribal-ribbon--bottom {
-    position: absolute !important;
-    top: 0 !important;
-    bottom: 0 !important;
-    right: 0 !important;
-    left: auto !important;
-    width: 30px !important;
-    height: 100% !important;
-    background-image: url('/bacolod-mosaic-ribbon-vertical.svg') !important;
-    background-repeat: repeat-y !important;
-    background-size: 30px 360px !important;
-    background-position: center top !important;
-    box-shadow: -3px 0 12px rgba(0, 0, 0, 0.18) !important;
-    transform: none !important;
-    display: block !important;
-  }
+  z-index: 80 !important;
+  pointer-events: none !important;
 }
 
 
@@ -2168,19 +2127,24 @@ body:has(#history-modal:not(.hidden)) .tribal-ribbon--bottom,
    Premium WebXR AR Button (Sunburst Theme)
 ────────────────────────────────────────── */
 #ARButton {
-  position: fixed !important;
-  top: 50% !important;
-  left: 50% !important;
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
   bottom: auto !important;
   right: auto !important;
-  transform: translate(-50%, -50%) !important;
+  transform: none !important;
+  margin: auto !important;
 
   width: 200px !important;
   height: 200px !important;
   border-radius: 50% !important;
   padding: 0 !important;
 
-  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #f8fafc 80%) !important;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.96) 0%, rgba(255, 251, 245, 0.94) 50%, rgba(254, 237, 213, 0.96) 100%),
+    radial-gradient(circle at 85% 15%, rgba(251, 176, 59, 0.18) 0%, transparent 40%),
+    url("data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M16 0l4 12h12l-10 7 4 13-10-8-10 8 4-13-10-7h12z' fill='%23ee6327' fill-opacity='0.055' fill-rule='evenodd'/%3E%3C/svg%3E"),
+    #fffbf5 !important;
   border: 3.5px solid var(--bacolod-yellow) !important;
 
   color: var(--bacolod-orange) !important;
@@ -2191,8 +2155,10 @@ body:has(#history-modal:not(.hidden)) .tribal-ribbon--bottom,
   text-transform: uppercase !important;
 
   box-shadow:
-    0 0 0 1px rgba(251, 176, 59, 0.30),
-    0 0 45px rgba(238, 99, 39, 0.22),
+    inset 0 0 28px rgba(251, 176, 59, 0.28),
+    inset 0 2px 4px rgba(255, 255, 255, 0.95),
+    0 0 0 1.5px rgba(251, 176, 59, 0.40),
+    0 0 45px rgba(238, 99, 39, 0.24),
     0 20px 50px rgba(0, 0, 0, 0.12) !important;
 
   transition: all 0.45s var(--ease-out) !important;
@@ -2204,78 +2170,64 @@ body:has(#history-modal:not(.hidden)) .tribal-ribbon--bottom,
   align-items: center !important;
   justify-content: center !important;
   gap: 10px !important;
-
-  animation: arButtonPulse 3s ease-in-out infinite !important;
 }
 
-#ARButton::before {
-  content: '' !important;
-  position: absolute !important;
-  inset: -9px !important;
-  border-radius: 50% !important;
-  border: 1.5px solid rgba(238, 99, 39, 0.35) !important;
-  pointer-events: none !important;
-  transition: inset 0.45s var(--ease-out) !important;
-}
-
+#ARButton::before,
 #ARButton::after {
   content: '' !important;
   position: absolute !important;
-  inset: -18px !important;
+  inset: 0 !important;
   border-radius: 50% !important;
-  border: 1px solid rgba(12, 118, 186, 0.25) !important;
+  border: 2.5px solid rgba(238, 99, 39, 0.65) !important;
   pointer-events: none !important;
-  transition: inset 0.45s var(--ease-out) !important;
+  animation: ar-radar-pulse 2.4s cubic-bezier(0.2, 0.8, 0.4, 1) infinite !important;
+  z-index: -1 !important;
+}
+
+#ARButton::after {
+  animation-delay: 1.2s !important;
+  border-color: rgba(251, 176, 59, 0.75) !important;
+}
+
+@keyframes ar-radar-pulse {
+  0% {
+    transform: scale(0.96);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.48);
+    opacity: 0;
+  }
 }
 
 #ARButton:hover {
-  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #f1f5f9 80%) !important;
+  background:
+    radial-gradient(circle at 50% 45%, #ffffff 0%, #fff7ed 60%, #fed7aa 100%),
+    url("data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M16 0l4 12h12l-10 7 4 13-10-8-10 8 4-13-10-7h12z' fill='%23ee6327' fill-opacity='0.08' fill-rule='evenodd'/%3E%3C/svg%3E"),
+    #fff7ed !important;
   border-color: var(--bacolod-orange) !important;
   color: var(--bacolod-orange) !important;
   box-shadow:
-    0 0 0 2px rgba(238, 99, 39, 0.4),
+    inset 0 0 32px rgba(251, 176, 59, 0.35),
+    inset 0 2px 5px rgba(255, 255, 255, 1),
+    0 0 0 2.5px rgba(238, 99, 39, 0.5),
     0 0 55px rgba(251, 176, 59, 0.40),
     0 24px 60px rgba(0, 0, 0, 0.16) !important;
-  transform: translate(-50%, -50%) scale(1.05) !important;
-  animation: none !important;
-}
-
-#ARButton:hover::before {
-  inset: -13px !important;
-}
-
-#ARButton:hover::after {
-  inset: -25px !important;
+  transform: scale(1.05) !important;
 }
 
 #ARButton:active {
-  transform: translate(-50%, -50%) scale(0.95) !important;
-  animation: none !important;
-}
-
-@keyframes arButtonPulse {
-
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 1px rgba(251, 176, 59, 0.25),
-      0 0 35px rgba(238, 99, 39, 0.20),
-      0 20px 50px rgba(0, 0, 0, 0.10);
-  }
-
-  50% {
-    box-shadow:
-      0 0 0 2.5px rgba(251, 176, 59, 0.40),
-      0 0 58px rgba(238, 99, 39, 0.35),
-      0 20px 50px rgba(0, 0, 0, 0.14);
-  }
+  transform: scale(0.95) !important;
 }
 
 body.landscape #ARButton {
-  top: 50% !important;
-  left: 50% !important;
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
   bottom: auto !important;
-  transform: translate(-50%, -50%) !important;
+  right: auto !important;
+  transform: none !important;
+  margin: auto !important;
   width: 160px !important;
   height: 160px !important;
   font-size: 10px !important;
@@ -2337,16 +2289,25 @@ body.landscape #ARButton {
    WebXR UI Overlay — root sizing and reset
 ────────────────────────────────────────── */
 #ui-overlay {
-  position: fixed;
-  inset: 0;
-  width: 100dvw;
-  height: 100dvh;
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
   transform: none !important;
 }
 
-/* Force hide WebXR ARButton whenever QR scan screen is active */
+/* Force hide WebXR ARButton and landing screen whenever QR scan screen or location gate is active */
 body:has(#qr-screen:not(.hidden)) #ARButton,
-#qr-screen:not(.hidden)~#ARButton {
+#qr-screen:not(.hidden)~#ARButton,
+body:has(#location-gate:not(.hidden)) #ARButton,
+#location-gate:not(.hidden)~#ARButton,
+body:has(#location-gate:not(.hidden)) #landing-screen,
+#location-gate:not(.hidden)~#landing-screen {
   display: none !important;
 }
 
@@ -2360,16 +2321,18 @@ body:has(#qr-screen:not(.hidden)) #ARButton,
   height: 100%;
   height: 100dvh;
   background:
-    radial-gradient(circle at 10% 12%, rgba(251, 176, 59, 0.14) 0%, transparent 45%),
-    radial-gradient(circle at 90% 18%, rgba(146, 74, 150, 0.12) 0%, transparent 40%),
-    radial-gradient(circle at 50% 95%, rgba(12, 118, 186, 0.12) 0%, transparent 50%),
-    #ffffff;
+    radial-gradient(circle at 10% 12%, rgba(251, 176, 59, 0.16) 0%, transparent 48%),
+    radial-gradient(circle at 90% 18%, rgba(146, 74, 150, 0.13) 0%, transparent 45%),
+    radial-gradient(circle at 50% 95%, rgba(12, 118, 186, 0.13) 0%, transparent 55%),
+    radial-gradient(circle at 50% 50%, rgba(238, 99, 39, 0.05) 0%, transparent 60%),
+    url("data:image/svg+xml,%3Csvg width='48' height='48' viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ee6327' fill-opacity='0.022' fill-rule='evenodd'%3E%3Cpath d='M24 0L0 24l24 24 24-24L24 0zm0 6.83L41.17 24 24 41.17 6.83 24 24 6.83z'/%3E%3C/g%3E%3C/svg%3E"),
+    #fffdfb;
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
-  padding: max(env(safe-area-inset-top), 38px) 18px max(env(safe-area-inset-bottom), 40px);
+  padding: calc(max(env(safe-area-inset-top), 0px) + 38px) 18px calc(max(env(safe-area-inset-bottom), 0px) + 38px);
   overflow-y: auto;
   transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.4s;
   opacity: 1;
@@ -2390,16 +2353,18 @@ body:has(#qr-screen:not(.hidden)) #ARButton,
 .screen--location .location-container {
   width: 100%;
   max-width: 420px;
-  margin: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
   position: relative;
   z-index: 2;
 }
 
 .screen--location .location-header {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2407,57 +2372,21 @@ body:has(#qr-screen:not(.hidden)) #ARButton,
   gap: 4px;
 }
 
-.screen--location .qr-header-emblem {
-  width: 48px;
-  height: auto;
-  filter: drop-shadow(0 4px 10px rgba(238, 99, 39, 0.25));
-  margin-bottom: 2px;
-}
-
-.screen--location .city-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 12px;
-  background: rgba(12, 118, 186, 0.08);
-  border: 1px solid rgba(12, 118, 186, 0.25);
-  border-radius: 999px;
-  color: #0c76ba;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-
-.screen--location .qr-title {
+.location-card-anchor {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin: 2px 0 0;
-}
-
-.screen--location .qr-title-text {
-  font-family: var(--font-heading, 'Outfit', sans-serif);
-  font-size: 26px;
-  font-weight: 800;
-  color: #8c2d08;
-  letter-spacing: -0.3px;
-}
-
-.screen--location .ar-badge {
-  background: linear-gradient(135deg, #fbb03b 0%, #ee6327 100%);
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 900;
-  padding: 2px 8px;
-  border-radius: 6px;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 6px rgba(238, 99, 39, 0.35);
+  margin: 0;
+  padding: 8px 0;
 }
 
 /* White Card matching main app */
 .location-card {
   width: 100%;
+  margin: 0 auto;
   background: #ffffff;
   border: 1.5px solid rgba(238, 99, 39, 0.2);
   border-radius: 22px;
@@ -2703,51 +2632,86 @@ body:has(#qr-screen:not(.hidden)) #ARButton,
 }
 
 /* ──────────────────────────────────────────
-   Location Geofence Screen — Landscape Mode
+   Location & Landing Screens — Landscape Mode
 ────────────────────────────────────────── */
 @media (orientation: landscape) {
-  .screen--location {
+  .screen--location,
+  .screen--landing {
     flex-direction: column !important;
     justify-content: center !important;
     align-items: center !important;
-    padding: max(env(safe-area-inset-top), 16px) max(env(safe-area-inset-right), 40px) max(env(safe-area-inset-bottom), 16px) max(env(safe-area-inset-left), 40px) !important;
+    padding: max(env(safe-area-inset-top), 16px) max(env(safe-area-inset-right), 44px) max(env(safe-area-inset-bottom), 16px) max(env(safe-area-inset-left), 44px) !important;
     overflow-y: auto !important;
   }
 
-  .screen--location .location-container {
+  .screen--location .location-container,
+  .screen--landing .landing-container {
     flex-direction: row !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: clamp(14px, 3.5vw, 28px) !important;
-    max-width: 720px !important;
+    gap: clamp(16px, 4vw, 36px) !important;
+    max-width: 740px !important;
     width: 100% !important;
+    margin: auto !important;
   }
 
-  .screen--location .location-header {
+  .screen--location .location-header,
+  .screen--landing .landing-header {
     flex: 0 0 auto !important;
     max-width: 220px !important;
     text-align: center !important;
-    gap: 2px !important;
+    gap: 3px !important;
   }
 
-  .screen--location .qr-header-emblem {
+  .screen--location .qr-header-emblem,
+  .screen--landing .qr-header-emblem {
     width: clamp(28px, 6.5vh, 40px) !important;
     margin-bottom: 0 !important;
   }
 
-  .screen--location .city-badge {
+  .screen--location .city-badge,
+  .screen--landing .city-badge {
     padding: 2px 8px !important;
     font-size: 9.5px !important;
   }
 
-  .screen--location .qr-title-text {
+  .screen--location .qr-title-text,
+  .screen--landing .qr-title-text {
     font-size: clamp(17px, 4vh, 21px) !important;
   }
 
-  .screen--location .location-card {
+  .location-card-anchor,
+  .landing-button-anchor {
     flex: 1 1 320px !important;
     max-width: 380px !important;
+    min-height: 160px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .screen--location .location-card {
+    width: 100% !important;
+    max-width: 380px !important;
     padding: clamp(12px, 2.5vh, 18px) clamp(14px, 2.5vw, 20px) !important;
+  }
+
+  #ARButton,
+  body.landscape #ARButton,
+  body.is-landscape #ARButton {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    bottom: auto !important;
+    right: auto !important;
+    transform: none !important;
+    margin: auto !important;
+    width: clamp(130px, 30vh, 160px) !important;
+    height: clamp(130px, 30vh, 160px) !important;
+    font-size: 10px !important;
+    letter-spacing: 1.5px !important;
   }
 
   .screen--location .location-icon-wrapper {
@@ -2787,4 +2751,94 @@ body:has(#qr-screen:not(.hidden)) #ARButton,
     padding: 9px 14px !important;
     font-size: 0.85rem !important;
   }
+}
+
+/* Also apply landscape layout to class-based landscape state */
+.is-landscape.screen--location,
+.is-landscape.screen--landing,
+body.landscape .screen--location,
+body.landscape .screen--landing,
+body.is-landscape .screen--location,
+body.is-landscape .screen--landing {
+  flex-direction: column !important;
+  justify-content: center !important;
+  align-items: center !important;
+  padding: max(env(safe-area-inset-top), 16px) max(env(safe-area-inset-right), 44px) max(env(safe-area-inset-bottom), 16px) max(env(safe-area-inset-left), 44px) !important;
+  overflow-y: auto !important;
+}
+
+.is-landscape .location-container,
+.is-landscape .landing-container,
+body.landscape .location-container,
+body.landscape .landing-container,
+body.is-landscape .location-container,
+body.is-landscape .landing-container {
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: clamp(16px, 4vw, 36px) !important;
+  max-width: 740px !important;
+  width: 100% !important;
+  margin: auto !important;
+}
+
+.is-landscape .location-header,
+.is-landscape .landing-header,
+body.landscape .location-header,
+body.landscape .landing-header,
+body.is-landscape .location-header,
+body.is-landscape .landing-header {
+  flex: 0 0 auto !important;
+  max-width: 220px !important;
+  text-align: center !important;
+  gap: 3px !important;
+}
+
+.is-landscape .qr-header-emblem,
+body.landscape .screen--landing .qr-header-emblem,
+body.landscape .screen--location .qr-header-emblem,
+body.is-landscape .screen--landing .qr-header-emblem,
+body.is-landscape .screen--location .qr-header-emblem {
+  width: clamp(28px, 6.5vh, 40px) !important;
+  margin-bottom: 0 !important;
+}
+
+.is-landscape .location-card-anchor,
+.is-landscape .landing-button-anchor,
+body.landscape .location-card-anchor,
+body.landscape .landing-button-anchor,
+body.is-landscape .location-card-anchor,
+body.is-landscape .landing-button-anchor {
+  flex: 1 1 320px !important;
+  max-width: 380px !important;
+  min-height: 160px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.is-landscape .location-card,
+body.landscape .location-card,
+body.is-landscape .location-card {
+  width: 100% !important;
+  max-width: 380px !important;
+  padding: clamp(12px, 2.5vh, 18px) clamp(14px, 2.5vw, 20px) !important;
+}
+
+.is-landscape #ARButton,
+body.landscape #ARButton,
+body.is-landscape #ARButton {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  bottom: auto !important;
+  right: auto !important;
+  transform: none !important;
+  margin: auto !important;
+  width: clamp(130px, 30vh, 160px) !important;
+  height: clamp(130px, 30vh, 160px) !important;
+  font-size: 10px !important;
+  letter-spacing: 1.5px !important;
 }

@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+const gltfLoader = new GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
 
 export const arState = {
   // Three.js instances
@@ -13,8 +19,9 @@ export const arState = {
   videoMesh: null,
   videoTex: null,
   currentGlbModel: null,
+  groundShadowMesh: null,
   mixer: null,
-  gltfLoader: new GLTFLoader(),
+  gltfLoader,
 
   // GIF state
   gifCanvas: null,

@@ -6,7 +6,8 @@ import { updateLoadingBar, hideLoadingBar } from '../ui/loadingBar.js';
 import { GifPlayer } from './gifPlayer.js';
 import {
   detectAndApplyKeyModeFromUrl,
-  autoDetectKeyModeFromVideo
+  autoDetectKeyModeFromVideo,
+  applyKeySettings
 } from '../shaders/chromaShader.js';
 import {
   stopPositionalAudio,
@@ -92,29 +93,35 @@ export function parseMediaAndAudioFromQr(text) {
     } catch (e) {}
   }
 
-  // 2. Direct File Garden folder links (e.g. https://file.garden/aoVl-M0-p1TyFay4/masskara1)
-  const cleanFolder = raw.replace(/\/+$/, '');
-  if (/file\.garden\/[^\/]+\/masskara1$/i.test(cleanFolder) || cleanFolder.endsWith('/masskara1')) {
-    return {
-      videoSource: `${cleanFolder}/Composition_greybg.mp4`,
-      audioSource: `${cleanFolder}/audioclip-1788760841000-245087.mp4`
-    };
-  }
-  if (/file\.garden\//i.test(cleanFolder) && !/\.(mp4|webm|mov|ogg|m4v|glb|gltf|jpg|jpeg|png|webp|gif|mp3|wav|m4a|aac)$/i.test(cleanFolder)) {
-    return {
-      videoSource: `${cleanFolder}/Composition_greybg.mp4`,
-      audioSource: `${cleanFolder}/audioclip-1788760841000-245087.mp4`
-    };
+  // 2. Query parameters (?audio=... or &audio=... or ?sound=...)
+  try {
+    const parsedUrl = new URL(raw, window.location.href);
+    if (parsedUrl.searchParams.has('audio') || parsedUrl.searchParams.has('sound')) {
+      const a = parsedUrl.searchParams.get('audio') || parsedUrl.searchParams.get('sound');
+      parsedUrl.searchParams.delete('audio');
+      parsedUrl.searchParams.delete('sound');
+      return { videoSource: parsedUrl.toString(), audioSource: a };
+    }
+  } catch (e) {}
+
+  // 3. Pipe separator: "videoUrl | audioUrl"
+  if (raw.includes('|')) {
+    const parts = raw.split('|');
+    let v = parts[0].trim();
+    let a = parts[1].trim();
+    if (a.toLowerCase().startsWith('audio=')) a = a.slice(6).trim();
+    if (a.toLowerCase().startsWith('sound=')) a = a.slice(6).trim();
+    return { videoSource: v, audioSource: a || null };
   }
 
-  // 3. Extract multiple URLs from text (separated by space, newlines, pipes, commas, etc.)
+  // 4. Extract multiple URLs from text (separated by space, newlines, commas, etc.)
   const urlMatches = raw.match(/https?:\/\/[^\s"',|]+/gi);
   if (urlMatches && urlMatches.length >= 2) {
     let videoUrl = null;
     let audioUrl = null;
 
-    const isAudioPattern = /(audioclip|audio|sound|music|track|voice|masskara|\.(mp3|wav|m4a|ogg|aac))($|[?#])/i;
-    const isVideoPattern = /(composition|video|movie|greybg|graybg|blackbg|greenbg|bluebg|original|\.(webm|mov|m4v))($|[?#])/i;
+    const isAudioPattern = /(audio|sound|music|track|voice|\.(mp3|wav|m4a|ogg|aac))($|[?#])/i;
+    const isVideoPattern = /(video|movie|composition|greybg|graybg|blackbg|greenbg|bluebg|\.(mp4|webm|mov|m4v))($|[?#])/i;
 
     for (const u of urlMatches) {
       if (isAudioPattern.test(u) && !audioUrl) {
@@ -128,37 +135,29 @@ export function parseMediaAndAudioFromQr(text) {
       }
     }
 
-    if (videoUrl && audioUrl) {
-      return { videoSource: videoUrl.trim(), audioSource: audioUrl.trim() };
+    if (videoUrl) {
+      return { videoSource: videoUrl.trim(), audioSource: audioUrl ? audioUrl.trim() : null };
     }
   }
 
-  // 4. Pipe separator: "videoUrl | audioUrl"
-  if (raw.includes('|')) {
-    const parts = raw.split('|');
-    let v = parts[0].trim();
-    let a = parts[1].trim();
-    if (a.toLowerCase().startsWith('audio=')) a = a.slice(6).trim();
-    return { videoSource: v, audioSource: a || null };
-  }
+  // 5. Single URL or path
+  const cleanUrl = raw.replace(/\/+$/, '');
+  const hasKnownExtension = /\.(mp4|webm|mov|ogg|m4v|glb|gltf|jpg|jpeg|png|webp|gif|mp3|wav|m4a|aac)($|[?#])/i.test(cleanUrl);
 
-  // 5. Query parameters (?audio=... or &audio=...)
-  try {
-    const parsedUrl = new URL(raw, window.location.href);
-    if (parsedUrl.searchParams.has('audio')) {
-      const a = parsedUrl.searchParams.get('audio');
-      parsedUrl.searchParams.delete('audio');
-      return { videoSource: parsedUrl.toString(), audioSource: a };
-    }
-  } catch (e) {}
-
-  let videoSource = raw;
+  let videoSource = cleanUrl;
   let audioSource = null;
 
-  // 6. If video is from masskara1 folder and audio wasn't explicitly passed, auto-pair with audioclip
-  if (videoSource.includes('/masskara1/')) {
-    const baseFolder = videoSource.substring(0, videoSource.lastIndexOf('/masskara1/') + 11);
-    audioSource = `${baseFolder}/audioclip-1788760841000-245087.mp4`;
+  if (!hasKnownExtension && (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://') || cleanUrl.startsWith('/'))) {
+    // If a folder URL is passed without a specific filename, default to Composition_greybg.mp4 inside that folder
+    videoSource = `${cleanUrl}/Composition_greybg.mp4`;
+    // Also pair the companion audioclip if inside this folder
+    audioSource = `${cleanUrl}/audioclip-1788760841000-245087.mp4`;
+  }
+
+  // If video is an MP4/video file and no separate audio URL was supplied,
+  // feed the video file itself to spatial audio so embedded sound plays with 3D audio!
+  if (!audioSource && /\.(mp4|webm|mov|m4v)($|[?#])/i.test(videoSource)) {
+    audioSource = videoSource;
   }
 
   return { videoSource, audioSource };
@@ -173,12 +172,14 @@ export function setMediaReady(ready) {
     stopPositionalAudio();
   }
   const arBtn = document.getElementById('ARButton');
+  const landingScreen = dom.landingScreen || document.getElementById('landing-screen');
   if (ready) {
     hideLoadingBar();
     const qrScreenEl = dom.qrScreen;
-    // Only display ARButton if the QR scanner screen is hidden (i.e. user is in AR mode)
-    if (qrScreenEl && qrScreenEl.classList.contains('hidden')) {
+    // Only display ARButton and landing screen if the QR scanner screen is hidden (i.e. user is in AR mode) and not currently presenting
+    if (qrScreenEl && qrScreenEl.classList.contains('hidden') && !arState.arStarted) {
       if (arBtn) arBtn.style.display = 'block';
+      if (landingScreen) landingScreen.classList.remove('hidden');
     }
   } else {
     if (arBtn) arBtn.style.display = 'none';
@@ -449,15 +450,16 @@ export async function tryLoadGif(urlOrBuffer, loadToken = ++arState.mediaLoadTok
     }
 
     arState.currentTexture = arState.gifTexture;
+    applyKeySettings(0);
     applyTextureToBillboard(arState.gifTexture);
     setMediaReady(true);
   });
 }
 
-export function tryLoadGlb(url, loadToken = ++arState.mediaLoadToken) {
+export async function tryLoadGlb(urlOrBuffer, loadToken = ++arState.mediaLoadToken) {
   arState.currentMediaType = '3d';
   setMediaReady(false);
-  updateLoadingBar(10);
+  updateLoadingBar(15, true);
 
   if (arState.currentGlbModel && arState.dancerGroup) {
     arState.dancerGroup.remove(arState.currentGlbModel);
@@ -469,10 +471,45 @@ export function tryLoadGlb(url, loadToken = ++arState.mediaLoadToken) {
     arState.videoMesh.visible = false;
   }
 
-  updateLoadingBar(15);
+  let buffer;
+  if (typeof urlOrBuffer === 'string') {
+    try {
+      updateLoadingBar(30, true);
+      const res = await fetch(urlOrBuffer);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      buffer = await res.arrayBuffer();
+    } catch (err) {
+      console.warn("Direct GLB fetch failed, trying proxy:", err);
+      try {
+        const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(urlOrBuffer);
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        buffer = await res.arrayBuffer();
+      } catch (proxyErr) {
+        try {
+          const backupProxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(urlOrBuffer);
+          const res = await fetch(backupProxy);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          buffer = await res.arrayBuffer();
+        } catch (backupErr) {
+          console.error("All GLB fetch attempts failed:", backupErr);
+          setToast("Failed to load 3D model.");
+          hideLoadingBar();
+          setMediaReady(true);
+          return;
+        }
+      }
+    }
+  } else {
+    buffer = urlOrBuffer;
+  }
 
-  arState.gltfLoader.load(
-    url,
+  if (loadToken !== arState.mediaLoadToken) return;
+  updateLoadingBar(60, true);
+
+  arState.gltfLoader.parse(
+    buffer,
+    '',
     (gltf) => {
       if (loadToken !== arState.mediaLoadToken) return;
 
@@ -493,28 +530,39 @@ export function tryLoadGlb(url, loadToken = ++arState.mediaLoadToken) {
       // Play skeletal animation if any clips are present
       if (gltf.animations && gltf.animations.length > 0) {
         arState.mixer = new THREE.AnimationMixer(model);
-        const action = arState.mixer.clipAction(gltf.animations[0]);
-        action.play();
+        for (const clip of gltf.animations) {
+          const action = arState.mixer.clipAction(clip);
+          action.play();
+        }
       }
 
       arState.currentGlbModel = model;
       if (arState.dancerGroup) {
         arState.dancerGroup.add(model);
+        arState.dancerGroup.visible = true;
+
+        if (arState.groundShadowMesh) {
+          arState.groundShadowMesh.visible = true;
+          if (!arState.dancerGroup.children.includes(arState.groundShadowMesh)) {
+            arState.dancerGroup.add(arState.groundShadowMesh);
+          }
+          const footprint = Math.max(size.x * scale, size.z * scale) * 1.5;
+          arState.groundShadowMesh.scale.set(Math.max(footprint, 0.8) * 0.5, Math.max(footprint, 0.8) * 0.5, 1);
+        }
       }
 
       setMediaReady(true);
-    },
-    (xhr) => {
-      if (loadToken !== arState.mediaLoadToken) return;
-      if (xhr.total) {
-        const percent = Math.round((xhr.loaded / xhr.total) * 100);
-        updateLoadingBar(percent);
+      hideLoadingBar();
+      if (arState.arStarted) {
+        setToast('3D Model Ready! Aim and tap to place.');
       }
     },
     (err) => {
       if (loadToken !== arState.mediaLoadToken) return;
-      console.error('GLB load error:', err);
-      updateLoadingBar(50, true);
+      console.error('GLB parse error:', err);
+      setToast('Error loading 3D Model.');
+      hideLoadingBar();
+      setMediaReady(true);
     }
   );
 }
@@ -536,6 +584,7 @@ export function tryLoadImage(url, loadToken = ++arState.mediaLoadToken) {
       tex.magFilter = THREE.LinearFilter;
       tex.colorSpace = THREE.SRGBColorSpace;
       arState.currentTexture = tex;
+      applyKeySettings(0);
       applyTextureToBillboard(tex);
       setMediaReady(true);
     },

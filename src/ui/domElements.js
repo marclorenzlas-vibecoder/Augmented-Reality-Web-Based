@@ -1,6 +1,7 @@
 export const $ = (id) => document.getElementById(id);
 
 export const dom = {
+  get landingScreen() { return $('landing-screen'); },
   get uiOverlay() { return $('ui-overlay'); },
   get uiWrapper() { return $('ui-wrapper'); },
   get qrScreen() { return $('qr-screen'); },

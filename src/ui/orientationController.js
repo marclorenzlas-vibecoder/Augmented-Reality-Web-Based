@@ -145,11 +145,15 @@ export function applyOrientationClasses(orientationInfo) {
     }
 
     if (overlay) {
-      overlay.style.position = 'fixed';
-      overlay.style.inset = '0';
-      overlay.style.width = '100dvw';
-      overlay.style.height = '100dvh';
-      overlay.style.pointerEvents = 'none';
+      overlay.style.setProperty('position', 'fixed', 'important');
+      overlay.style.setProperty('inset', '0', 'important');
+      overlay.style.setProperty('top', '0', 'important');
+      overlay.style.setProperty('bottom', '0', 'important');
+      overlay.style.setProperty('left', '0', 'important');
+      overlay.style.setProperty('right', '0', 'important');
+      overlay.style.setProperty('width', '100%', 'important');
+      overlay.style.setProperty('height', '100%', 'important');
+      overlay.style.setProperty('pointer-events', 'none', 'important');
       overlay.style.transform = '';
       if (!isNativeLandscape) {
         overlay.style.overflow = 'visible';
@@ -200,6 +204,15 @@ export function applyOrientationClasses(orientationInfo) {
     if (overlay) {
       overlay.classList.add('is-portrait');
       overlay.classList.remove('is-landscape', 'landscape');
+      overlay.style.setProperty('position', 'fixed', 'important');
+      overlay.style.setProperty('inset', '0', 'important');
+      overlay.style.setProperty('top', '0', 'important');
+      overlay.style.setProperty('bottom', '0', 'important');
+      overlay.style.setProperty('left', '0', 'important');
+      overlay.style.setProperty('right', '0', 'important');
+      overlay.style.setProperty('width', '100%', 'important');
+      overlay.style.setProperty('height', '100%', 'important');
+      overlay.style.setProperty('pointer-events', 'none', 'important');
       overlay.style.overflow = '';
     }
     if (uiWrapper) {
