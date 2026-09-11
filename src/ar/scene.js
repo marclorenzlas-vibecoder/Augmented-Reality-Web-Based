@@ -58,6 +58,7 @@ export function initThreeScene() {
   });
   arState.renderer.setSize(window.innerWidth, window.innerHeight);
   arState.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+  arState.renderer.setClearColor(0x000000, 0);
 
   // Enable WebXR
   arState.renderer.xr.enabled = true;

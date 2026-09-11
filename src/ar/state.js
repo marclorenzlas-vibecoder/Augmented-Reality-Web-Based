@@ -66,11 +66,11 @@ export const arState = {
   detectedPlaneGrids: new Map(),
   planeDetectionAvailable: false,
 
-  // Chroma key state
-  currentKeyMode: 2,
-  currentKeyColor: new THREE.Color(0x000000),
-  currentSimilarity: 0.38,
-  currentSmoothness: 0.10,
+  // Chroma key state (defaults to Mode 3: Grey Screen for Composition_greybg.mp4)
+  currentKeyMode: 3,
+  currentKeyColor: new THREE.Color(83 / 255, 83 / 255, 83 / 255),
+  currentSimilarity: 0.22,
+  currentSmoothness: 0.08,
   hasFilenameKeyTag: false,
 
   // Audio state

@@ -98,22 +98,24 @@ export const ChromaShader = {
         float lumaDiff = abs(luma - targetLuma);
         float colorDist = distance(texColor.rgb, keyColor);
 
-        float chromaTol = 0.045;
-        float lumaTol = similarity;
+        // Robust thresholds for video compression artifacts & browser color spaces
+        float chromaTol = 0.075;
+        float lumaTol = max(similarity, 0.22);
+        float distTol = max(similarity * 1.55, 0.28);
 
-        if (chroma > chromaTol || lumaDiff > lumaTol || colorDist > lumaTol * 1.25) {
+        if (chroma > chromaTol || lumaDiff > lumaTol || colorDist > distTol) {
           gl_FragColor = texColor;
         } else {
-          float chromaFactor = smoothstep(0.015, chromaTol, chroma);
-          float lumaFactor = smoothstep(lumaTol * 0.4, lumaTol, lumaDiff);
-          float distFactor = smoothstep(lumaTol * 0.4, lumaTol * 1.25, colorDist);
+          float chromaFactor = smoothstep(0.02, chromaTol, chroma);
+          float lumaFactor = smoothstep(lumaTol * 0.35, lumaTol, lumaDiff);
+          float distFactor = smoothstep(distTol * 0.35, distTol, colorDist);
           float dancerStrength = max(chromaFactor, max(lumaFactor, distFactor));
 
-          if (dancerStrength < 0.12) {
+          if (dancerStrength < 0.10) {
             discard;
           }
 
-          float alpha = smoothstep(0.12, 0.75, dancerStrength);
+          float alpha = smoothstep(0.10, 0.70, dancerStrength);
           if (alpha < 0.02) discard;
           gl_FragColor = vec4(texColor.rgb, texColor.a * alpha);
         }
@@ -206,7 +208,8 @@ export function detectAndApplyKeyModeFromUrl(url) {
   if (/(greybg|graybg|_greybg|_graybg|grey[_-]?bg|gray[_-]?bg|bg[_-]?grey|bg[_-]?gray|_grey\b|_gray\b)/i.test(decoded)) {
     console.log('Chroma Key: Detected Grey background from filename (greybg)');
     arState.hasFilenameKeyTag = true;
-    applyKeySettings(3, new THREE.Color(0.5, 0.5, 0.5), 0.18, 0.08);
+    // Exact grey color in Composition_greybg.mp4 is RGB(83, 83, 83)
+    applyKeySettings(3, new THREE.Color(83 / 255, 83 / 255, 83 / 255), 0.22, 0.08);
     return;
   }
 
