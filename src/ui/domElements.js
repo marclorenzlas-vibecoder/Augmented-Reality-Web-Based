@@ -18,5 +18,13 @@ export const dom = {
   get loadingBarContainer() { return $('loading-bar-container'); },
   get loadingBar() { return $('loading-bar'); },
   get dancerVideo() { return $('dancer-video'); },
-  get arCanvas() { return $('ar-canvas'); }
+  get arCanvas() { return $('ar-canvas'); },
+  get landingLoader() { return $('landing-loader'); },
+  get landingLoaderCircle() { return $('landing-loader-circle'); },
+  get landingLoaderPercent() { return $('landing-loader-percent'); },
+  get landingLoaderStatus() { return $('landing-loader-status'); },
+  get landingCompatCard() { return $('landing-compat-card'); },
+  get landingCompatTitle() { return $('landing-compat-title'); },
+  get landingCompatDesc() { return $('landing-compat-desc'); },
+  get landingCompatAction() { return $('landing-compat-action'); }
 };

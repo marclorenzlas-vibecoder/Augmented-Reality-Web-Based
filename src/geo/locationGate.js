@@ -8,6 +8,102 @@ import { stopPositionalAudio } from '../audio/audioController.js';
 let watchId = null;
 let pollIntervalId = null;
 let isFirstCheck = true;
+let currentPermissionState = 'prompt'; // 'granted' | 'denied' | 'prompt'
+let gpsAutoRetryTimer = null;
+
+function stopGpsAutoRetry() {
+  if (gpsAutoRetryTimer !== null) {
+    clearTimeout(gpsAutoRetryTimer);
+    gpsAutoRetryTimer = null;
+  }
+}
+
+function scheduleGpsAutoRetry(intervalMs = 1800) {
+  if (gpsAutoRetryTimer !== null) return;
+  if (arState.isLocationVerified || !isGeofenceEnabled()) return;
+
+  gpsAutoRetryTimer = setTimeout(() => {
+    gpsAutoRetryTimer = null;
+    if (arState.isLocationVerified || !isGeofenceEnabled()) return;
+
+    // Trigger high-accuracy position request to trigger OS prompt and query GPS status
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        stopGpsAutoRetry();
+        currentPermissionState = 'granted';
+        processCoordinates(pos.coords.latitude, pos.coords.longitude);
+      },
+      (err) => {
+        handleGpsError(err);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 6000,
+        maximumAge: 0
+      }
+    );
+  }, intervalMs);
+}
+
+function setActivatingDeviceGpsState() {
+  const gateEl = $('location-gate');
+  const iconEl = $('location-gate-icon');
+  const badgeEl = $('location-badge');
+  const titleEl = $('location-gate-title');
+  const descEl = $('location-gate-desc');
+  const distEl = $('location-gate-distance');
+  const actionsEl = $('location-gate-actions');
+
+  if (gateEl) gateEl.className = 'screen screen--location state-activating-gps';
+  if (iconEl) iconEl.innerHTML = GEO_ICONS.pin;
+  if (badgeEl) {
+    badgeEl.textContent = 'Permission Allowed';
+    badgeEl.className = 'location-badge';
+  }
+  if (titleEl) titleEl.textContent = 'Activating Device GPS…';
+  if (descEl) {
+    descEl.innerHTML = `
+      <p>Location permission is granted! Automatically connecting to high-accuracy device GPS…</p>
+      <p class="location-desc-sub" style="color: var(--bacolod-orange, #ee6327); font-weight: 600;">
+        ⚡ Acquiring real-time GPS coordinates…
+      </p>
+    `;
+  }
+  if (distEl) distEl.classList.add('hidden');
+  if (actionsEl) actionsEl.classList.add('hidden');
+}
+
+function setWaitingForDeviceGpsState() {
+  const gateEl = $('location-gate');
+  const iconEl = $('location-gate-icon');
+  const badgeEl = $('location-badge');
+  const titleEl = $('location-gate-title');
+  const descEl = $('location-gate-desc');
+  const distEl = $('location-gate-distance');
+  const actionsEl = $('location-gate-actions');
+  const retryBtn = $('location-retry-btn');
+
+  if (gateEl) gateEl.className = 'screen screen--location state-waiting-gps';
+  if (iconEl) iconEl.innerHTML = GEO_ICONS.pin;
+  if (badgeEl) {
+    badgeEl.textContent = 'Turn On GPS';
+    badgeEl.className = 'location-badge';
+  }
+  if (titleEl) titleEl.textContent = 'Turn On Device Location';
+  if (descEl) {
+    descEl.innerHTML = `
+      <p>Browser permission is allowed! If prompted on your device, tap <strong>OK</strong> to turn on location, or turn on <strong>Location / GPS</strong> in your phone's quick settings.</p>
+      <p class="location-desc-sub" style="color: var(--bacolod-orange, #ee6327); font-weight: 600;">
+        ⚡ Waiting for GPS signal… automatically connecting once turned on.
+      </p>
+    `;
+  }
+  if (distEl) distEl.classList.add('hidden');
+  if (actionsEl) actionsEl.classList.remove('hidden');
+  if (retryBtn) {
+    retryBtn.innerHTML = `${GEO_ICONS.pin} <span>Turn On Device Location</span>`;
+  }
+}
 
 export function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371e3; // Earth's mean radius in meters
@@ -24,6 +120,11 @@ export function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 export function handleLocationRevokedOrOutOfRange(stateType, nearestLoc = null, distMeters = 0, errMsg = '') {
+  if (!isGeofenceEnabled()) {
+    arState.isLocationVerified = true;
+    return;
+  }
+
   arState.isLocationVerified = false;
 
   // 1. Immediately abort active AR session if running
@@ -230,6 +331,14 @@ function setErrorState(errMsg) {
 }
 
 function processCoordinates(userLat, userLng) {
+  stopGpsAutoRetry();
+  currentPermissionState = 'granted';
+
+  if (!isGeofenceEnabled()) {
+    arState.isLocationVerified = true;
+    return;
+  }
+
   let matchedLocation = null;
   let matchedDistance = Infinity;
   let nearestLocation = null;
@@ -266,14 +375,29 @@ function processCoordinates(userLat, userLng) {
 }
 
 function handleGpsError(err) {
+  if (!isGeofenceEnabled()) {
+    arState.isLocationVerified = true;
+    return;
+  }
+
   console.warn('[Location Real-Time] Geolocation error:', err);
   if (err.code === err.PERMISSION_DENIED) {
+    currentPermissionState = 'denied';
+    stopGpsAutoRetry();
     handleLocationRevokedOrOutOfRange('denied');
   } else if (err.code === err.POSITION_UNAVAILABLE) {
-    handleLocationRevokedOrOutOfRange('error', null, 0, 'Location/GPS is disabled on your device');
+    // Site permission is allowed, but device GPS hardware is disabled or acquiring fix
+    currentPermissionState = 'granted';
+    setWaitingForDeviceGpsState();
+    scheduleGpsAutoRetry(1800);
   } else if (err.code === err.TIMEOUT) {
     if (!arState.isLocationVerified) {
-      setErrorState('Location request timed out');
+      if (currentPermissionState === 'granted') {
+        setActivatingDeviceGpsState();
+        scheduleGpsAutoRetry(1800);
+      } else {
+        setErrorState('Location request timed out');
+      }
     }
   } else {
     handleLocationRevokedOrOutOfRange('error', null, 0, err.message || 'GPS Signal Lost');
@@ -287,29 +411,28 @@ export function startRealtimeLocationTracking() {
   }
 
   if (isFirstCheck) {
-    setCheckingState();
+    if (currentPermissionState === 'granted') {
+      setActivatingDeviceGpsState();
+    } else {
+      setCheckingState();
+    }
   }
 
   const geoOptions = {
     enableHighAccuracy: true,
     timeout: 10000,
-    maximumAge: 3000
+    maximumAge: 0
   };
 
-  // 1. Clear any prior watchers
-  if (watchId !== null) {
-    navigator.geolocation.clearWatch(watchId);
-    watchId = null;
-  }
-  if (pollIntervalId !== null) {
-    clearInterval(pollIntervalId);
-    pollIntervalId = null;
-  }
+  // 1. Clear any prior watchers and timers
+  stopRealtimeLocationTracking();
 
   // 2. Real-time GPS Watcher
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
       isFirstCheck = false;
+      stopGpsAutoRetry();
+      currentPermissionState = 'granted';
       processCoordinates(pos.coords.latitude, pos.coords.longitude);
     },
     (err) => {
@@ -319,10 +442,12 @@ export function startRealtimeLocationTracking() {
     geoOptions
   );
 
-  // 3. Fallback recurring polling check every 4 seconds to guarantee continuous validation
+  // 3. Fallback recurring polling check every 3.5 seconds to guarantee continuous validation
   pollIntervalId = setInterval(() => {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        stopGpsAutoRetry();
+        currentPermissionState = 'granted';
         processCoordinates(pos.coords.latitude, pos.coords.longitude);
       },
       (err) => {
@@ -330,29 +455,112 @@ export function startRealtimeLocationTracking() {
       },
       geoOptions
     );
-  }, 4000);
+  }, 3500);
 
-  // 4. Listen to browser permission state changes
-  if (navigator.permissions && navigator.permissions.query) {
-    navigator.permissions.query({ name: 'geolocation' }).then((permissionStatus) => {
-      permissionStatus.onchange = () => {
-        if (permissionStatus.state === 'denied') {
-          handleLocationRevokedOrOutOfRange('denied');
-        } else if (permissionStatus.state === 'granted') {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => processCoordinates(pos.coords.latitude, pos.coords.longitude),
-            handleGpsError,
-            geoOptions
-          );
-        }
-      };
-    }).catch(() => {});
+  // 4. Immediate high-accuracy position request to instantly trigger Android's native "Turn on location" dialog
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      stopGpsAutoRetry();
+      currentPermissionState = 'granted';
+      processCoordinates(pos.coords.latitude, pos.coords.longitude);
+    },
+    (err) => {
+      handleGpsError(err);
+    },
+    geoOptions
+  );
+}
+
+export function isGeofenceEnabled() {
+  const stored = localStorage.getItem('geofence_enabled');
+  return stored === null ? true : stored === 'true';
+}
+
+export function syncGeofenceToggleUI(enabled) {
+  const inputs = document.querySelectorAll('.geofence-toggle-input');
+  const wraps = document.querySelectorAll('.geofence-toggle-wrap');
+  const statusTexts = document.querySelectorAll('.geofence-status-text');
+
+  inputs.forEach(input => {
+    input.checked = enabled;
+  });
+
+  wraps.forEach(wrap => {
+    if (enabled) {
+      wrap.classList.remove('is-disabled');
+    } else {
+      wrap.classList.add('is-disabled');
+    }
+  });
+
+  statusTexts.forEach(txt => {
+    txt.textContent = enabled ? 'Active' : 'Disabled';
+  });
+}
+
+export function stopRealtimeLocationTracking() {
+  stopGpsAutoRetry();
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+  if (pollIntervalId !== null) {
+    clearInterval(pollIntervalId);
+    pollIntervalId = null;
   }
 }
 
-export function initLocationGateCheck() {
+export function setGeofenceEnabled(enabled) {
+  localStorage.setItem('geofence_enabled', enabled ? 'true' : 'false');
+  syncGeofenceToggleUI(enabled);
+
+  if (!enabled) {
+    stopRealtimeLocationTracking();
+    arState.isLocationVerified = true;
+
+    const gateEl = $('location-gate');
+    if (gateEl) {
+      gateEl.classList.add('fade-out');
+      setTimeout(() => {
+        gateEl.classList.add('hidden');
+      }, 400);
+    }
+    launchDirectAR();
+  } else {
+    arState.isLocationVerified = false;
+    startRealtimeLocationTracking();
+  }
+}
+
+export function setupGeofenceToggleListeners() {
+  const inputs = document.querySelectorAll('.geofence-toggle-input');
+  inputs.forEach(input => {
+    if (!input.dataset.bound) {
+      input.dataset.bound = 'true';
+      input.addEventListener('change', (e) => {
+        setGeofenceEnabled(e.target.checked);
+      });
+    }
+  });
+}
+
+export async function initLocationGateCheck() {
+  setupGeofenceToggleListeners();
+
+  const enabled = isGeofenceEnabled();
+  syncGeofenceToggleUI(enabled);
+
   const gateEl = $('location-gate');
   const retryBtn = $('location-retry-btn');
+
+  if (!enabled) {
+    arState.isLocationVerified = true;
+    if (gateEl) {
+      gateEl.classList.add('hidden');
+    }
+    launchDirectAR();
+    return;
+  }
 
   if (!gateEl) {
     launchDirectAR();
@@ -362,10 +570,41 @@ export function initLocationGateCheck() {
   if (retryBtn && !retryBtn.dataset.bound) {
     retryBtn.dataset.bound = 'true';
     retryBtn.addEventListener('click', () => {
-      setCheckingState();
+      if (currentPermissionState === 'granted') {
+        setActivatingDeviceGpsState();
+      } else {
+        setCheckingState();
+      }
       startRealtimeLocationTracking();
     });
   }
 
+  // 1. Proactively query permission status and auto-activate device GPS if granted
+  if (navigator.permissions && navigator.permissions.query) {
+    try {
+      const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+      currentPermissionState = permissionStatus.state;
+
+      if (permissionStatus.state === 'granted') {
+        // Automatically start activating GPS without requiring manual button press!
+        setActivatingDeviceGpsState();
+      }
+
+      permissionStatus.onchange = () => {
+        currentPermissionState = permissionStatus.state;
+        if (permissionStatus.state === 'denied') {
+          stopGpsAutoRetry();
+          handleLocationRevokedOrOutOfRange('denied');
+        } else if (permissionStatus.state === 'granted') {
+          setActivatingDeviceGpsState();
+          startRealtimeLocationTracking();
+        }
+      };
+    } catch (e) {
+      console.warn('[Location] permissions.query not supported or rejected:', e);
+    }
+  }
+
+  // 2. Automatically start tracking & GPS activation
   startRealtimeLocationTracking();
 }

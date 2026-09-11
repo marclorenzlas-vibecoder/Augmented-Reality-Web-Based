@@ -11,12 +11,15 @@ import { executeCaptureFrame } from '../ui/captureController.js';
 import { stopPositionalAudio } from '../audio/audioController.js';
 import { loadMediaFromQR } from '../media/mediaLoader.js';
 import { DEFAULT_MEDIA_URL } from '../config/constants.js';
+import { showCircularLoader } from '../ui/loadingBar.js';
 
 export async function launchDirectAR() {
   const urlParams = new URLSearchParams(window.location.search);
   const targetMedia = urlParams.get('media') || urlParams.get('model') || urlParams.get('url') || urlParams.get('qr') || DEFAULT_MEDIA_URL;
 
   if (dom.qrScreen) dom.qrScreen.classList.add('hidden');
+
+  showCircularLoader();
 
   if (!arState.isThreeInitialized) {
     initThreeScene();
@@ -213,9 +216,11 @@ export function initThreeScene() {
     if (arState.renderer.xr.isPresenting) {
       const orient = getEffectiveOrientation();
       if (
-        arState.currentOrientationIsLandscape === null ||
-        orient.isLandscape !== arState.currentOrientationIsLandscape ||
-        (orient.isLandscape && orient.angle !== arState.currentOrientationState.angle)
+        orient && (
+          arState.currentOrientationIsLandscape === null ||
+          orient.isLandscape !== arState.currentOrientationIsLandscape ||
+          (orient.isLandscape && Math.abs((orient.angle || 0) - (arState.currentOrientationState?.angle ?? 0)) > 45)
+        )
       ) {
         updateUILayout(orient);
       }

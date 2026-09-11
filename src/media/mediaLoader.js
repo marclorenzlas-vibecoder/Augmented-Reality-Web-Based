@@ -2,7 +2,13 @@ import * as THREE from 'three';
 import { arState } from '../ar/state.js';
 import { dom } from '../ui/domElements.js';
 import { setToast } from '../ui/toast.js';
-import { updateLoadingBar, hideLoadingBar } from '../ui/loadingBar.js';
+import {
+  updateLoadingBar,
+  hideLoadingBar,
+  showCircularLoader,
+  updateCircularProgress,
+  completeAndRevealArButton
+} from '../ui/loadingBar.js';
 import { GifPlayer } from './gifPlayer.js';
 import {
   detectAndApplyKeyModeFromUrl,
@@ -170,6 +176,7 @@ export function setMediaReady(ready) {
   }
   if (!ready) {
     stopPositionalAudio();
+    showCircularLoader();
   }
   const arBtn = document.getElementById('ARButton');
   const landingScreen = dom.landingScreen || document.getElementById('landing-screen');
@@ -178,8 +185,8 @@ export function setMediaReady(ready) {
     const qrScreenEl = dom.qrScreen;
     // Only display ARButton and landing screen if the QR scanner screen is hidden (i.e. user is in AR mode) and not currently presenting
     if (qrScreenEl && qrScreenEl.classList.contains('hidden') && !arState.arStarted) {
-      if (arBtn) arBtn.style.display = 'block';
       if (landingScreen) landingScreen.classList.remove('hidden');
+      completeAndRevealArButton();
     }
   } else {
     if (arBtn) arBtn.style.display = 'none';
@@ -256,16 +263,12 @@ export function hasDecodedVideoFrame() {
 export async function loadVideoViaBlob(url, loadToken) {
   if (loadToken !== arState.mediaLoadToken || arState.isMediaReady) return;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
-
   try {
-    updateLoadingBar(20, true);
+    updateLoadingBar(25, true);
+    updateCircularProgress(25, 'Downloading festival media…');
     const response = await fetch(url, {
-      cache: 'reload',
-      signal: controller.signal
+      cache: 'reload'
     });
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -278,55 +281,62 @@ export async function loadVideoViaBlob(url, loadToken) {
       throw new Error(`Unexpected media type: ${blob.type}`);
     }
 
-    updateLoadingBar(80, true);
+    updateLoadingBar(85, true);
+    updateCircularProgress(85, 'Processing video stream…');
     arState.currentBlobUrl = URL.createObjectURL(blob);
     loadVideoMedia(arState.currentBlobUrl, loadToken, { allowBlobFallback: false });
   } catch (err) {
-    clearTimeout(timeoutId);
     if (loadToken !== arState.mediaLoadToken || arState.isMediaReady) return;
     console.warn('Video blob fallback failed:', err);
-    hideLoadingBar();
-    setToast('Video loading error', false);
   }
 }
 
 export function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}) {
   const video = arState.dancerVideo;
   if (!video) return;
-  updateLoadingBar(20, true);
+  showCircularLoader();
+  updateLoadingBar(15, true);
+  updateCircularProgress(15, 'Buffering festival media…');
 
-  let timeoutId = null;
-  let fallbackId = null;
+  let progressInterval = null;
+
   const cleanup = () => {
-    clearTimeout(timeoutId);
-    clearTimeout(fallbackId);
-    video.removeEventListener('loadedmetadata', onReady);
-    video.removeEventListener('loadeddata', onReady);
-    video.removeEventListener('canplay', onReady);
-    video.removeEventListener('playing', onReady);
+    if (progressInterval) clearInterval(progressInterval);
+    video.removeEventListener('loadedmetadata', checkBufferComplete);
+    video.removeEventListener('loadeddata', checkBufferComplete);
+    video.removeEventListener('canplay', checkBufferComplete);
+    video.removeEventListener('canplaythrough', checkBufferComplete);
+    video.removeEventListener('playing', checkBufferComplete);
+    video.removeEventListener('progress', onProgress);
     video.removeEventListener('error', onError);
   };
 
-  const readyStateCheck = () => {
-    if (loadToken !== arState.mediaLoadToken) {
-      cleanup();
-      return;
-    }
-
-    if (hasDecodedVideoFrame()) {
-      cleanup();
-      markVideoReady(loadToken);
+  const onProgress = () => {
+    if (loadToken !== arState.mediaLoadToken || arState.isMediaReady) return;
+    if (video.buffered.length > 0 && video.duration > 0) {
+      const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+      const pct = Math.min(Math.round((bufferedEnd / video.duration) * 100), 100);
+      updateCircularProgress(pct, `Buffering festival dancer (${pct}%)…`);
+      updateLoadingBar(pct);
+      if (pct >= 96) {
+        checkBufferComplete();
+      }
     }
   };
 
-  const onReady = () => {
-    if (loadToken !== arState.mediaLoadToken) {
-      cleanup();
+  const checkBufferComplete = () => {
+    if (loadToken !== arState.mediaLoadToken || arState.isMediaReady) {
       return;
     }
 
-    if (hasDecodedVideoFrame()) {
+    if (!hasDecodedVideoFrame()) {
+      return;
+    }
+
+    // Video has decoded frame and reached playable buffer state
+    if (video.readyState >= 3 || (video.buffered.length > 0 && video.duration > 0 && (video.buffered.end(video.buffered.length - 1) / video.duration) >= 0.25)) {
       cleanup();
+      updateCircularProgress(100, 'Ready!');
       markVideoReady(loadToken);
     }
   };
@@ -347,6 +357,21 @@ export function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}
     }
   };
 
+  // Heartbeat to provide smooth visual feedback while downloading video chunks
+  let simProgress = 15;
+  progressInterval = setInterval(() => {
+    if (loadToken !== arState.mediaLoadToken || arState.isMediaReady) {
+      clearInterval(progressInterval);
+      return;
+    }
+    if (simProgress < 94) {
+      simProgress += Math.max(1, Math.floor((94 - simProgress) / 8));
+      updateCircularProgress(simProgress, `Buffering festival dancer (${simProgress}%)…`);
+      updateLoadingBar(simProgress);
+    }
+    checkBufferComplete();
+  }, 350);
+
   video.pause();
   pausePositionalAudio();
   video.crossOrigin = 'anonymous';
@@ -355,10 +380,12 @@ export function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}
   video.playsInline = true;
   video.preload = 'auto';
 
-  video.addEventListener('loadedmetadata', onReady);
-  video.addEventListener('loadeddata', onReady);
-  video.addEventListener('canplay', onReady);
-  video.addEventListener('playing', onReady);
+  video.addEventListener('loadedmetadata', checkBufferComplete);
+  video.addEventListener('loadeddata', checkBufferComplete);
+  video.addEventListener('canplay', checkBufferComplete);
+  video.addEventListener('canplaythrough', checkBufferComplete);
+  video.addEventListener('playing', checkBufferComplete);
+  video.addEventListener('progress', onProgress);
   video.addEventListener('error', onError);
 
   video.src = url;
@@ -367,26 +394,12 @@ export function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}
 
   if ('requestVideoFrameCallback' in video) {
     video.requestVideoFrameCallback(() => {
-      readyStateCheck();
+      checkBufferComplete();
     });
   }
 
-  setTimeout(readyStateCheck, 0);
-  setTimeout(readyStateCheck, 250);
-
-  // If after 4s no metadata/frames are ready, try blob fallback
-  fallbackId = setTimeout(() => {
-    if (!allowBlobFallback || loadToken !== arState.mediaLoadToken || arState.isMediaReady || hasDecodedVideoFrame()) return;
-    loadVideoViaBlob(url, loadToken);
-    setTimeout(readyStateCheck, 1000);
-  }, 4000);
-
-  timeoutId = setTimeout(() => {
-    if (loadToken !== arState.mediaLoadToken || arState.isMediaReady || hasDecodedVideoFrame()) return;
-    cleanup();
-    hideLoadingBar();
-    setToast('Video loading timed out', false);
-  }, 15000);
+  setTimeout(checkBufferComplete, 100);
+  setTimeout(checkBufferComplete, 500);
 }
 
 export async function tryLoadGif(urlOrBuffer, loadToken = ++arState.mediaLoadToken) {

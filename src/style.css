@@ -116,7 +116,7 @@ body {
   right: 0;
   width: 100%;
   height: 30px;
-  background-image: url('/bacolod-mosaic-ribbon.svg');
+  background-image: url('./assets/bacolod-mosaic-ribbon.svg');
   background-repeat: repeat-x;
   background-size: 360px 30px;
   background-position: left center;
@@ -131,12 +131,41 @@ body {
   right: 0;
   width: 100%;
   height: 30px;
-  background-image: url('/bacolod-mosaic-ribbon.svg');
+  background-image: url('./assets/bacolod-mosaic-ribbon.svg');
   background-repeat: repeat-x;
   background-size: 360px 30px;
   background-position: left center;
   box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.12);
   transform: none !important;
+}
+
+.tribal-ribbon--vertical,
+.tribal-ribbon--left,
+.tribal-ribbon--right {
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 30px !important;
+  height: 100% !important;
+  background-image: url('./assets/bacolod-mosaic-ribbon-vertical.svg') !important;
+  background-repeat: repeat-y !important;
+  background-size: 30px 360px !important;
+  background-position: center top !important;
+  box-shadow: 3px 0 12px rgba(0, 0, 0, 0.14) !important;
+  transform: none !important;
+  z-index: 80 !important;
+  pointer-events: none !important;
+}
+
+.tribal-ribbon--left {
+  left: 0 !important;
+  right: auto !important;
+}
+
+.tribal-ribbon--right {
+  right: 0 !important;
+  left: auto !important;
+  box-shadow: -3px 0 12px rgba(0, 0, 0, 0.14) !important;
 }
 
 /* ──────────────────────────────────────────
@@ -230,16 +259,353 @@ body {
   pointer-events: auto;
 }
 
-.landing-button-anchor {
-  flex: 1 1 auto;
-  width: 100%;
-  min-height: 0;
+/* ──────────────────────────────────────────
+   Geofence Enable/Disable Toggle
+────────────────────────────────────────── */
+.geofence-toggle-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-top: 4px;
+  margin-bottom: 6px;
   pointer-events: auto;
-  margin: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.geofence-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 10px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(238, 99, 39, 0.25);
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.25s var(--ease-out);
+}
+
+.geofence-toggle-label:hover {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(238, 99, 39, 0.45);
+  box-shadow: 0 4px 12px rgba(238, 99, 39, 0.12);
+}
+
+.geofence-toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bacolod-orange, #ee6327);
+  opacity: 0.9;
+  transition: color 0.25s ease;
+}
+
+.geofence-toggle-text {
+  font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #4b5563;
+  letter-spacing: 0.1px;
+}
+
+.geofence-status-text {
+  color: var(--bacolod-orange, #ee6327);
+  font-weight: 700;
+  transition: color 0.25s ease;
+}
+
+.geofence-toggle-wrap.is-disabled .geofence-status-text {
+  color: #9ca3af;
+}
+
+.geofence-toggle-wrap.is-disabled .geofence-toggle-icon {
+  color: #9ca3af;
+}
+
+/* The Switch Slider */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.geofence-toggle-input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #d1d5db;
+  transition: all 0.28s ease;
+  border-radius: 18px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.toggle-switch-slider::before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #ffffff;
+  transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.geofence-toggle-input:checked + .toggle-switch-slider {
+  background: linear-gradient(135deg, var(--bacolod-orange, #ee6327), var(--bacolod-yellow, #fbb03b));
+}
+
+.geofence-toggle-input:checked + .toggle-switch-slider::before {
+  transform: translateX(14px);
+}
+
+.landing-button-anchor {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  margin: 0 auto;
   padding: 8px 0;
+  position: relative;
+  text-align: center;
+}
+
+/* Enforce buffer loader first; hide Start AR button until buffer is completely finished */
+.landing-button-anchor:not(.is-ready) #ARButton,
+#ARButton.hidden {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.landing-button-anchor.is-ready #landing-loader {
+  display: none !important;
+}
+
+.landing-button-anchor.is-ready #ARButton:not(.hidden) {
+  display: flex !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+/* ──────────────────────────────────────────
+   Landing Screen — Circular Loading Progress Bar
+────────────────────────────────────────── */
+.landing-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  position: relative;
+  width: 100%;
+  max-width: 240px;
+  margin: 0 auto;
+  text-align: center;
+  transition: opacity 0.45s var(--ease-out), transform 0.45s var(--ease-out);
+  animation: loader-appear 0.5s var(--ease-out);
+  z-index: 990;
+}
+
+.landing-loader.fade-out {
+  opacity: 0;
+  transform: scale(0.92);
+  pointer-events: none;
+}
+
+@keyframes loader-appear {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.circular-progress-wrap {
+  position: relative;
+  width: 190px;
+  height: 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.96) 0%, rgba(255, 251, 245, 0.94) 50%, rgba(254, 237, 213, 0.96) 100%),
+    #fffbf5;
+  box-shadow:
+    inset 0 0 24px rgba(251, 176, 59, 0.22),
+    inset 0 2px 4px rgba(255, 255, 255, 0.95),
+    0 0 0 1.5px rgba(251, 176, 59, 0.35),
+    0 0 40px rgba(238, 99, 39, 0.18),
+    0 16px 40px rgba(0, 0, 0, 0.1);
+}
+
+.circular-progress-wrap::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px dashed rgba(238, 99, 39, 0.3);
+  animation: rotate-radar 12s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes rotate-radar {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.circular-progress-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.progress-ring-bg {
+  fill: none;
+  stroke: rgba(251, 176, 59, 0.16);
+  stroke-width: 7;
+}
+
+.progress-ring-fill {
+  fill: none;
+  stroke: url(#loader-gradient);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 314.16;
+  stroke-dashoffset: 314.16;
+  transition: stroke-dashoffset 0.35s ease-out;
+}
+
+.circular-progress-center {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  text-align: center;
+}
+
+.loader-percent {
+  font-family: var(--font-heading, 'Outfit', sans-serif);
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--bacolod-orange, #ee6327);
+  letter-spacing: -0.5px;
+  line-height: 1;
+  text-shadow: 0 2px 10px rgba(238, 99, 39, 0.2);
+}
+
+.loader-status {
+  font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  text-align: center;
+  max-width: 220px;
+  line-height: 1.4;
+  letter-spacing: 0.1px;
+}
+
+/* ──────────────────────────────────────────
+   Incompatible Browser Notice Card
+────────────────────────────────────────── */
+.compat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px 20px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1.5px solid rgba(238, 99, 39, 0.25);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.08),
+    0 2px 6px rgba(238, 99, 39, 0.1);
+  max-width: 310px;
+  width: 90%;
+  animation: loader-appear 0.4s var(--ease-out);
+  z-index: 995;
+}
+
+.compat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(238, 99, 39, 0.1);
+  color: var(--bacolod-orange, #ee6327);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.compat-title {
+  font-family: var(--font-heading, 'Outfit', sans-serif);
+  font-size: 17px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 8px;
+}
+
+.compat-desc {
+  font-family: var(--font-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 13px;
+  line-height: 1.5;
+  color: #4b5563;
+  margin: 0 0 16px;
+}
+
+.compat-action .btn--compat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, var(--bacolod-orange, #ee6327) 0%, var(--bacolod-yellow, #fbb03b) 100%);
+  color: #ffffff;
+  font-family: var(--font-heading, 'Outfit', sans-serif);
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(238, 99, 39, 0.3);
+}
+
+@media (max-height: 600px) and (orientation: landscape) {
+  .circular-progress-wrap {
+    width: 140px;
+    height: 140px;
+  }
+  .loader-percent {
+    font-size: 1.7rem;
+  }
 }
 
 /* ──────────────────────────────────────────
@@ -817,29 +1183,37 @@ body {
   padding: max(env(safe-area-inset-top), 45px) 18px max(env(safe-area-inset-bottom), 28px);
   opacity: 1;
   transition: opacity 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-  transform: none !important;
-}
-
-.ui-wrapper.ui-transitioning,
-body .ui-wrapper.ui-transitioning,
-#ui-overlay .ui-wrapper.ui-transitioning {
-  opacity: 0 !important;
-  pointer-events: none !important;
 }
 
 /* Top Bar */
 .top-bar,
 .top-actions {
-  position: absolute;
-  top: calc(max(env(safe-area-inset-top), 0px) + 50px);
-  left: 18px;
-  right: 18px;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  pointer-events: auto;
-  z-index: 90;
+  position: absolute !important;
+  top: calc(max(env(safe-area-inset-top, 0px), 0px) + 36px) !important;
+  right: 16px !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: auto !important;
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 8px !important;
+  pointer-events: auto !important;
+  z-index: 150 !important;
   transition: opacity 0.2s ease;
+}
+
+.top-bar > div,
+.top-actions > div {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  width: auto !important;
+  margin: 0 !important;
+  pointer-events: auto !important;
 }
 
 .brand-tag {
@@ -1438,6 +1812,13 @@ body.landscape #ui-overlay {
   pointer-events: none;
 }
 
+body.simulated-landscape {
+  --ar-edge-l: 24px;
+  --ar-edge-r: 24px;
+  --ar-edge-t: 38px;
+  --ar-edge-b: 38px;
+}
+
 body.simulated-landscape #ui-overlay {
   overflow: visible !important;
 }
@@ -1446,14 +1827,18 @@ body.simulated-landscape #ui-overlay {
 .is-landscape .dock,
 body.is-landscape .dock,
 body.landscape .dock {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  padding: 0;
-  margin: 0;
-  display: block;
+  position: absolute !important;
+  inset: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: block !important;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
@@ -1465,19 +1850,55 @@ body.is-landscape .top-actions,
 body.is-landscape .top-bar,
 body.landscape .top-actions,
 body.landscape .top-bar {
-  position: absolute;
-  top: var(--ar-edge-t);
-  right: var(--ar-edge-r);
-  left: auto;
-  bottom: auto;
-  width: auto;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  pointer-events: auto;
-  z-index: 70;
+  position: absolute !important;
+  top: var(--ar-edge-t, 38px) !important;
+  right: var(--ar-edge-r, 20px) !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: auto !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin: 0 !important;
+  pointer-events: auto !important;
+  z-index: 100 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.is-landscape .top-actions > div,
+body.is-landscape .top-actions > div {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin: 0 !important;
+}
+
+body.ar-active.is-landscape #exit-ar-btn:not(.hidden),
+body.ar-active.is-landscape .btn--exit:not(.hidden) {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  border-radius: 50% !important;
+  z-index: 105 !important;
+}
+
+.is-landscape #recenter-btn:not(.hidden),
+body.is-landscape #recenter-btn:not(.hidden) {
+  display: inline-flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  padding: 8px 16px !important;
+  font-size: 12.5px !important;
+  z-index: 105 !important;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
@@ -1489,15 +1910,23 @@ body.is-landscape .camera-button,
 body.is-landscape .shutter-btn,
 body.landscape .camera-button,
 body.landscape .shutter-btn {
-  position: absolute;
-  top: 50%;
-  right: var(--ar-edge-r);
-  transform: translateY(-50%);
-  left: auto;
-  bottom: auto;
-  margin: 0;
-  pointer-events: auto;
-  z-index: 60;
+  position: absolute !important;
+  top: 50% !important;
+  right: var(--ar-edge-r, 20px) !important;
+  transform: translateY(-50%) !important;
+  left: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  pointer-events: auto !important;
+  z-index: 95 !important;
+}
+
+.is-landscape #capture-btn:not(.hidden),
+body.is-landscape #capture-btn:not(.hidden) {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
@@ -1509,48 +1938,80 @@ body.is-landscape .info-pill,
 body.is-landscape .btn--info,
 body.landscape .info-pill,
 body.landscape .btn--info {
-  position: absolute;
-  bottom: var(--ar-edge-b);
-  left: var(--ar-edge-l);
-  right: auto;
-  top: auto;
-  transform: none;
-  margin: 0;
-  pointer-events: auto;
-  z-index: 60;
-  width: auto;
-  min-width: 220px;
-  max-width: min(340px, 45vw);
-  padding: 10px 22px;
-  font-size: 13px;
-  letter-spacing: 0.2px;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
+  position: absolute !important;
+  bottom: var(--ar-edge-b, 38px) !important;
+  right: var(--ar-edge-r, 20px) !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  margin: 0 !important;
+  pointer-events: auto !important;
+  z-index: 95 !important;
+  width: auto !important;
+  min-width: 230px !important;
+  max-width: min(380px, 48vw) !important;
+  padding: 10px 22px !important;
+  font-size: 13px !important;
+  letter-spacing: 0.2px !important;
+  white-space: nowrap !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+}
+
+/* When phone is tilted clockwise (CW, deg = -90), controls flip to the left side */
+.simulated-landscape--90 .top-actions,
+.simulated-landscape--90 .top-bar,
+body.simulated-landscape--90 .top-actions,
+body.simulated-landscape--90 .top-bar {
+  left: var(--ar-edge-l, 20px) !important;
+  right: auto !important;
+  flex-direction: row-reverse !important;
+}
+
+.simulated-landscape--90 .camera-button,
+.simulated-landscape--90 .shutter-btn,
+body.simulated-landscape--90 .camera-button,
+body.simulated-landscape--90 .shutter-btn {
+  left: var(--ar-edge-l, 20px) !important;
+  right: auto !important;
+}
+
+.simulated-landscape--90 .info-pill,
+.simulated-landscape--90 .btn--info,
+body.simulated-landscape--90 .info-pill,
+body.simulated-landscape--90 .btn--info {
+  left: var(--ar-edge-l, 20px) !important;
+  right: auto !important;
+}
+
+.is-landscape #info-toggle-btn:not(.hidden),
+body.is-landscape #info-toggle-btn:not(.hidden) {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
 }
 
 /* ── Landscape: toast floats top-center ─────────────────────────────────── */
 .is-landscape .toast,
 body.is-landscape .toast,
 body.landscape .toast {
-  position: absolute;
-  top: calc(var(--ar-edge-t) + 4px);
-  bottom: auto;
-  left: 50%;
-  right: auto;
-  transform: translateX(-50%);
-  max-width: min(480px, 52vw);
-  font-size: 12px;
-  text-align: center;
-  z-index: 65;
+  position: absolute !important;
+  top: calc(var(--ar-edge-t, 38px) + 4px) !important;
+  bottom: auto !important;
+  left: 50% !important;
+  right: auto !important;
+  transform: translateX(-50%) !important;
+  max-width: min(480px, 52vw) !important;
+  font-size: 12px !important;
+  text-align: center !important;
+  z-index: 65 !important;
 }
 
 /* ── Landscape ui-wrapper canvas ─────────────────────────────────────────── */
-body.landscape:not(.simulated-landscape) .ui-wrapper,
-body.is-landscape:not(.simulated-landscape) .ui-wrapper,
-.is-landscape:not(.simulated-landscape) .ui-wrapper {
+body.landscape:not(.simulated-landscape) .ui-wrapper:not(.simulated-landscape),
+body.is-landscape:not(.simulated-landscape) .ui-wrapper:not(.simulated-landscape) {
   position: absolute !important;
   inset: 0 !important;
   width: 100% !important;
@@ -1565,7 +2026,8 @@ body.is-landscape:not(.simulated-landscape) .ui-wrapper,
 
 /* Simulated landscape (phone tilted in portrait WebXR viewport) */
 body.simulated-landscape .ui-wrapper,
-.simulated-landscape .ui-wrapper {
+.simulated-landscape .ui-wrapper,
+#ui-overlay.simulated-landscape .ui-wrapper {
   position: absolute !important;
   inset: auto !important;
   padding: 0 !important;
@@ -1663,8 +2125,8 @@ body.simulated-landscape .ui-wrapper,
   body.is-landscape:not(.is-portrait) .btn--info {
     position: absolute !important;
     bottom: var(--ar-edge-b) !important;
-    left: var(--ar-edge-l) !important;
-    right: auto !important;
+    right: var(--ar-edge-r) !important;
+    left: auto !important;
     top: auto !important;
     transform: none !important;
     margin: 0 !important;
@@ -1769,19 +2231,33 @@ body.is-portrait .btn--info {
 .is-portrait .top-bar,
 body.is-portrait .top-actions,
 body.is-portrait .top-bar {
-  position: absolute;
-  top: calc(max(env(safe-area-inset-top, 0px), 0px) + 38px);
-  right: 14px;
-  left: auto;
-  bottom: auto;
-  width: auto;
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-  pointer-events: auto;
-  z-index: 70;
+  position: absolute !important;
+  top: calc(max(env(safe-area-inset-top, 0px), 0px) + 36px) !important;
+  right: 16px !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: auto !important;
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 8px !important;
+  pointer-events: auto !important;
+  z-index: 150 !important;
+}
+
+.is-portrait .top-actions > div,
+.is-portrait .top-bar > div,
+body.is-portrait .top-actions > div,
+body.is-portrait .top-bar > div {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  width: auto !important;
+  margin: 0 !important;
+  pointer-events: auto !important;
 }
 
 /* Portrait: toast text indicator at the bottom */
@@ -1821,14 +2297,14 @@ body.is-portrait .toast {
   right: 0 !important;
   width: 100% !important;
   height: 30px !important;
-  background-image: url('/bacolod-mosaic-ribbon.svg') !important;
+  background-image: url('./assets/bacolod-mosaic-ribbon.svg') !important;
   background-repeat: repeat-x !important;
   background-size: 360px 30px !important;
   background-position: left center !important;
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.14) !important;
   transform: none !important;
   display: block !important;
-  z-index: 80 !important;
+  z-index: 120 !important;
   pointer-events: none !important;
 }
 
@@ -1848,14 +2324,14 @@ body.is-portrait .toast {
   right: 0 !important;
   width: 100% !important;
   height: 30px !important;
-  background-image: url('/bacolod-mosaic-ribbon.svg') !important;
+  background-image: url('./assets/bacolod-mosaic-ribbon.svg') !important;
   background-repeat: repeat-x !important;
   background-size: 360px 30px !important;
   background-position: left center !important;
   box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.14) !important;
   transform: none !important;
   display: block !important;
-  z-index: 80 !important;
+  z-index: 120 !important;
   pointer-events: none !important;
 }
 
@@ -2069,18 +2545,8 @@ body.is-landscape .drawer-handle {
   pointer-events: auto !important;
 }
 
-/* Hide ribbons whenever the drawer is open to prevent any visual obstruction on all orientations */
-body.drawer-open .tribal-ribbon,
-body:has(#history-modal:not(.hidden)) .tribal-ribbon,
-.overlay:has(#history-modal:not(.hidden)) .tribal-ribbon,
-body:has(#history-modal:not(.hidden)) .tribal-ribbon--top,
-body:has(#history-modal:not(.hidden)) .tribal-ribbon--bottom,
-.overlay:has(#history-modal:not(.hidden)) .tribal-ribbon--top,
-.overlay:has(#history-modal:not(.hidden)) .tribal-ribbon--bottom {
-  opacity: 0 !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
+/* Tribal ribbons always visible on top and bottom */
+
 
 /* ──────────────────────────────────────────
    Small height screens portrait mode adjustments
@@ -2311,6 +2777,31 @@ body:has(#location-gate:not(.hidden)) #landing-screen,
   display: none !important;
 }
 
+/* Force hide Exit AR button and WebXR UI Overlay whenever landing screen, location gate, or QR scanner is active, or when AR is not running */
+body:not(.ar-active) #exit-ar-btn,
+body:not(.ar-active) #ui-overlay,
+#exit-ar-btn.hidden,
+.btn--exit.hidden,
+#ui-overlay.hidden,
+.overlay.hidden,
+body:has(#landing-screen:not(.hidden)) #exit-ar-btn,
+body:has(#landing-screen:not(.hidden)) #ui-overlay,
+body:has(#location-gate:not(.hidden)) #exit-ar-btn,
+body:has(#location-gate:not(.hidden)) #ui-overlay,
+body:has(#qr-screen:not(.hidden)) #exit-ar-btn,
+body:has(#qr-screen:not(.hidden)) #ui-overlay,
+#landing-screen:not(.hidden) ~ #exit-ar-btn,
+#landing-screen:not(.hidden) ~ #ui-overlay,
+#location-gate:not(.hidden) ~ #exit-ar-btn,
+#location-gate:not(.hidden) ~ #ui-overlay,
+#qr-screen:not(.hidden) ~ #exit-ar-btn,
+#qr-screen:not(.hidden) ~ #ui-overlay {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 /* ──────────────────────────────────────────
    Location Geofence Screen (Matching Main App)
 ────────────────────────────────────────── */
@@ -2475,6 +2966,27 @@ body:has(#location-gate:not(.hidden)) #landing-screen,
 
 .screen--location.state-verified .location-radar-ring {
   border-color: rgba(16, 185, 129, 0.5);
+}
+
+.screen--location.state-activating-gps .location-icon,
+.screen--location.state-waiting-gps .location-icon {
+  background: rgba(238, 99, 39, 0.1);
+  border-color: rgba(238, 99, 39, 0.4);
+  color: #ee6327;
+  box-shadow: 0 4px 14px rgba(238, 99, 39, 0.2);
+}
+
+.screen--location.state-activating-gps .location-radar-ring,
+.screen--location.state-waiting-gps .location-radar-ring {
+  border-color: rgba(238, 99, 39, 0.5);
+  display: block !important;
+}
+
+.screen--location.state-activating-gps .location-badge,
+.screen--location.state-waiting-gps .location-badge {
+  background: rgba(238, 99, 39, 0.1);
+  color: #ee6327;
+  border-color: rgba(238, 99, 39, 0.35);
 }
 
 .screen--location.state-denied .location-icon {
