@@ -128,6 +128,11 @@ export function getEffectiveOrientation() {
     if (xrOrient !== null) {
       return xrOrient;
     }
+  } else if (arState.isFallbackMode && arState.camera && arState.deviceOrientationActive) {
+    const fallbackOrient = getXrDeviceOrientation(arState.camera);
+    if (fallbackOrient !== null) {
+      return fallbackOrient;
+    }
   }
 
   const screenInfo = getScreenOrientationInfo();

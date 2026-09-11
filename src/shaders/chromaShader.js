@@ -205,9 +205,9 @@ export function detectAndApplyKeyModeFromUrl(url) {
     return;
   }
 
-  // 2. Grey / Gray background
-  if (/(greybg|graybg|_greybg|_graybg|grey[_-]?bg|gray[_-]?bg|bg[_-]?grey|bg[_-]?gray|_grey\b|_gray\b)/i.test(decoded)) {
-    console.log('Chroma Key: Detected Grey background from filename (greybg)');
+  // 2. Grey / Gray background or MassKara video
+  if (/(masskara|greybg|graybg|_greybg|_graybg|grey[_-]?bg|gray[_-]?bg|bg[_-]?grey|bg[_-]?gray|_grey\b|_gray\b)/i.test(decoded)) {
+    console.log('Chroma Key: Detected Grey background from filename (greybg/masskara)');
     arState.hasFilenameKeyTag = true;
     // Exact grey color in Composition_greybg.mp4 is RGB(83, 83, 83)
     applyKeySettings(3, new THREE.Color(83 / 255, 83 / 255, 83 / 255), 0.22, 0.08);
@@ -246,8 +246,8 @@ export function detectAndApplyKeyModeFromUrl(url) {
     return;
   }
 
-  // Default fallback: Black BG keying
-  applyKeySettings(2, new THREE.Color(0x000000), 0.07, 0.14);
+  // Default fallback: Grey Screen keying (for MassKara dancer video)
+  applyKeySettings(3, new THREE.Color(83 / 255, 83 / 255, 83 / 255), 0.22, 0.08);
 }
 
 export function autoDetectKeyModeFromVideo() {

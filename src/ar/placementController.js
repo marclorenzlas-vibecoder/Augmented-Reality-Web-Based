@@ -119,18 +119,26 @@ export function handleFloorTap(screenX = null, screenY = null) {
     }
   }
 
-  // 2. If fallback grid is active on detected surface, ensure tap is inside grid bounds (max 3m radius)
+  // 2. If fallback grid is active on detected surface, ensure tap is inside grid bounds
   if (!foundIntersection && arState.fallbackFloorGridMesh && arState.fallbackFloorGridMesh.visible && arState.detectedFloorHeight !== null) {
     const floorY = arState.detectedFloorHeight;
     const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -floorY);
     const hitIntersection = new THREE.Vector3();
     if (raycaster.ray.intersectPlane(groundPlane, hitIntersection)) {
       const distFromGridCenter = hitIntersection.distanceTo(arState.fallbackFloorGridMesh.position);
-      if (distFromGridCenter <= 3.0) {
+      if (distFromGridCenter <= 4.5) {
         targetPoint.copy(hitIntersection);
         targetPoint.y = floorY;
         foundIntersection = true;
       }
+    }
+  }
+
+  if (!foundIntersection && arState.isFallbackMode) {
+    const gridPos = arState.fallbackFloorGridMesh?.position;
+    if (gridPos) {
+      targetPoint.set(gridPos.x, arState.detectedFloorHeight || -1.3, gridPos.z);
+      foundIntersection = true;
     }
   }
 
@@ -168,6 +176,9 @@ export function placeDancer() {
 
   if (arState.floorGridMesh) {
     arState.floorGridMesh.visible = false;
+  }
+  if (arState.fallbackFloorGridMesh) {
+    arState.fallbackFloorGridMesh.visible = false;
   }
 
   const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
@@ -268,6 +279,9 @@ export function repositionDancer() {
     arState.floorGridMesh.traverse((child) => {
       if (child.isMesh) child.visible = true;
     });
+  }
+  if (arState.fallbackFloorGridMesh) {
+    arState.fallbackFloorGridMesh.visible = true;
   }
 
   dom.historyModal?.classList.add('hidden');

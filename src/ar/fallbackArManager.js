@@ -3,7 +3,8 @@ import { arState } from './state.js';
 import { dom, $ } from '../ui/domElements.js';
 import { setToast } from '../ui/toast.js';
 import { updateUILayout, unpinARControls } from '../ui/orientationController.js';
-import { stopPositionalAudio, syncAudioToVideo, resumeAudioContext } from '../audio/audioController.js';
+import { stopPositionalAudio } from '../audio/audioController.js';
+import { enablePlacementListener, disablePlacementListener } from './placementController.js';
 
 // Pre-allocated vectors & quaternions for device orientation
 const zee = new THREE.Vector3(0, 0, 1);
@@ -51,11 +52,20 @@ function onDeviceOrientation(e) {
   if (initialOrientationYaw === null) {
     const camEuler = new THREE.Euler().setFromQuaternion(q, 'YXZ');
     initialOrientationYaw = camEuler.y;
-    repositionFallbackDancer();
   }
 
   if (arState.camera && arState.isFallbackMode) {
     arState.camera.quaternion.copy(q);
+
+    // While scanning (not placed yet), dynamically keep the floor grid in front of the camera view on the floor
+    if (!arState.isPlaced && arState.fallbackFloorGridMesh) {
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+      forward.y = 0;
+      if (forward.lengthSq() > 0.001) {
+        forward.normalize();
+        arState.fallbackFloorGridMesh.position.set(forward.x * 2.2, -1.3, forward.z * 2.2);
+      }
+    }
   }
 }
 
@@ -76,40 +86,69 @@ async function requestOrientationPermission() {
 }
 
 /**
- * Reposition the dancer directly in front of the phone's current camera gaze
+ * Reposition the dancer in fallback mode: re-enters scanning phase so user can tap to place on floor
  */
 export function repositionFallbackDancer() {
-  if (!arState.dancerGroup || !arState.camera) return;
+  arState.ignorePlacementUntil = performance.now() + 800;
+  arState.isPlaced = false;
 
-  const camera = arState.camera;
-  camera.updateMatrixWorld(true);
-
-  // Direction camera is facing projected on horizontal XZ plane
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-  forward.y = 0;
-  if (forward.lengthSq() < 0.001) {
-    forward.set(0, 0, -1);
-  } else {
-    forward.normalize();
+  if (arState.dancerGroup) {
+    arState.dancerGroup.visible = false;
+    arState.dancerGroup.scale.set(1, 1, 1);
   }
 
-  const distance = 2.1;
-  arState.dancerGroup.position.copy(camera.position).addScaledVector(forward, distance);
-  arState.dancerGroup.position.y = camera.position.y - 0.48;
-  arState.dancerGroup.userData.baseY = arState.dancerGroup.position.y;
+  disablePlacementListener();
+  stopPositionalAudio();
 
-  // Rotate dancer to face back toward the user
-  const faceAngle = Math.atan2(forward.x, forward.z) + Math.PI;
-  arState.dancerGroup.rotation.set(0, faceAngle, 0);
-  arState.dancerGroup.userData.baseRotY = faceAngle;
+  const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
+  if (dancerVideo) {
+    dancerVideo.pause();
+    dancerVideo.currentTime = 0;
+  }
 
-  arState.isPlaced = true;
-  arState.dancerGroup.visible = true;
+  // Reposition fallback floor grid in front of current camera gaze on floor
+  if (arState.camera) {
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(arState.camera.quaternion);
+    forward.y = 0;
+    if (forward.lengthSq() > 0.001) {
+      forward.normalize();
+      if (arState.fallbackFloorGridMesh) {
+        arState.fallbackFloorGridMesh.position.set(forward.x * 2.2, -1.3, forward.z * 2.2);
+      }
+    }
+  }
 
-  setToast('Dancer repositioned in front of you');
+  if (arState.fallbackFloorGridMesh) {
+    arState.fallbackFloorGridMesh.visible = true;
+  }
+  if (arState.floorGridMesh) {
+    arState.floorGridMesh.visible = true;
+    arState.floorGridMesh.traverse((child) => {
+      if (child.isMesh) child.visible = true;
+    });
+  }
+
+  dom.historyModal?.classList.add('hidden');
+  document.body.classList.remove('drawer-open');
+  dom.infoToggleBtn?.classList.add('hidden');
+  dom.captureBtn?.classList.add('hidden');
+  dom.recenterBtn?.classList.add('hidden');
+  dom.exitArBtn?.classList.add('hidden');
+  const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+  if (topBar) {
+    topBar.classList.add('hidden');
+    topBar.style.setProperty('display', 'none', 'important');
+  }
+
+  setToast('Point at floor plane and tap anywhere on grid to place');
+
   setTimeout(() => {
-    dom.toast?.classList.add('hidden');
-  }, 2200);
+    if (arState.arStarted && !arState.isPlaced) {
+      enablePlacementListener();
+    }
+  }, 400);
+
+  updateUILayout();
 }
 
 /**
@@ -151,10 +190,11 @@ export async function startFallbackAR() {
       await cameraVideo.play().catch(err => console.warn('Camera video play error:', err));
     }
 
-    // 4. Set state flags
+    // 4. Set state flags: AR is active, but dancer is NOT placed yet (surface scanning phase)
     arState.isFallbackMode = true;
     arState.arStarted = true;
-    arState.isPlaced = true;
+    arState.isPlaced = false;
+    arState.detectedFloorHeight = -1.3;
     document.body.classList.add('ar-active', 'ar-fallback-active');
 
     // Disable Three.js WebXR presentation mode so camera renders normally
@@ -167,7 +207,7 @@ export async function startFallbackAR() {
     const arBtn = document.getElementById('ARButton');
     if (arBtn) arBtn.style.display = 'none';
 
-    // 6. Show AR UI Overlay & Controls
+    // 6. Show AR UI Overlay
     const uiOverlayEl = dom.uiOverlay || $('ui-overlay');
     if (uiOverlayEl) {
       uiOverlayEl.classList.remove('hidden');
@@ -177,75 +217,78 @@ export async function startFallbackAR() {
       uiOverlayEl.style.pointerEvents = '';
     }
 
-    const exitBtn = dom.exitArBtn || $('exit-ar-btn');
-    if (exitBtn) {
-      exitBtn.classList.remove('hidden');
-      exitBtn.style.display = '';
-      exitBtn.style.visibility = '';
-      exitBtn.style.opacity = '';
-      exitBtn.style.pointerEvents = '';
+    // 7. Hide placed-only controls until dancer is placed (Exit, Reposition, Info pill, Camera Shutter, Top bar)
+    dom.exitArBtn?.classList.add('hidden');
+    dom.recenterBtn?.classList.add('hidden');
+    dom.infoToggleBtn?.classList.add('hidden');
+    dom.captureBtn?.classList.add('hidden');
+    const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+    if (topBar) {
+      topBar.classList.add('hidden');
+      topBar.style.setProperty('display', 'none', 'important');
     }
 
-    dom.infoToggleBtn?.classList.remove('hidden');
-    const captureBtn = dom.captureBtn || document.getElementById('capture-btn');
-    if (captureBtn) {
-      captureBtn.classList.remove('hidden');
-      captureBtn.style.removeProperty('display');
-      captureBtn.style.removeProperty('visibility');
-      captureBtn.style.removeProperty('opacity');
-      captureBtn.style.removeProperty('pointer-events');
-    }
-    dom.recenterBtn?.classList.remove('hidden');
-
-    // 7. Initialize orientation listener
+    // 8. Initialize orientation listener
     initialOrientationYaw = null;
     if (window.DeviceOrientationEvent) {
       deviceOrientationListener = onDeviceOrientation;
       window.addEventListener('deviceorientation', deviceOrientationListener, true);
     }
 
-    // 8. Position the dancer in front of user and make visible
+    // 9. Reset camera and keep dancer hidden until user taps to place
     if (arState.camera) {
       arState.camera.position.set(0, 0, 0);
       arState.camera.rotation.set(0, 0, 0);
     }
 
     if (arState.dancerGroup) {
-      arState.dancerGroup.position.set(0, -0.48, -2.1);
-      arState.dancerGroup.rotation.set(0, 0, 0);
-      arState.dancerGroup.userData.baseY = -0.48;
-      arState.dancerGroup.visible = true;
+      arState.dancerGroup.visible = false;
+      arState.dancerGroup.scale.set(1, 1, 1);
     }
 
-    // Hide floor grid in fallback mode
-    if (arState.floorGridMesh) {
-      arState.floorGridMesh.visible = false;
-    }
-
-    // 9. Play festival dancer video & audio
     const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
     if (dancerVideo) {
+      dancerVideo.pause();
       dancerVideo.currentTime = 0;
-      dancerVideo.play().catch(() => {});
+    }
+    stopPositionalAudio();
+
+    // 10. Prepare Floor Grid for surface scanning
+    if (!arState.fallbackFloorGridMesh) {
+      const gridGeo = new THREE.PlaneGeometry(6, 6, 1, 1);
+      gridGeo.rotateX(-Math.PI / 2);
+      arState.fallbackFloorGridMesh = new THREE.Mesh(gridGeo, arState.floorGridMaterial);
+      arState.fallbackFloorGridMesh.renderOrder = 1;
+      if (arState.floorGridMesh) {
+        arState.floorGridMesh.add(arState.fallbackFloorGridMesh);
+      } else {
+        arState.scene.add(arState.fallbackFloorGridMesh);
+      }
+    }
+    arState.fallbackFloorGridMesh.position.set(0, -1.3, -2.2);
+    arState.fallbackFloorGridMesh.visible = true;
+
+    if (arState.floorGridMesh) {
+      arState.floorGridMesh.visible = true;
+      arState.floorGridMesh.traverse((child) => {
+        if (child.isMesh) child.visible = true;
+      });
     }
 
-    resumeAudioContext();
-    const audioEl = arState.dancerAudioEl || document.getElementById('dancer-audio');
-    if (audioEl && arState.isAudioReady && !arState.isAudioMuted) {
-      audioEl.currentTime = 0;
-      audioEl.play().catch(() => {});
-    }
-    syncAudioToVideo(true);
+    // 11. Instruction toast & enable placement listener
+    setToast('Point at the floor to detect flat surface, then tap anywhere on the grid to place');
 
-    // 10. Update UI layout
+    enablePlacementListener();
+    setTimeout(() => {
+      if (arState.arStarted && !arState.isPlaced) {
+        enablePlacementListener();
+      }
+    }, 400);
+
+    // 12. Update UI layout
     updateUILayout();
     requestAnimationFrame(updateUILayout);
     setTimeout(updateUILayout, 150);
-
-    setToast('Move your phone to explore the MassKara dancer!');
-    setTimeout(() => {
-      dom.toast?.classList.add('hidden');
-    }, 3500);
 
   } catch (err) {
     console.error('[FallbackAR] Error starting camera fallback AR:', err);
@@ -305,6 +348,15 @@ export function stopFallbackAR() {
   // Re-enable WebXR flag on renderer for future WebXR sessions
   if (arState.renderer && arState.renderer.xr) {
     arState.renderer.xr.enabled = true;
+  }
+
+  // Disable placement listener and hide grids
+  disablePlacementListener();
+  if (arState.fallbackFloorGridMesh) {
+    arState.fallbackFloorGridMesh.visible = false;
+  }
+  if (arState.floorGridMesh) {
+    arState.floorGridMesh.visible = false;
   }
 
   // Unpin orientation controls
