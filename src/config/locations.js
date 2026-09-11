@@ -22,7 +22,7 @@ export const ALLOWED_LOCATIONS = [
     badge: 'Dev Zone (Programmer)',
     latitude: 10.6194,
     longitude: 122.9310,
-    radiusMeters: 500 // 500m radius
+    radiusMeters: 2000 // 2km radius
   },
   {
     id: 'designer',
