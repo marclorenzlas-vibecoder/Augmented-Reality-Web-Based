@@ -47,7 +47,10 @@ export function showCircularLoader() {
 
   currentCircularPercent = 0;
   if (anchor) anchor.classList.remove('is-ready');
-  if (compatCard) compatCard.classList.add('hidden');
+  if (compatCard) {
+    compatCard.classList.add('hidden');
+    compatCard.style.display = 'none';
+  }
   if (arButton) {
     arButton.classList.add('hidden');
     arButton.style.display = 'none';
@@ -174,5 +177,6 @@ export function showBrowserIncompatibleNotice(title, description, actionConfig =
     }
 
     compatCard.classList.remove('hidden');
+    compatCard.style.display = 'flex';
   }
 }

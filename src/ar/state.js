@@ -46,6 +46,14 @@ export const arState = {
   placementListenerAttached: false,
   handlePlacementTap: null,
 
+  // Fallback Camera AR mode (Mozilla Firefox, iOS Safari & non-WebXR devices)
+  isFallbackMode: false,
+  cameraStream: null,
+  deviceOrientationHandler: null,
+  deviceOrientationData: { alpha: 0, beta: 0, gamma: 0 },
+  deviceOrientationActive: false,
+  fallbackBasePosition: new THREE.Vector3(0, -0.48, -2.1),
+
   // WebXR Hit test & plane detection
   hitTestSource: null,
   hitTestSourceRequested: false,

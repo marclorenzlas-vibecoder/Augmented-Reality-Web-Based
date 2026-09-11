@@ -19,6 +19,7 @@ export const dom = {
   get loadingBar() { return $('loading-bar'); },
   get dancerVideo() { return $('dancer-video'); },
   get arCanvas() { return $('ar-canvas'); },
+  get arCameraFeed() { return $('ar-camera-feed'); },
   get landingLoader() { return $('landing-loader'); },
   get landingLoaderCircle() { return $('landing-loader-circle'); },
   get landingLoaderPercent() { return $('landing-loader-percent'); },

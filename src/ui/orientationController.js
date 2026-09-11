@@ -175,10 +175,10 @@ function _applyARControlsLandscape(deg) {
   const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
   if (topBar) {
     topBar.style.setProperty('position', 'absolute', 'important');
-    topBar.style.setProperty('top', '24px', 'important');
+    topBar.style.setProperty('top', '38px', 'important');
     topBar.style.setProperty('bottom', 'auto', 'important');
-    topBar.style.setProperty('left', isCCW ? 'auto' : '24px', 'important');
-    topBar.style.setProperty('right', isCCW ? '24px' : 'auto', 'important');
+    topBar.style.setProperty('left', isCCW ? 'auto' : '44px', 'important');
+    topBar.style.setProperty('right', isCCW ? '44px' : 'auto', 'important');
     topBar.style.setProperty('z-index', '150', 'important');
     topBar.style.setProperty('display', 'flex', 'important');
     topBar.style.setProperty('flex-direction', isCCW ? 'row' : 'row-reverse', 'important');
@@ -224,35 +224,26 @@ function _applyARControlsLandscape(deg) {
   }
 
   // 2) Camera Shutter:
-  // In CCW: middle-right of landscape screen. In CW: middle-left of landscape screen.
+  // Same fixed bottom-center position in both portrait and landscape (never repositioned or transformed)
   const captureBtn = document.getElementById('capture-btn');
-  if (captureBtn) {
+  if (captureBtn && arState.isPlaced) {
     captureBtn.classList.remove('hidden');
-    captureBtn.style.setProperty('position', 'absolute', 'important');
-    captureBtn.style.setProperty('top', '50%', 'important');
-    captureBtn.style.setProperty('bottom', 'auto', 'important');
-    captureBtn.style.setProperty('left', isCCW ? 'auto' : '24px', 'important');
-    captureBtn.style.setProperty('right', isCCW ? '24px' : 'auto', 'important');
-    captureBtn.style.setProperty('transform', 'translateY(-50%)', 'important');
-    captureBtn.style.setProperty('display', 'flex', 'important');
     captureBtn.style.setProperty('opacity', '1', 'important');
     captureBtn.style.setProperty('visibility', 'visible', 'important');
     captureBtn.style.setProperty('pointer-events', 'auto', 'important');
-    captureBtn.style.setProperty('z-index', '150', 'important');
-    captureBtn.style.setProperty('margin', '0', 'important');
   }
 
   // 3) About MassKara Festival Pill:
   // In CCW: bottom-right of landscape screen. In CW: bottom-left of landscape screen.
-  // Oriented horizontally, completely readable and beautifully positioned.
+  // Oriented horizontally, completely readable and beautifully positioned above the 30px bottom ribbon strip.
   const infoBtn = document.getElementById('info-toggle-btn');
   if (infoBtn) {
     infoBtn.classList.remove('hidden');
     infoBtn.style.setProperty('position', 'absolute', 'important');
     infoBtn.style.setProperty('top', 'auto', 'important');
-    infoBtn.style.setProperty('bottom', '24px', 'important');
-    infoBtn.style.setProperty('left', isCCW ? 'auto' : '24px', 'important');
-    infoBtn.style.setProperty('right', isCCW ? '24px' : 'auto', 'important');
+    infoBtn.style.setProperty('bottom', '44px', 'important');
+    infoBtn.style.setProperty('left', isCCW ? 'auto' : '44px', 'important');
+    infoBtn.style.setProperty('right', isCCW ? '44px' : 'auto', 'important');
     infoBtn.style.setProperty('transform', 'none', 'important');
     infoBtn.style.setProperty('display', 'inline-flex', 'important');
     infoBtn.style.setProperty('opacity', '1', 'important');
@@ -347,7 +338,6 @@ function _unpinARControls() {
     topBarEl?.querySelector('div'),
     document.getElementById('exit-ar-btn'),
     document.getElementById('recenter-btn'),
-    document.getElementById('capture-btn'),
     document.getElementById('info-toggle-btn'),
     document.querySelector('.dock'),
     document.getElementById('toast'),
