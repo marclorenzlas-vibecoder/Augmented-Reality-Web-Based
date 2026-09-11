@@ -77,9 +77,9 @@ export function handleSessionStart() {
   }
 
   // 7. Layout orientation & enable placement listeners
-  updateUILayout();
-  requestAnimationFrame(updateUILayout);
-  setTimeout(updateUILayout, 150);
+  updateUILayout(null, true);
+  requestAnimationFrame(() => updateUILayout(null, true));
+  setTimeout(() => updateUILayout(null, true), 150);
 
   enablePlacementListener();
   setTimeout(() => {

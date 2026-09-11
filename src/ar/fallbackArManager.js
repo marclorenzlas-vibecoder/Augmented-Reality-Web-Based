@@ -258,7 +258,7 @@ export function repositionFallbackDancer() {
     }
   }, 400);
 
-  updateUILayout();
+  updateUILayout(null, true);
 }
 
 /**
@@ -413,9 +413,9 @@ export async function startFallbackAR() {
     }, 400);
 
     // 12. Update UI layout
-    updateUILayout();
-    requestAnimationFrame(updateUILayout);
-    setTimeout(updateUILayout, 150);
+    updateUILayout(null, true);
+    requestAnimationFrame(() => updateUILayout(null, true));
+    setTimeout(() => updateUILayout(null, true), 150);
 
   } catch (err) {
     console.error('[FallbackAR] Error starting camera fallback AR:', err);

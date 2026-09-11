@@ -211,56 +211,61 @@ export function placeDancer() {
   }
 
   setToast('3D Object placed on floor');
+
+  const captureBtn = dom.captureBtn || document.getElementById('capture-btn');
+  if (captureBtn) {
+    captureBtn.classList.remove('hidden');
+    captureBtn.style.removeProperty('display');
+    captureBtn.style.removeProperty('visibility');
+    captureBtn.style.removeProperty('opacity');
+    captureBtn.style.removeProperty('pointer-events');
+    captureBtn.style.setProperty('display', 'flex', 'important');
+    captureBtn.style.setProperty('visibility', 'visible', 'important');
+    captureBtn.style.setProperty('opacity', '1', 'important');
+    captureBtn.style.setProperty('pointer-events', 'auto', 'important');
+  }
+
+  const infoBtn = dom.infoToggleBtn || document.getElementById('info-toggle-btn');
+  if (infoBtn) {
+    infoBtn.classList.remove('hidden');
+    infoBtn.style.removeProperty('display');
+    infoBtn.style.removeProperty('visibility');
+    infoBtn.style.removeProperty('opacity');
+    infoBtn.style.removeProperty('pointer-events');
+  }
+
+  const recenterBtn = dom.recenterBtn || document.getElementById('recenter-btn');
+  if (recenterBtn) {
+    recenterBtn.classList.remove('hidden');
+    recenterBtn.style.removeProperty('display');
+    recenterBtn.style.removeProperty('visibility');
+    recenterBtn.style.removeProperty('opacity');
+    recenterBtn.style.removeProperty('pointer-events');
+  }
+
+  const exitBtn = dom.exitArBtn || document.getElementById('exit-ar-btn');
+  if (exitBtn) {
+    exitBtn.classList.remove('hidden');
+    exitBtn.style.removeProperty('display');
+    exitBtn.style.removeProperty('visibility');
+    exitBtn.style.removeProperty('opacity');
+    exitBtn.style.removeProperty('pointer-events');
+  }
+
+  const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+  if (topBar) {
+    topBar.classList.remove('hidden');
+    topBar.style.removeProperty('display');
+    topBar.style.removeProperty('visibility');
+    topBar.style.removeProperty('opacity');
+    topBar.style.removeProperty('pointer-events');
+  }
+
+  applyOrientationClasses(arState.currentOrientationState || getEffectiveOrientation());
+
   setTimeout(() => {
     dom.toast?.classList.add('hidden');
-
-    const captureBtn = dom.captureBtn || document.getElementById('capture-btn');
-    if (captureBtn) {
-      captureBtn.classList.remove('hidden');
-      captureBtn.style.removeProperty('display');
-      captureBtn.style.removeProperty('visibility');
-      captureBtn.style.removeProperty('opacity');
-      captureBtn.style.removeProperty('pointer-events');
-    }
-
-    const infoBtn = dom.infoToggleBtn || document.getElementById('info-toggle-btn');
-    if (infoBtn) {
-      infoBtn.classList.remove('hidden');
-      infoBtn.style.removeProperty('display');
-      infoBtn.style.removeProperty('visibility');
-      infoBtn.style.removeProperty('opacity');
-      infoBtn.style.removeProperty('pointer-events');
-    }
-
-    const recenterBtn = dom.recenterBtn || document.getElementById('recenter-btn');
-    if (recenterBtn) {
-      recenterBtn.classList.remove('hidden');
-      recenterBtn.style.removeProperty('display');
-      recenterBtn.style.removeProperty('visibility');
-      recenterBtn.style.removeProperty('opacity');
-      recenterBtn.style.removeProperty('pointer-events');
-    }
-
-    const exitBtn = dom.exitArBtn || document.getElementById('exit-ar-btn');
-    if (exitBtn) {
-      exitBtn.classList.remove('hidden');
-      exitBtn.style.removeProperty('display');
-      exitBtn.style.removeProperty('visibility');
-      exitBtn.style.removeProperty('opacity');
-      exitBtn.style.removeProperty('pointer-events');
-    }
-
-    const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
-    if (topBar) {
-      topBar.classList.remove('hidden');
-      topBar.style.removeProperty('display');
-      topBar.style.removeProperty('visibility');
-      topBar.style.removeProperty('opacity');
-      topBar.style.removeProperty('pointer-events');
-    }
-
-    applyOrientationClasses(arState.currentOrientationState || getEffectiveOrientation());
-  }, 1500);
+  }, 1800);
 }
 
 export function repositionDancer() {
