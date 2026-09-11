@@ -10,6 +10,7 @@ export const ChromaShader = {
     }
   `,
   fragmentShader: `
+    precision mediump float;
     uniform sampler2D map;
     uniform int keyMode;
     uniform vec3 keyColor;

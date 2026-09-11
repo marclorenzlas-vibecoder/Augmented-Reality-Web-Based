@@ -22,6 +22,11 @@ export function setupDeviceOrientationListeners() {
   }, true);
 }
 
+// Pre-allocated static vectors to eliminate GC pauses in render loop
+const _camDir = new THREE.Vector3();
+const _camRight = new THREE.Vector3();
+const _projUp = new THREE.Vector3();
+
 export function getXrDeviceOrientation(cameraObj) {
   const activeCam = (cameraObj && cameraObj.cameras && cameraObj.cameras.length > 0)
     ? cameraObj.cameras[0]
@@ -34,11 +39,10 @@ export function getXrDeviceOrientation(cameraObj) {
   }
 
   const q = activeCam.quaternion;
-  const camDir = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
-  const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
-  const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+  _camDir.set(0, 0, -1).applyQuaternion(q);
+  _camRight.set(1, 0, 0).applyQuaternion(q);
 
-  if (Math.abs(camDir.y) > 0.92) {
+  if (Math.abs(_camDir.y) > 0.92) {
     if (arState.currentOrientationIsLandscape !== null) {
       return {
         isLandscape: arState.currentOrientationIsLandscape,
@@ -48,8 +52,8 @@ export function getXrDeviceOrientation(cameraObj) {
     return null;
   }
 
-  const projUp = new THREE.Vector3(0, 1, 0).addScaledVector(camDir, -camDir.y);
-  const len = projUp.length();
+  _projUp.set(0, 1, 0).addScaledVector(_camDir, -_camDir.y);
+  const len = _projUp.length();
   if (len < 0.2) {
     if (arState.currentOrientationIsLandscape !== null) {
       return {
@@ -59,9 +63,9 @@ export function getXrDeviceOrientation(cameraObj) {
     }
     return null;
   }
-  projUp.divideScalar(len);
+  _projUp.divideScalar(len);
 
-  const rightDot = camRight.dot(projUp);
+  const rightDot = _camRight.dot(_projUp);
   const absRight = Math.abs(rightDot);
 
   // Robust hysteresis: requires absRight >= 0.62 to enter landscape, stays landscape until absRight <= 0.38
