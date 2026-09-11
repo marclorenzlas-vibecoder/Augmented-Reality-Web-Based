@@ -70,6 +70,10 @@ export function onSelect() {
 export function handleFloorTap(screenX = null, screenY = null) {
   if (!arState.arStarted || arState.isPlaced) return;
   if (performance.now() < arState.ignorePlacementUntil) return;
+  if (arState.isFallbackMode && !arState.isSurfaceDetected) {
+    setToast('Please scan the floor first to detect a flat surface');
+    return;
+  }
 
   const targetPoint = new THREE.Vector3();
   let foundIntersection = false;
@@ -180,6 +184,7 @@ export function placeDancer() {
   if (arState.fallbackFloorGridMesh) {
     arState.fallbackFloorGridMesh.visible = false;
   }
+  dom.surfaceScannerReticle?.classList.add('hidden');
 
   const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
   const audioEl = arState.dancerAudioEl || document.getElementById('dancer-audio');

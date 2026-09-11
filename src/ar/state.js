@@ -41,6 +41,7 @@ export const arState = {
   // Session and placement state
   isPlaced: false,
   arStarted: false,
+  isSurfaceDetected: false,
   isThreeInitialized: false,
   ignorePlacementUntil: 0,
   placementListenerAttached: false,

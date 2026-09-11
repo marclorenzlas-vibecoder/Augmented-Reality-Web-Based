@@ -15,6 +15,10 @@ const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -PI/2
 let deviceOrientationListener = null;
 let currentCameraStream = null;
 let initialOrientationYaw = null;
+let scanScore = 0;
+let lastPitch = null;
+let lastYaw = null;
+let autoScanTimeout = null;
 
 /**
  * Converts device orientation angles (alpha, beta, gamma) into a Three.js Quaternion.
@@ -29,6 +33,52 @@ function setDeviceOrientationQuaternion(quaternion, alpha, beta, gamma, orientAn
   quaternion.setFromEuler(euler);
   quaternion.multiply(q1); // Camera faces outward through back of phone
   quaternion.multiply(q0.setFromAxisAngle(zee, -THREE.MathUtils.degToRad(orientAngle))); // Screen rotation
+}
+
+/**
+ * Triggers successful surface detection: reveals floor grid and prompts user to tap to place
+ */
+export function triggerSurfaceDetected() {
+  if (arState.isSurfaceDetected || arState.isPlaced || !arState.arStarted) return;
+  arState.isSurfaceDetected = true;
+
+  if (autoScanTimeout) {
+    clearTimeout(autoScanTimeout);
+    autoScanTimeout = null;
+  }
+
+  // Hide the scanning reticle
+  dom.surfaceScannerReticle?.classList.add('hidden');
+
+  // Position floor grid in front of current camera gaze on floor
+  if (arState.camera) {
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(arState.camera.quaternion);
+    const forwardXZ = new THREE.Vector3(forward.x, 0, forward.z);
+    if (forwardXZ.lengthSq() < 0.001) forwardXZ.set(0, 0, -1);
+    else forwardXZ.normalize();
+    const dist = Math.min(Math.max(-1.3 / (forward.y || -0.6), 1.6), 3.0);
+    if (arState.fallbackFloorGridMesh) {
+      arState.fallbackFloorGridMesh.position.set(forwardXZ.x * dist, -1.3, forwardXZ.z * dist);
+    }
+  }
+
+  // Reveal floor grid
+  if (arState.fallbackFloorGridMesh) {
+    arState.fallbackFloorGridMesh.visible = true;
+  }
+  if (arState.floorGridMesh) {
+    arState.floorGridMesh.visible = true;
+    arState.floorGridMesh.traverse((child) => {
+      if (child.isMesh) child.visible = true;
+    });
+  }
+
+  // Subtle haptic feedback on mobile devices
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try { navigator.vibrate([40, 60, 40]); } catch (_) {}
+  }
+
+  setToast('Surface detected! Tap anywhere on the grid to place');
 }
 
 /**
@@ -57,13 +107,45 @@ function onDeviceOrientation(e) {
   if (arState.camera && arState.isFallbackMode) {
     arState.camera.quaternion.copy(q);
 
-    // While scanning (not placed yet), dynamically keep the floor grid in front of the camera view on the floor
-    if (!arState.isPlaced && arState.fallbackFloorGridMesh) {
+    // SURFACE SCANNING LOGIC
+    if (!arState.isPlaced && !arState.isSurfaceDetected) {
       const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
-      forward.y = 0;
-      if (forward.lengthSq() > 0.001) {
-        forward.normalize();
-        arState.fallbackFloorGridMesh.position.set(forward.x * 2.2, -1.3, forward.z * 2.2);
+
+      // forward.y indicates vertical pitch:
+      // forward.y ≈ 0 is horizontal horizon
+      // forward.y < -0.22 means user is pointing downward toward a floor surface
+      if (forward.y > -0.20) {
+        // User is aiming straight at walls or ceiling, not at the floor
+        setToast('Tilt camera downward toward the floor...', true);
+        const scannerText = dom.surfaceScannerReticle?.querySelector('.scanner-text');
+        if (scannerText) scannerText.textContent = 'Aim camera at the floor';
+      } else {
+        // User is aiming downward at a floor surface!
+        // Measure motion across floor surface
+        const deltaYaw = (lastYaw !== null) ? Math.abs(e.alpha - lastYaw) : 0;
+        const deltaPitch = (lastPitch !== null) ? Math.abs(e.beta - lastPitch) : 0;
+        lastYaw = e.alpha;
+        lastPitch = e.beta;
+
+        // Progress scanning when sweeping gently over floor
+        const motionBonus = Math.min((deltaYaw + deltaPitch) * 0.02, 0.05);
+        scanScore += 0.035 + motionBonus;
+
+        const scannerText = dom.surfaceScannerReticle?.querySelector('.scanner-text');
+        if (scannerText) scannerText.textContent = 'Scanning flat surface...';
+
+        if (scanScore >= 1.0) {
+          triggerSurfaceDetected();
+        }
+      }
+    } else if (!arState.isPlaced && arState.isSurfaceDetected && arState.fallbackFloorGridMesh) {
+      // After surface is detected, floor grid glides along the ground plane in front of user
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+      const forwardXZ = new THREE.Vector3(forward.x, 0, forward.z);
+      if (forwardXZ.lengthSq() > 0.001) {
+        forwardXZ.normalize();
+        const dist = Math.min(Math.max(-1.3 / (forward.y || -0.6), 1.6), 3.0);
+        arState.fallbackFloorGridMesh.position.set(forwardXZ.x * dist, -1.3, forwardXZ.z * dist);
       }
     }
   }
@@ -91,6 +173,10 @@ async function requestOrientationPermission() {
 export function repositionFallbackDancer() {
   arState.ignorePlacementUntil = performance.now() + 800;
   arState.isPlaced = false;
+  arState.isSurfaceDetected = false;
+  scanScore = 0;
+  lastPitch = null;
+  lastYaw = null;
 
   if (arState.dancerGroup) {
     arState.dancerGroup.visible = false;
@@ -106,26 +192,12 @@ export function repositionFallbackDancer() {
     dancerVideo.currentTime = 0;
   }
 
-  // Reposition fallback floor grid in front of current camera gaze on floor
-  if (arState.camera) {
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(arState.camera.quaternion);
-    forward.y = 0;
-    if (forward.lengthSq() > 0.001) {
-      forward.normalize();
-      if (arState.fallbackFloorGridMesh) {
-        arState.fallbackFloorGridMesh.position.set(forward.x * 2.2, -1.3, forward.z * 2.2);
-      }
-    }
-  }
-
+  // Hide floor grid until scanned again
   if (arState.fallbackFloorGridMesh) {
-    arState.fallbackFloorGridMesh.visible = true;
+    arState.fallbackFloorGridMesh.visible = false;
   }
   if (arState.floorGridMesh) {
-    arState.floorGridMesh.visible = true;
-    arState.floorGridMesh.traverse((child) => {
-      if (child.isMesh) child.visible = true;
-    });
+    arState.floorGridMesh.visible = false;
   }
 
   dom.historyModal?.classList.add('hidden');
@@ -140,7 +212,19 @@ export function repositionFallbackDancer() {
     topBar.style.setProperty('display', 'none', 'important');
   }
 
-  setToast('Point at floor plane and tap anywhere on grid to place');
+  // Show surface scanning reticle & instruction toast
+  dom.surfaceScannerReticle?.classList.remove('hidden');
+  const scannerText = dom.surfaceScannerReticle?.querySelector('.scanner-text');
+  if (scannerText) scannerText.textContent = 'Point camera at the floor';
+
+  setToast('Point camera at floor and move slowly to scan', true);
+
+  if (autoScanTimeout) clearTimeout(autoScanTimeout);
+  autoScanTimeout = setTimeout(() => {
+    if (arState.arStarted && !arState.isPlaced && !arState.isSurfaceDetected) {
+      triggerSurfaceDetected();
+    }
+  }, 3800);
 
   setTimeout(() => {
     if (arState.arStarted && !arState.isPlaced) {
@@ -190,11 +274,15 @@ export async function startFallbackAR() {
       await cameraVideo.play().catch(err => console.warn('Camera video play error:', err));
     }
 
-    // 4. Set state flags: AR is active, but dancer is NOT placed yet (surface scanning phase)
+    // 4. Set state flags: AR is active, but dancer is NOT placed and surface is NOT yet detected
     arState.isFallbackMode = true;
     arState.arStarted = true;
     arState.isPlaced = false;
+    arState.isSurfaceDetected = false;
     arState.detectedFloorHeight = -1.3;
+    scanScore = 0;
+    lastPitch = null;
+    lastYaw = null;
     document.body.classList.add('ar-active', 'ar-fallback-active');
 
     // Disable Three.js WebXR presentation mode so camera renders normally
@@ -253,7 +341,7 @@ export async function startFallbackAR() {
     }
     stopPositionalAudio();
 
-    // 10. Prepare Floor Grid for surface scanning
+    // 10. Prepare Floor Grid for surface scanning (initially HIDDEN until floor surface is scanned)
     if (!arState.fallbackFloorGridMesh) {
       const gridGeo = new THREE.PlaneGeometry(6, 6, 1, 1);
       gridGeo.rotateX(-Math.PI / 2);
@@ -266,17 +354,26 @@ export async function startFallbackAR() {
       }
     }
     arState.fallbackFloorGridMesh.position.set(0, -1.3, -2.2);
-    arState.fallbackFloorGridMesh.visible = true;
+    arState.fallbackFloorGridMesh.visible = false;
 
     if (arState.floorGridMesh) {
-      arState.floorGridMesh.visible = true;
-      arState.floorGridMesh.traverse((child) => {
-        if (child.isMesh) child.visible = true;
-      });
+      arState.floorGridMesh.visible = false;
     }
 
-    // 11. Instruction toast & enable placement listener
-    setToast('Point at the floor to detect flat surface, then tap anywhere on the grid to place');
+    // 11. Instruction toast & scanning reticle
+    dom.surfaceScannerReticle?.classList.remove('hidden');
+    const scannerText = dom.surfaceScannerReticle?.querySelector('.scanner-text');
+    if (scannerText) scannerText.textContent = 'Point camera at the floor';
+
+    setToast('Point camera at the floor and move slowly to scan', true);
+
+    // Auto-detection timer for desktop / non-gyro environments (3.8s)
+    if (autoScanTimeout) clearTimeout(autoScanTimeout);
+    autoScanTimeout = setTimeout(() => {
+      if (arState.arStarted && !arState.isPlaced && !arState.isSurfaceDetected) {
+        triggerSurfaceDetected();
+      }
+    }, 3800);
 
     enablePlacementListener();
     setTimeout(() => {
@@ -304,6 +401,16 @@ export function stopFallbackAR() {
   arState.isFallbackMode = false;
   arState.arStarted = false;
   arState.isPlaced = false;
+  arState.isSurfaceDetected = false;
+  scanScore = 0;
+
+  if (autoScanTimeout) {
+    clearTimeout(autoScanTimeout);
+    autoScanTimeout = null;
+  }
+
+  // Hide scanning reticle
+  dom.surfaceScannerReticle?.classList.add('hidden');
 
   document.body.classList.remove('ar-active', 'ar-fallback-active');
   document.body.classList.remove('landscape', 'is-landscape', 'drawer-open');

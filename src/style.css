@@ -3376,3 +3376,125 @@ body.is-landscape #ARButton {
   font-size: 10px !important;
   letter-spacing: 1.5px !important;
 }
+
+/* ──────────────────────────────────────────
+   AR Surface Scanning Reticle & Visual Indicator
+────────────────────────────────────────── */
+.surface-scanner-reticle {
+  position: fixed !important;
+  top: 52% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) perspective(320px) rotateX(44deg) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: none !important;
+  z-index: 130 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transition: opacity 0.35s ease, transform 0.35s ease !important;
+}
+
+.surface-scanner-reticle.hidden {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: translate(-50%, -50%) scale(0.8) !important;
+}
+
+.scanner-disc {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scanner-ring--outer {
+  position: absolute;
+  inset: 0;
+  border: 2px dashed rgba(251, 176, 59, 0.75);
+  border-radius: 50%;
+  animation: scanner-rotate 8s linear infinite;
+  box-shadow: 0 0 16px rgba(238, 99, 39, 0.35), inset 0 0 12px rgba(251, 176, 59, 0.2);
+}
+
+.scanner-ring--inner {
+  position: absolute;
+  inset: 20px;
+  border: 1.5px solid rgba(238, 99, 39, 0.8);
+  border-radius: 50%;
+  animation: scanner-pulse 2s ease-in-out infinite alternate;
+}
+
+.scanner-crosshair-h {
+  position: absolute;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(251, 176, 59, 0.6) 50%, transparent 100%);
+}
+
+.scanner-crosshair-v {
+  position: absolute;
+  height: 100%;
+  width: 1px;
+  background: linear-gradient(180deg, transparent 0%, rgba(251, 176, 59, 0.6) 50%, transparent 100%);
+}
+
+.scanner-center-dot {
+  width: 8px;
+  height: 8px;
+  background: #fbb03b;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #ee6327;
+}
+
+.scanner-badge {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  background: rgba(12, 10, 18, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(251, 176, 59, 0.35);
+  border-radius: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transform: perspective(320px) rotateX(-44deg); /* Un-tilt text badge so it reads flat */
+}
+
+.scanner-dot-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fbb03b;
+  animation: scanner-dot-blink 1.2s ease-in-out infinite;
+}
+
+.scanner-text {
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+@keyframes scanner-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes scanner-pulse {
+  0% { transform: scale(0.88); opacity: 0.6; }
+  100% { transform: scale(1.08); opacity: 1; }
+}
+
+@keyframes scanner-dot-blink {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.25); }
+}

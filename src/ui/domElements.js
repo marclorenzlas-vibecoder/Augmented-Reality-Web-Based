@@ -27,5 +27,6 @@ export const dom = {
   get landingCompatCard() { return $('landing-compat-card'); },
   get landingCompatTitle() { return $('landing-compat-title'); },
   get landingCompatDesc() { return $('landing-compat-desc'); },
-  get landingCompatAction() { return $('landing-compat-action'); }
+  get landingCompatAction() { return $('landing-compat-action'); },
+  get surfaceScannerReticle() { return $('surface-scanner-reticle'); }
 };
