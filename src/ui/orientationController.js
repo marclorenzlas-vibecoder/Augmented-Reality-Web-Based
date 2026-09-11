@@ -237,6 +237,8 @@ function _applyARControlsLandscape(deg) {
     // 2) Camera Shutter:
     if (captureBtn) {
       captureBtn.classList.remove('hidden');
+      captureBtn.style.removeProperty('display');
+      captureBtn.style.setProperty('display', 'flex', 'important');
       captureBtn.style.setProperty('opacity', '1', 'important');
       captureBtn.style.setProperty('visibility', 'visible', 'important');
       captureBtn.style.setProperty('pointer-events', 'auto', 'important');
@@ -383,6 +385,7 @@ function _unpinARControls() {
     document.getElementById('exit-ar-btn'),
     document.getElementById('recenter-btn'),
     document.getElementById('info-toggle-btn'),
+    document.getElementById('capture-btn'),
     document.querySelector('.dock'),
     document.getElementById('toast'),
   ];
@@ -541,17 +544,24 @@ export function applyOrientationClasses(orientationInfo) {
 
     // Controls visibility in landscape: only show when placed
     const topBarEl = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+    const captureBtnEl = dom.captureBtn || document.getElementById('capture-btn');
     if (arState.isPlaced) {
       dom.exitArBtn?.classList.remove('hidden');
       dom.recenterBtn?.classList.remove('hidden');
       dom.infoToggleBtn?.classList.remove('hidden');
-      dom.captureBtn?.classList.remove('hidden');
+      if (captureBtnEl) {
+        captureBtnEl.classList.remove('hidden');
+        captureBtnEl.style.removeProperty('display');
+      }
       topBarEl?.classList.remove('hidden');
     } else {
       dom.exitArBtn?.classList.add('hidden');
       dom.recenterBtn?.classList.add('hidden');
       dom.infoToggleBtn?.classList.add('hidden');
-      dom.captureBtn?.classList.add('hidden');
+      if (captureBtnEl) {
+        captureBtnEl.classList.add('hidden');
+        captureBtnEl.style.setProperty('display', 'none', 'important');
+      }
       topBarEl?.classList.add('hidden');
     }
 
@@ -568,11 +578,18 @@ export function applyOrientationClasses(orientationInfo) {
 
     // Controls visibility in portrait: only show when placed
     const topBarEl = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+    const captureBtnEl = dom.captureBtn || document.getElementById('capture-btn');
     if (arState.isPlaced) {
       dom.exitArBtn?.classList.remove('hidden');
       dom.recenterBtn?.classList.remove('hidden');
       dom.infoToggleBtn?.classList.remove('hidden');
-      dom.captureBtn?.classList.remove('hidden');
+      if (captureBtnEl) {
+        captureBtnEl.classList.remove('hidden');
+        captureBtnEl.style.removeProperty('display');
+        captureBtnEl.style.removeProperty('visibility');
+        captureBtnEl.style.removeProperty('opacity');
+        captureBtnEl.style.removeProperty('pointer-events');
+      }
       if (topBarEl) {
         topBarEl.classList.remove('hidden');
         topBarEl.style.removeProperty('display');
@@ -581,7 +598,10 @@ export function applyOrientationClasses(orientationInfo) {
       dom.exitArBtn?.classList.add('hidden');
       dom.recenterBtn?.classList.add('hidden');
       dom.infoToggleBtn?.classList.add('hidden');
-      dom.captureBtn?.classList.add('hidden');
+      if (captureBtnEl) {
+        captureBtnEl.classList.add('hidden');
+        captureBtnEl.style.setProperty('display', 'none', 'important');
+      }
       if (topBarEl) {
         topBarEl.classList.add('hidden');
         topBarEl.style.setProperty('display', 'none', 'important');

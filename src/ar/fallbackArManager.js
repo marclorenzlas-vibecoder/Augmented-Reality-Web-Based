@@ -187,7 +187,14 @@ export async function startFallbackAR() {
     }
 
     dom.infoToggleBtn?.classList.remove('hidden');
-    dom.captureBtn?.classList.remove('hidden');
+    const captureBtn = dom.captureBtn || document.getElementById('capture-btn');
+    if (captureBtn) {
+      captureBtn.classList.remove('hidden');
+      captureBtn.style.removeProperty('display');
+      captureBtn.style.removeProperty('visibility');
+      captureBtn.style.removeProperty('opacity');
+      captureBtn.style.removeProperty('pointer-events');
+    }
     dom.recenterBtn?.classList.remove('hidden');
 
     // 7. Initialize orientation listener
