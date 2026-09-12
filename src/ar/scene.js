@@ -181,10 +181,17 @@ export function initThreeScene() {
         ? currentHitMatrix
         : null;
 
-      if (hasActivePlaneGrid && !arState.isPlaced) {
-        if (!arState.isSurfaceDetected) {
-          arState.isSurfaceDetected = true;
-          setToast('Surface detected! Tap anywhere on grid to place');
+      if (!arState.isPlaced) {
+        if (hasActivePlaneGrid) {
+          if (!arState.isSurfaceDetected) {
+            arState.isSurfaceDetected = true;
+            setToast('Surface detected! Tap anywhere on grid to place', true);
+          }
+        } else {
+          if (arState.isSurfaceDetected) {
+            arState.isSurfaceDetected = false;
+            setToast('Point camera at floor and move slowly to scan surface', true);
+          }
         }
       }
     }

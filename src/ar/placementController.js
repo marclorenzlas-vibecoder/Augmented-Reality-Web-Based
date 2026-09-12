@@ -285,7 +285,7 @@ export function handleFloorTap(screenX = null, screenY = null) {
 
     placeDancer('MassKara Dancer placed on floor');
   } else {
-    setToast('Point camera at floor and tap directly on the floor grid to place');
+    setToast('Point camera at floor and tap directly on the floor grid to place', true);
   }
 }
 
@@ -455,7 +455,7 @@ export function placeDancer(customToast = 'MassKara Dancer placed in front of yo
   hideARControls();
 
   // Show ONLY the placement toast text first
-  setToast(customToast);
+  setToast(customToast, true);
 
   if (autoPlayMedia) {
     // Show only the toast for 2.5 seconds, then hide toast and reveal UI controls (camera, info pill, reposition, exit)
@@ -522,7 +522,7 @@ export function repositionDancer() {
     topBar.style.setProperty('display', 'none', 'important');
   }
 
-  setToast('Point at floor plane and tap anywhere on grid to place');
+  setToast('Point camera at floor and move slowly to scan surface', true);
 
   setTimeout(() => {
     if (arState.arStarted && !arState.isPlaced) {

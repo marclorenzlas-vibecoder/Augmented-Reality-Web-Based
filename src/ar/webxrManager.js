@@ -89,7 +89,7 @@ export function handleSessionStart() {
   dom.surfaceScannerReticle?.classList.add('hidden');
 
   // 7. Show initial floor scanning prompt
-  setToast('Point camera at floor and move slowly to scan surface');
+  setToast('Point camera at floor and move slowly to scan surface', true);
   const toast = dom.toast || $('toast');
   if (toast) {
     toast.classList.remove('hidden');
