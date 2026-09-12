@@ -7,10 +7,10 @@ export const DEFAULT_MEDIA_URL =
   import.meta.env.FILE_LINK ||
   import.meta.env.VITE_FILE_LINK ||
   import.meta.env.VITE_DEFAULT_MEDIA_URL ||
-  'https://file.garden/aoVl-M0-p1TyFay4/masskara1';
+  'https://file.garden/aoVl-M0-p1TyFay4/maskaramen';
 
 export const VIDEO_ASPECT = 9 / 16;
-export const BILLBOARD_HEIGHT = 5.0;    // 5.0 meters scale (feet touching floor)
+export const BILLBOARD_HEIGHT = 2.0;    // 2.0 meters scale (lifesize / feet touching floor)
 export const PLACEMENT_FLOAT_AMPLITUDE = 0.04;
 export const PLANE_GRID_SURFACE_OFFSET = 0.003;
 

@@ -28,14 +28,33 @@ import {
 } from '../ar/billboard.js';
 
 export function resolveKnownLocalMedia(text) {
-  const normalized = text.trim().replace(/_mp4($|[?#])/i, '.mp4$1');
-
-  if (/MaxwellNB\.mp4($|[?#])/i.test(normalized) || /MaxwellNB/i.test(normalized)) {
-    return '/MaxwellNB.mp4';
+  if (!text) return null;
+  const trimmed = text.trim();
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('data:')
+  ) {
+    return null;
   }
 
-  if (/Maxwell\.mp4($|[?#])/i.test(normalized) || /Maxwell/i.test(normalized)) {
-    return '/Maxwell.mp4';
+  const normalized = trimmed
+    .replace(/_mp4($|[?#])/i, '.mp4$1')
+    .replace(/_webm($|[?#])/i, '.webm$1')
+    .replace(/_glb($|[?#])/i, '.glb$1')
+    .replace(/_gltf($|[?#])/i, '.gltf$1')
+    .replace(/_gif($|[?#])/i, '.gif$1')
+    .replace(/_png($|[?#])/i, '.png$1')
+    .replace(/_jpg($|[?#])/i, '.jpg$1')
+    .replace(/_jpeg($|[?#])/i, '.jpeg$1');
+
+  const hasMediaExt = /\.(mp4|webm|mov|ogg|m4v|glb|gltf|jpg|jpeg|png|webp|gif|mp3|wav|m4a|aac)($|[?#])/i.test(normalized);
+  if (hasMediaExt) {
+    if (normalized.startsWith('/') || normalized.startsWith('./') || normalized.startsWith('../')) {
+      return normalized;
+    }
+    return '/' + normalized;
   }
 
   return null;
@@ -56,8 +75,8 @@ export function resolveMediaUrl(raw) {
 
   try {
     const parsedUrl = new URL(url, window.location.href);
-    const isMediaPath = /\.(mp4|webm|mov|ogg|m4v|jpg|jpeg|png|webp|gif)($|\?)/i.test(parsedUrl.pathname);
-    const isViteDevMedia = parsedUrl.port === '5173' || parsedUrl.origin === window.location.origin;
+    const isMediaPath = /\.(mp4|webm|mov|ogg|m4v|glb|gltf|jpg|jpeg|png|webp|gif|mp3|wav|m4a|aac)($|\?)/i.test(parsedUrl.pathname);
+    const isViteDevMedia = parsedUrl.origin === window.location.origin;
 
     if (isViteDevMedia && isMediaPath) {
       return parsedUrl.pathname + parsedUrl.search + parsedUrl.hash;
@@ -82,6 +101,11 @@ export function resolveMediaUrl(raw) {
     return url.replace('.gifv', '.mp4');
   }
 
+  // Handle OneDrive direct links
+  if (url.includes('1drv.ms') || url.includes('onedrive.live.com')) {
+    return url.replace('redir?', 'download?');
+  }
+
   return url;
 }
 
@@ -89,24 +113,26 @@ export function parseMediaAndAudioFromQr(text) {
   if (!text) return { videoSource: '', audioSource: null };
   const raw = text.trim();
 
-  // 1. JSON payload support: {"video": "...", "audio": "..."}
+  // 1. JSON payload support: {"video": "...", "audio": "..."} or {"url": "...", "sound": "..."} or {"media": "...", "music": "..."}
   if (raw.startsWith('{') && raw.endsWith('}')) {
     try {
       const obj = JSON.parse(raw);
-      const v = obj.video || obj.mp4 || obj.url || obj.media || obj.src;
-      const a = obj.audio || obj.sound || obj.music || obj.track;
-      if (v) return { videoSource: v.trim(), audioSource: a ? a.trim() : null };
+      const v = obj.video || obj.mp4 || obj.url || obj.media || obj.src || obj.model || obj.image || obj.file;
+      const a = obj.audio || obj.sound || obj.music || obj.track || obj.audioUrl || obj.soundUrl;
+      if (v) return { videoSource: String(v).trim(), audioSource: a ? String(a).trim() : null };
     } catch (e) {}
   }
 
-  // 2. Query parameters (?audio=... or &audio=... or ?sound=...)
+  // 2. Query parameters (?audio=... or &audio=... or ?sound=... or ?music=...)
   try {
     const parsedUrl = new URL(raw, window.location.href);
-    if (parsedUrl.searchParams.has('audio') || parsedUrl.searchParams.has('sound')) {
-      const a = parsedUrl.searchParams.get('audio') || parsedUrl.searchParams.get('sound');
+    if (parsedUrl.searchParams.has('audio') || parsedUrl.searchParams.has('sound') || parsedUrl.searchParams.has('music') || parsedUrl.searchParams.has('track')) {
+      const a = parsedUrl.searchParams.get('audio') || parsedUrl.searchParams.get('sound') || parsedUrl.searchParams.get('music') || parsedUrl.searchParams.get('track');
       parsedUrl.searchParams.delete('audio');
       parsedUrl.searchParams.delete('sound');
-      return { videoSource: parsedUrl.toString(), audioSource: a };
+      parsedUrl.searchParams.delete('music');
+      parsedUrl.searchParams.delete('track');
+      return { videoSource: parsedUrl.toString(), audioSource: a ? a.trim() : null };
     }
   } catch (e) {}
 
@@ -117,6 +143,8 @@ export function parseMediaAndAudioFromQr(text) {
     let a = parts[1].trim();
     if (a.toLowerCase().startsWith('audio=')) a = a.slice(6).trim();
     if (a.toLowerCase().startsWith('sound=')) a = a.slice(6).trim();
+    if (a.toLowerCase().startsWith('music=')) a = a.slice(6).trim();
+    if (a.toLowerCase().startsWith('track=')) a = a.slice(6).trim();
     return { videoSource: v, audioSource: a || null };
   }
 
@@ -127,7 +155,7 @@ export function parseMediaAndAudioFromQr(text) {
     let audioUrl = null;
 
     const isAudioPattern = /(audio|sound|music|track|voice|\.(mp3|wav|m4a|ogg|aac))($|[?#])/i;
-    const isVideoPattern = /(video|movie|composition|greybg|graybg|blackbg|greenbg|bluebg|\.(mp4|webm|mov|m4v))($|[?#])/i;
+    const isVideoPattern = /(video|movie|media|\.(mp4|webm|mov|m4v|glb|gltf|jpg|jpeg|png|webp|gif))($|[?#])/i;
 
     for (const u of urlMatches) {
       if (isAudioPattern.test(u) && !audioUrl) {
@@ -146,17 +174,14 @@ export function parseMediaAndAudioFromQr(text) {
     }
   }
 
-  // 5. Single URL or path
+  // 5. Single URL, path, or arbitrary media endpoint
   const cleanUrl = raw.replace(/\/+$/, '');
-  const hasKnownExtension = /\.(mp4|webm|mov|ogg|m4v|glb|gltf|jpg|jpeg|png|webp|gif|mp3|wav|m4a|aac)($|[?#])/i.test(cleanUrl);
-
   let videoSource = cleanUrl;
   let audioSource = null;
 
-  if (!hasKnownExtension && (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://') || cleanUrl.startsWith('/'))) {
-    // If a folder URL is passed without a specific filename, default to Composition_greybg.mp4 inside that folder
+  // If a File Garden folder URL is passed without a specific filename, link to the media & companion audio inside it
+  if (cleanUrl.includes('file.garden') && !/\.(mp4|webm|mov|ogg|m4v|glb|gltf|jpg|jpeg|png|webp|gif|mp3|wav|m4a|aac)($|[?#])/i.test(cleanUrl)) {
     videoSource = `${cleanUrl}/Composition_greybg.mp4`;
-    // Also pair the companion audioclip if inside this folder
     audioSource = `${cleanUrl}/audioclip-1788760841000-245087.mp4`;
   }
 
@@ -265,7 +290,7 @@ export async function loadVideoViaBlob(url, loadToken) {
 
   try {
     updateLoadingBar(25, true);
-    updateCircularProgress(25, 'Downloading festival media…');
+    updateCircularProgress(25, 'Downloading media…');
     const response = await fetch(url, {
       cache: 'reload'
     });
@@ -282,7 +307,7 @@ export async function loadVideoViaBlob(url, loadToken) {
     }
 
     updateLoadingBar(85, true);
-    updateCircularProgress(85, 'Processing video stream…');
+    updateCircularProgress(85, 'Processing media stream…');
     arState.currentBlobUrl = URL.createObjectURL(blob);
     loadVideoMedia(arState.currentBlobUrl, loadToken, { allowBlobFallback: false });
   } catch (err) {
@@ -295,33 +320,20 @@ export function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}
   const video = arState.dancerVideo;
   if (!video) return;
   showCircularLoader();
-  updateLoadingBar(15, true);
-  updateCircularProgress(15, 'Buffering festival media…');
+  updateLoadingBar(20, true);
+  updateCircularProgress(20, 'Buffering media…');
 
   let progressInterval = null;
 
   const cleanup = () => {
     if (progressInterval) clearInterval(progressInterval);
-    video.removeEventListener('loadedmetadata', checkBufferComplete);
-    video.removeEventListener('loadeddata', checkBufferComplete);
+    video.removeEventListener('loadedmetadata', onMetadata);
+    video.removeEventListener('loadeddata', onLoadedData);
     video.removeEventListener('canplay', checkBufferComplete);
     video.removeEventListener('canplaythrough', checkBufferComplete);
     video.removeEventListener('playing', checkBufferComplete);
     video.removeEventListener('progress', onProgress);
     video.removeEventListener('error', onError);
-  };
-
-  const onProgress = () => {
-    if (loadToken !== arState.mediaLoadToken || arState.isMediaReady) return;
-    if (video.buffered.length > 0 && video.duration > 0) {
-      const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-      const pct = Math.min(Math.round((bufferedEnd / video.duration) * 100), 100);
-      updateCircularProgress(pct, `Buffering festival dancer (${pct}%)…`);
-      updateLoadingBar(pct);
-      if (pct >= 96) {
-        checkBufferComplete();
-      }
-    }
   };
 
   const checkBufferComplete = () => {
@@ -333,11 +345,38 @@ export function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}
       return;
     }
 
-    // Video has decoded frame and reached playable buffer state
-    if (video.readyState >= 3 || (video.buffered.length > 0 && video.duration > 0 && (video.buffered.end(video.buffered.length - 1) / video.duration) >= 0.25)) {
+    // Video has decoded first frame and is ready to display!
+    if (video.readyState >= 2 || (video.buffered.length > 0 && video.duration > 0)) {
       cleanup();
       updateCircularProgress(100, 'Ready!');
       markVideoReady(loadToken);
+    }
+  };
+
+  const onMetadata = () => {
+    if (loadToken !== arState.mediaLoadToken || arState.isMediaReady) return;
+    updateCircularProgress(50, 'Buffering media…');
+    updateLoadingBar(50);
+    checkBufferComplete();
+  };
+
+  const onLoadedData = () => {
+    if (loadToken !== arState.mediaLoadToken || arState.isMediaReady) return;
+    updateCircularProgress(85, 'Finalizing AR scene…');
+    updateLoadingBar(85);
+    checkBufferComplete();
+    setTimeout(checkBufferComplete, 60);
+  };
+
+  const onProgress = () => {
+    if (loadToken !== arState.mediaLoadToken || arState.isMediaReady) return;
+    if (video.buffered.length > 0 && video.duration > 0) {
+      const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+      const pct = Math.min(Math.round((bufferedEnd / video.duration) * 100), 100);
+      const displayPct = Math.max(30, Math.min(95, pct));
+      updateCircularProgress(displayPct, `Buffering media (${displayPct}%)…`);
+      updateLoadingBar(displayPct);
+      checkBufferComplete();
     }
   };
 
@@ -348,7 +387,7 @@ export function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}
     }
 
     cleanup();
-    console.warn('Video load error:', describeVideoError());
+    console.warn('Video stream error, trying fallback:', describeVideoError());
 
     if (allowBlobFallback) {
       loadVideoViaBlob(url, loadToken);
@@ -357,20 +396,20 @@ export function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}
     }
   };
 
-  // Heartbeat to provide smooth visual feedback while downloading video chunks
-  let simProgress = 15;
+  // Fast responsive heartbeat while loading initial video frame
+  let simProgress = 25;
   progressInterval = setInterval(() => {
     if (loadToken !== arState.mediaLoadToken || arState.isMediaReady) {
       clearInterval(progressInterval);
       return;
     }
-    if (simProgress < 94) {
-      simProgress += Math.max(1, Math.floor((94 - simProgress) / 8));
-      updateCircularProgress(simProgress, `Buffering festival dancer (${simProgress}%)…`);
+    if (simProgress < 85) {
+      simProgress += 15;
+      updateCircularProgress(simProgress, `Buffering media (${simProgress}%)…`);
       updateLoadingBar(simProgress);
     }
     checkBufferComplete();
-  }, 350);
+  }, 200);
 
   video.pause();
   pausePositionalAudio();
@@ -380,8 +419,8 @@ export function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}
   video.playsInline = true;
   video.preload = 'auto';
 
-  video.addEventListener('loadedmetadata', checkBufferComplete);
-  video.addEventListener('loadeddata', checkBufferComplete);
+  video.addEventListener('loadedmetadata', onMetadata);
+  video.addEventListener('loadeddata', onLoadedData);
   video.addEventListener('canplay', checkBufferComplete);
   video.addEventListener('canplaythrough', checkBufferComplete);
   video.addEventListener('playing', checkBufferComplete);
@@ -398,8 +437,9 @@ export function loadVideoMedia(url, loadToken, { allowBlobFallback = true } = {}
     });
   }
 
-  setTimeout(checkBufferComplete, 100);
-  setTimeout(checkBufferComplete, 500);
+  setTimeout(checkBufferComplete, 80);
+  setTimeout(checkBufferComplete, 250);
+  setTimeout(checkBufferComplete, 600);
 }
 
 export async function tryLoadGif(urlOrBuffer, loadToken = ++arState.mediaLoadToken) {
@@ -653,24 +693,12 @@ export async function loadMediaFromQR(text) {
     return;
   }
 
-  const isVideoExt = /\.(mp4|webm|mov|m4v|ogg)($|[?#])/i.test(resolvedUrl);
-  const isGifExt   = /\.(gif)($|[?#])/i.test(resolvedUrl);
-  const isImageExt = /\.(jpg|jpeg|png|webp)($|[?#])/i.test(resolvedUrl);
   const isGlbExt   = /\.(glb|gltf)($|[?#])/i.test(resolvedUrl);
-
-  if (isVideoExt) {
-    arState.currentMediaType = 'video';
-    loadVideoMedia(resolvedUrl, loadToken);
-    return;
-  }
+  const isImageExt = /\.(jpg|jpeg|png|webp)($|[?#])/i.test(resolvedUrl);
+  const isGifExt   = /\.(gif)($|[?#])/i.test(resolvedUrl);
 
   if (isGlbExt) {
     tryLoadGlb(resolvedUrl, loadToken);
-    return;
-  }
-
-  if (isImageExt) {
-    tryLoadImage(resolvedUrl, loadToken);
     return;
   }
 
@@ -679,102 +707,12 @@ export async function loadMediaFromQR(text) {
     return;
   }
 
-  updateLoadingBar(25, true);
-
-  let response = null;
-  let errorMsg = '';
-
-  try {
-    response = await fetch(resolvedUrl);
-  } catch (err) {
-    console.warn('Direct fetch failed, trying CORS proxy:', err);
-    errorMsg = err.message || err;
+  if (isImageExt) {
+    tryLoadImage(resolvedUrl, loadToken);
+    return;
   }
 
-  if (!response || !response.ok) {
-    try {
-      const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(resolvedUrl);
-      response = await fetch(proxyUrl);
-    } catch (err) {
-      console.warn('CORS proxy fetch failed, trying backup proxy:', err);
-      errorMsg = err.message || err;
-    }
-  }
-
-  if (!response || !response.ok) {
-    try {
-      const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(resolvedUrl);
-      response = await fetch(proxyUrl);
-    } catch (err) {
-      console.warn('Backup proxy fetch failed:', err);
-      errorMsg = err.message || err;
-    }
-  }
-
-  if (response && response.ok) {
-    try {
-      const blob = await response.blob();
-      const contentType = blob.type || response.headers.get('Content-Type') || '';
-
-      let isGlb = contentType.startsWith('model/') ||
-        contentType.includes('gltf') ||
-        /\.(glb|gltf)($|\?)/i.test(resolvedUrl);
-
-      try {
-        const headerBuffer = await blob.slice(0, 4).arrayBuffer();
-        if (headerBuffer.byteLength === 4) {
-          const headerView = new DataView(headerBuffer);
-          const magic = headerView.getUint32(0, false);
-          if (magic === 0x676C5446) {
-            isGlb = true;
-          }
-        }
-      } catch (magicErr) {
-        console.warn('Could not check magic bytes for GLB detection:', magicErr);
-      }
-
-      const isGif = contentType.includes('gif') || /\.(gif)($|\?)/i.test(resolvedUrl);
-      const isImage = (contentType.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl)) && !isGif;
-      const isVideo = contentType.startsWith('video/') || /\.(mp4|webm|mov|ogg|m4v)($|\?)/i.test(resolvedUrl);
-
-      arState.currentBlobUrl = URL.createObjectURL(blob);
-
-      if (isGlb) {
-        tryLoadGlb(arState.currentBlobUrl, loadToken);
-      } else if (isGif) {
-        const buffer = await blob.arrayBuffer();
-        tryLoadGif(buffer, loadToken);
-      } else if (isImage && !isVideo) {
-        tryLoadImage(arState.currentBlobUrl, loadToken);
-      } else {
-        arState.currentMediaType = 'video';
-        loadVideoMedia(arState.currentBlobUrl, loadToken, { allowBlobFallback: false });
-      }
-      return;
-    } catch (err) {
-      console.error('Failed to process media blob:', err);
-      errorMsg = err.message || err;
-    }
-  }
-
-  console.warn('All fetch attempts failed. Trying direct loading fallback. Error:', errorMsg);
-  updateLoadingBar(50, true);
-
-  const isExplicitImage = /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(resolvedUrl);
-  if (isExplicitImage) {
-    const isExplicitGif = /\.(gif)($|\?)/i.test(resolvedUrl);
-    if (isExplicitGif) {
-      tryLoadGif(resolvedUrl, loadToken);
-    } else {
-      tryLoadImage(resolvedUrl, loadToken);
-    }
-  } else {
-    const isExplicitGlb = /\.(glb|gltf)($|\?)/i.test(resolvedUrl);
-    if (isExplicitGlb) {
-      tryLoadGlb(resolvedUrl, loadToken);
-    } else {
-      arState.currentMediaType = 'video';
-      loadVideoMedia(resolvedUrl, loadToken);
-    }
-  }
+  // Direct fast streaming for all video URLs and extensionless media endpoints
+  arState.currentMediaType = 'video';
+  loadVideoMedia(resolvedUrl, loadToken);
 }

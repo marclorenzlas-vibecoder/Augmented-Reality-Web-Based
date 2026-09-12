@@ -67,7 +67,7 @@ export function showCircularLoader() {
   const statusEl = dom.landingLoaderStatus || $('landing-loader-status');
   if (circle) circle.style.strokeDashoffset = `${CIRCUMFERENCE}`;
   if (percentEl) percentEl.textContent = '0%';
-  if (statusEl) statusEl.textContent = 'Buffering festival media…';
+  if (statusEl) statusEl.textContent = 'Buffering media…';
 }
 
 export function updateCircularProgress(percent, statusMessage = '') {

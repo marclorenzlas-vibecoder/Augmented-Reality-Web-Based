@@ -3466,7 +3466,8 @@ body.is-landscape #ARButton {
   border: 1px solid rgba(251, 176, 59, 0.35);
   border-radius: 20px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  transform: perspective(320px) rotateX(-44deg); /* Un-tilt text badge so it reads flat */
+  transform: perspective(320px) rotateX(-44deg);
+  /* Un-tilt text badge so it reads flat */
 }
 
 .scanner-dot-pulse {
@@ -3487,16 +3488,37 @@ body.is-landscape #ARButton {
 }
 
 @keyframes scanner-rotate {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes scanner-pulse {
-  0% { transform: scale(0.88); opacity: 0.6; }
-  100% { transform: scale(1.08); opacity: 1; }
+  0% {
+    transform: scale(0.88);
+    opacity: 0.6;
+  }
+
+  100% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
 }
 
 @keyframes scanner-dot-blink {
-  0%, 100% { opacity: 0.3; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.25); }
+
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
 }
