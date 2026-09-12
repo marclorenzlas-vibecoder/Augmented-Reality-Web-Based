@@ -3,7 +3,15 @@ import { arState } from './state.js';
 import { dom, $ } from '../ui/domElements.js';
 import { setToast } from '../ui/toast.js';
 import { updateUILayout, unpinARControls } from '../ui/orientationController.js';
-import { stopPositionalAudio, syncAudioToVideo, resumeAudioContext } from '../audio/audioController.js';
+import { stopPositionalAudio } from '../audio/audioController.js';
+import {
+  enablePlacementListener,
+  disablePlacementListener,
+  spawnDancerInFrontOfCamera,
+  clearVideoStartDelay,
+  clearUiControlsRevealTimeout,
+  hideARControls
+} from './placementController.js';
 
 // Pre-allocated vectors & quaternions for device orientation
 const zee = new THREE.Vector3(0, 0, 1);
@@ -14,6 +22,11 @@ const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -PI/2
 let deviceOrientationListener = null;
 let currentCameraStream = null;
 let initialOrientationYaw = null;
+let accumulatedScanTime = 0;
+let lastScanTimestamp = 0;
+let lastPitch = null;
+let lastYaw = null;
+let autoScanTimeout = null;
 
 /**
  * Converts device orientation angles (alpha, beta, gamma) into a Three.js Quaternion.
@@ -28,6 +41,20 @@ function setDeviceOrientationQuaternion(quaternion, alpha, beta, gamma, orientAn
   quaternion.setFromEuler(euler);
   quaternion.multiply(q1); // Camera faces outward through back of phone
   quaternion.multiply(q0.setFromAxisAngle(zee, -THREE.MathUtils.degToRad(orientAngle))); // Screen rotation
+}
+
+/**
+ * Triggers successful surface detection: reveals floor grid and prompts user to tap to place
+ */
+export function triggerSurfaceDetected() {
+  arState.isSurfaceDetected = true;
+  if (autoScanTimeout) {
+    clearTimeout(autoScanTimeout);
+    autoScanTimeout = null;
+  }
+  dom.surfaceScannerReticle?.classList.add('hidden');
+  if (arState.fallbackFloorGridMesh) arState.fallbackFloorGridMesh.visible = false;
+  if (arState.floorGridMesh) arState.floorGridMesh.visible = false;
 }
 
 /**
@@ -51,7 +78,6 @@ function onDeviceOrientation(e) {
   if (initialOrientationYaw === null) {
     const camEuler = new THREE.Euler().setFromQuaternion(q, 'YXZ');
     initialOrientationYaw = camEuler.y;
-    repositionFallbackDancer();
   }
 
   if (arState.camera && arState.isFallbackMode) {
@@ -76,40 +102,15 @@ async function requestOrientationPermission() {
 }
 
 /**
- * Reposition the dancer directly in front of the phone's current camera gaze
+ * Reposition the dancer in fallback mode: re-centers the dancer directly in front of the camera
  */
 export function repositionFallbackDancer() {
-  if (!arState.dancerGroup || !arState.camera) return;
-
-  const camera = arState.camera;
-  camera.updateMatrixWorld(true);
-
-  // Direction camera is facing projected on horizontal XZ plane
-  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-  forward.y = 0;
-  if (forward.lengthSq() < 0.001) {
-    forward.set(0, 0, -1);
-  } else {
-    forward.normalize();
-  }
-
-  const distance = 2.1;
-  arState.dancerGroup.position.copy(camera.position).addScaledVector(forward, distance);
-  arState.dancerGroup.position.y = camera.position.y - 0.48;
-  arState.dancerGroup.userData.baseY = arState.dancerGroup.position.y;
-
-  // Rotate dancer to face back toward the user
-  const faceAngle = Math.atan2(forward.x, forward.z) + Math.PI;
-  arState.dancerGroup.rotation.set(0, faceAngle, 0);
-  arState.dancerGroup.userData.baseRotY = faceAngle;
-
-  arState.isPlaced = true;
-  arState.dancerGroup.visible = true;
-
-  setToast('Dancer repositioned in front of you');
+  arState.ignorePlacementUntil = performance.now() + 600;
+  spawnDancerInFrontOfCamera(1.9);
+  setToast('Dancer repositioned in front of camera');
   setTimeout(() => {
     dom.toast?.classList.add('hidden');
-  }, 2200);
+  }, 1800);
 }
 
 /**
@@ -151,10 +152,13 @@ export async function startFallbackAR() {
       await cameraVideo.play().catch(err => console.warn('Camera video play error:', err));
     }
 
-    // 4. Set state flags
+    // 4. Set state flags: AR is active, dancer is placed immediately in front of camera
     arState.isFallbackMode = true;
     arState.arStarted = true;
     arState.isPlaced = true;
+    arState.isSurfaceDetected = true;
+    arState.uiControlsVisible = false;
+    arState.detectedFloorHeight = -1.25;
     document.body.classList.add('ar-active', 'ar-fallback-active');
 
     // Disable Three.js WebXR presentation mode so camera renders normally
@@ -167,7 +171,7 @@ export async function startFallbackAR() {
     const arBtn = document.getElementById('ARButton');
     if (arBtn) arBtn.style.display = 'none';
 
-    // 6. Show AR UI Overlay & Controls
+    // 6. Show AR UI Overlay
     const uiOverlayEl = dom.uiOverlay || $('ui-overlay');
     if (uiOverlayEl) {
       uiOverlayEl.classList.remove('hidden');
@@ -177,75 +181,31 @@ export async function startFallbackAR() {
       uiOverlayEl.style.pointerEvents = '';
     }
 
-    const exitBtn = dom.exitArBtn || $('exit-ar-btn');
-    if (exitBtn) {
-      exitBtn.classList.remove('hidden');
-      exitBtn.style.display = '';
-      exitBtn.style.visibility = '';
-      exitBtn.style.opacity = '';
-      exitBtn.style.pointerEvents = '';
-    }
+    // 7. Hide floor grids and surface scanner reticle
+    if (arState.fallbackFloorGridMesh) arState.fallbackFloorGridMesh.visible = false;
+    if (arState.floorGridMesh) arState.floorGridMesh.visible = false;
+    dom.surfaceScannerReticle?.classList.add('hidden');
 
-    dom.infoToggleBtn?.classList.remove('hidden');
-    const captureBtn = dom.captureBtn || document.getElementById('capture-btn');
-    if (captureBtn) {
-      captureBtn.classList.remove('hidden');
-      captureBtn.style.removeProperty('display');
-      captureBtn.style.removeProperty('visibility');
-      captureBtn.style.removeProperty('opacity');
-      captureBtn.style.removeProperty('pointer-events');
-    }
-    dom.recenterBtn?.classList.remove('hidden');
-
-    // 7. Initialize orientation listener
+    // 8. Initialize orientation listener
     initialOrientationYaw = null;
     if (window.DeviceOrientationEvent) {
       deviceOrientationListener = onDeviceOrientation;
       window.addEventListener('deviceorientation', deviceOrientationListener, true);
     }
 
-    // 8. Position the dancer in front of user and make visible
+    // 9. Reset camera
     if (arState.camera) {
       arState.camera.position.set(0, 0, 0);
       arState.camera.rotation.set(0, 0, 0);
     }
 
-    if (arState.dancerGroup) {
-      arState.dancerGroup.position.set(0, -0.48, -2.1);
-      arState.dancerGroup.rotation.set(0, 0, 0);
-      arState.dancerGroup.userData.baseY = -0.48;
-      arState.dancerGroup.visible = true;
-    }
+    // 10. Automatically spawn MassKara dancer directly in front of camera with 4-second pause before video play!
+    spawnDancerInFrontOfCamera(1.9, 4);
 
-    // Hide floor grid in fallback mode
-    if (arState.floorGridMesh) {
-      arState.floorGridMesh.visible = false;
-    }
-
-    // 9. Play festival dancer video & audio
-    const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
-    if (dancerVideo) {
-      dancerVideo.currentTime = 0;
-      dancerVideo.play().catch(() => {});
-    }
-
-    resumeAudioContext();
-    const audioEl = arState.dancerAudioEl || document.getElementById('dancer-audio');
-    if (audioEl && arState.isAudioReady && !arState.isAudioMuted) {
-      audioEl.currentTime = 0;
-      audioEl.play().catch(() => {});
-    }
-    syncAudioToVideo(true);
-
-    // 10. Update UI layout
-    updateUILayout();
-    requestAnimationFrame(updateUILayout);
-    setTimeout(updateUILayout, 150);
-
-    setToast('Move your phone to explore the MassKara dancer!');
-    setTimeout(() => {
-      dom.toast?.classList.add('hidden');
-    }, 3500);
+    // 11. Update UI layout to show controls and Bacolod mosaic ribbons
+    updateUILayout(null, true);
+    requestAnimationFrame(() => updateUILayout(null, true));
+    setTimeout(() => updateUILayout(null, true), 150);
 
   } catch (err) {
     console.error('[FallbackAR] Error starting camera fallback AR:', err);
@@ -258,9 +218,25 @@ export async function startFallbackAR() {
  * Clean up and exit fallback Camera AR mode
  */
 export function stopFallbackAR() {
+  clearUiControlsRevealTimeout();
+  clearVideoStartDelay();
+  hideARControls();
   arState.isFallbackMode = false;
   arState.arStarted = false;
   arState.isPlaced = false;
+  arState.isSurfaceDetected = false;
+  arState.uiControlsVisible = false;
+  accumulatedScanTime = 0;
+  lastPitch = null;
+  lastYaw = null;
+
+  if (autoScanTimeout) {
+    clearTimeout(autoScanTimeout);
+    autoScanTimeout = null;
+  }
+
+  // Hide scanning reticle
+  dom.surfaceScannerReticle?.classList.add('hidden');
 
   document.body.classList.remove('ar-active', 'ar-fallback-active');
   document.body.classList.remove('landscape', 'is-landscape', 'drawer-open');
@@ -305,6 +281,15 @@ export function stopFallbackAR() {
   // Re-enable WebXR flag on renderer for future WebXR sessions
   if (arState.renderer && arState.renderer.xr) {
     arState.renderer.xr.enabled = true;
+  }
+
+  // Disable placement listener and hide grids
+  disablePlacementListener();
+  if (arState.fallbackFloorGridMesh) {
+    arState.fallbackFloorGridMesh.visible = false;
+  }
+  if (arState.floorGridMesh) {
+    arState.floorGridMesh.visible = false;
   }
 
   // Unpin orientation controls

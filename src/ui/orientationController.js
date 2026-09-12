@@ -128,6 +128,11 @@ export function getEffectiveOrientation() {
     if (xrOrient !== null) {
       return xrOrient;
     }
+  } else if (arState.isFallbackMode && arState.camera && arState.deviceOrientationActive) {
+    const fallbackOrient = getXrDeviceOrientation(arState.camera);
+    if (fallbackOrient !== null) {
+      return fallbackOrient;
+    }
   }
 
   const screenInfo = getScreenOrientationInfo();
@@ -183,7 +188,7 @@ function _applyARControlsLandscape(deg) {
   const captureBtn = document.getElementById('capture-btn');
   const infoBtn = document.getElementById('info-toggle-btn');
 
-  if (arState.isPlaced) {
+  if (arState.isPlaced && arState.uiControlsVisible) {
     // 1) Top Bar: [Reposition] + [✕ Exit]
     if (topBar) {
       topBar.classList.remove('hidden');
@@ -331,10 +336,39 @@ function _applyARControlsLandscape(deg) {
   }
 }
 
+function _hideARRibbons() {
+  const ribbons = document.querySelectorAll('#ui-overlay > .tribal-ribbon, #ui-overlay .tribal-ribbon');
+  ribbons.forEach(r => {
+    r.style.setProperty('display', 'none', 'important');
+    r.style.setProperty('opacity', '0', 'important');
+    r.style.setProperty('visibility', 'hidden', 'important');
+    r.style.setProperty('pointer-events', 'none', 'important');
+  });
+}
+
 function _ensureARRibbons() {
   if (!arState.arStarted) return;
 
-  const ribbonsTop = document.querySelectorAll('#ui-overlay > .tribal-ribbon--top, #ui-overlay .tribal-ribbon--top');
+  const overlay = document.getElementById('ar-overlay') || document.getElementById('ui-overlay') || dom.uiOverlay;
+  if (!overlay) return;
+
+  let topRibbon = overlay.querySelector('.tribal-ribbon--top');
+  if (!topRibbon) {
+    topRibbon = document.createElement('div');
+    topRibbon.className = 'tribal-ribbon tribal-ribbon--top banner-top';
+    topRibbon.setAttribute('aria-hidden', 'true');
+    overlay.prepend(topRibbon);
+  }
+
+  let bottomRibbon = overlay.querySelector('.tribal-ribbon--bottom');
+  if (!bottomRibbon) {
+    bottomRibbon = document.createElement('div');
+    bottomRibbon.className = 'tribal-ribbon tribal-ribbon--bottom banner-bottom';
+    bottomRibbon.setAttribute('aria-hidden', 'true');
+    overlay.appendChild(bottomRibbon);
+  }
+
+  const ribbonsTop = overlay.querySelectorAll('.tribal-ribbon--top');
   ribbonsTop.forEach(r => {
     r.style.setProperty('position', 'absolute', 'important');
     r.style.setProperty('top', '0', 'important');
@@ -355,7 +389,7 @@ function _ensureARRibbons() {
     r.style.setProperty('transform', 'none', 'important');
   });
 
-  const ribbonsBottom = document.querySelectorAll('#ui-overlay > .tribal-ribbon--bottom, #ui-overlay .tribal-ribbon--bottom');
+  const ribbonsBottom = overlay.querySelectorAll('.tribal-ribbon--bottom');
   ribbonsBottom.forEach(r => {
     r.style.setProperty('position', 'absolute', 'important');
     r.style.setProperty('bottom', '0', 'important');
@@ -405,7 +439,7 @@ function _unpinARControls() {
   }
 
   // If not placed yet, strictly re-enforce hidden state on placed-only controls
-  if (!arState.isPlaced) {
+  if (!arState.isPlaced || !arState.uiControlsVisible) {
     document.getElementById('exit-ar-btn')?.classList.add('hidden');
     document.getElementById('recenter-btn')?.classList.add('hidden');
     document.getElementById('info-toggle-btn')?.classList.add('hidden');
@@ -545,7 +579,7 @@ export function applyOrientationClasses(orientationInfo) {
     // Controls visibility in landscape: only show when placed
     const topBarEl = document.querySelector('.top-bar') || document.querySelector('.top-actions');
     const captureBtnEl = dom.captureBtn || document.getElementById('capture-btn');
-    if (arState.isPlaced) {
+    if (arState.isPlaced && arState.uiControlsVisible) {
       dom.exitArBtn?.classList.remove('hidden');
       dom.recenterBtn?.classList.remove('hidden');
       dom.infoToggleBtn?.classList.remove('hidden');
@@ -576,10 +610,11 @@ export function applyOrientationClasses(orientationInfo) {
     // Remove landscape inline pins so portrait CSS takes over
     _unpinARControls();
 
-    // Controls visibility in portrait: only show when placed
+    // Controls visibility in portrait: only show placed controls
     const topBarEl = document.querySelector('.top-bar') || document.querySelector('.top-actions');
     const captureBtnEl = dom.captureBtn || document.getElementById('capture-btn');
-    if (arState.isPlaced) {
+
+    if (arState.isPlaced && arState.uiControlsVisible) {
       dom.exitArBtn?.classList.remove('hidden');
       dom.recenterBtn?.classList.remove('hidden');
       dom.infoToggleBtn?.classList.remove('hidden');
@@ -655,7 +690,7 @@ export function applyOrientationClasses(orientationInfo) {
 
 
 
-export function updateUILayout(forcedOrientation = null) {
+export function updateUILayout(forcedOrientation = null, force = false) {
   let target = forcedOrientation;
   if (typeof target === 'boolean') {
     target = { isLandscape: target, angle: 90 };
@@ -664,16 +699,21 @@ export function updateUILayout(forcedOrientation = null) {
   }
 
   const isFirstRun = arState.currentOrientationIsLandscape === null;
+  const arStartedChanged = arState.arStarted !== arState._lastLayoutArStarted;
+  const isPlacedChanged = arState.isPlaced !== arState._lastLayoutIsPlaced;
+  const uiControlsChanged = arState.uiControlsVisible !== arState._lastLayoutUiControls;
   const hasChanged = !isFirstRun && (
     target.isLandscape !== arState.currentOrientationIsLandscape ||
     (target.isLandscape && Math.abs((target.angle || 0) - (arState.currentOrientationState?.angle ?? 0)) > 45)
   );
 
-  if (!isFirstRun && !hasChanged) {
+  if (!isFirstRun && !hasChanged && !force && !arStartedChanged && !isPlacedChanged && !uiControlsChanged) {
     return;
   }
 
-  // Synchronously update state to prevent any continuous re-trigger loops
+  arState._lastLayoutArStarted = arState.arStarted;
+  arState._lastLayoutIsPlaced = arState.isPlaced;
+  arState._lastLayoutUiControls = arState.uiControlsVisible;
   arState.currentOrientationIsLandscape = target.isLandscape;
   arState.currentOrientationState = { isLandscape: target.isLandscape, angle: target.angle };
   arState.isTransitioningOrientation = false;

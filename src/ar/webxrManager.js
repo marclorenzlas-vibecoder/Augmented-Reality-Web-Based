@@ -37,6 +37,8 @@ export function restoreArButtonContent() {
 export function handleSessionStart() {
   arState.arStarted = true;
   arState.isPlaced = false;
+  arState.isSurfaceDetected = false;
+  arState.uiControlsVisible = false;
   arState.hitTestSourceRequested = false;
   arState.hitTestSource = null;
   document.body.classList.add('ar-active');
@@ -59,7 +61,7 @@ export function handleSessionStart() {
     uiOverlayEl.style.pointerEvents = '';
   }
 
-  // 4. Hide placed-only controls until dancer is placed (Exit, Reposition, Info, Shutter)
+  // 4. Hide placed-only controls until dancer is placed (Exit, Reposition, Info, Shutter, TopBar)
   dom.exitArBtn?.classList.add('hidden');
   dom.recenterBtn?.classList.add('hidden');
   dom.infoToggleBtn?.classList.add('hidden');
@@ -70,16 +72,33 @@ export function handleSessionStart() {
     topBar.style.setProperty('display', 'none', 'important');
   }
 
-  // 5. Show initial floor detection toast
+  // 5. Hide dancer group and pause video
+  if (arState.dancerGroup) {
+    arState.dancerGroup.visible = false;
+  }
+  const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
+  if (dancerVideo) {
+    dancerVideo.pause();
+    dancerVideo.currentTime = 0;
+  }
+  stopPositionalAudio();
+
+  // 6. Hide floor grid initially until surface is detected by SLAM hit-test / plane detection
+  if (arState.floorGridMesh) arState.floorGridMesh.visible = false;
+  if (arState.fallbackFloorGridMesh) arState.fallbackFloorGridMesh.visible = false;
+  dom.surfaceScannerReticle?.classList.add('hidden');
+
+  // 7. Show initial floor scanning prompt
+  setToast('Point camera at floor and move slowly to scan surface');
   const toast = dom.toast || $('toast');
   if (toast) {
     toast.classList.remove('hidden');
   }
 
-  // 7. Layout orientation & enable placement listeners
-  updateUILayout();
-  requestAnimationFrame(updateUILayout);
-  setTimeout(updateUILayout, 150);
+  // 8. Layout orientation & enable placement listeners
+  updateUILayout(null, true);
+  requestAnimationFrame(() => updateUILayout(null, true));
+  setTimeout(() => updateUILayout(null, true), 150);
 
   enablePlacementListener();
   setTimeout(() => {

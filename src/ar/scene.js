@@ -12,6 +12,7 @@ import { stopPositionalAudio } from '../audio/audioController.js';
 import { loadMediaFromQR } from '../media/mediaLoader.js';
 import { DEFAULT_MEDIA_URL } from '../config/constants.js';
 import { showCircularLoader } from '../ui/loadingBar.js';
+import { setToast } from '../ui/toast.js';
 
 export async function launchDirectAR() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -32,10 +33,6 @@ export async function launchDirectAR() {
 
 export async function startUniversalAR() {
   resetArSessionState();
-  const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
-  if (dancerVideo) {
-    dancerVideo.play().catch(() => { });
-  }
 
   if (!arState.isThreeInitialized) {
     initThreeScene();
@@ -183,6 +180,13 @@ export function initThreeScene() {
       arState.lastHitPoseMatrix = currentHitMatrix && (!arState.planeDetectionAvailable || hasActivePlaneGrid)
         ? currentHitMatrix
         : null;
+
+      if (hasActivePlaneGrid && !arState.isPlaced) {
+        if (!arState.isSurfaceDetected) {
+          arState.isSurfaceDetected = true;
+          setToast('Surface detected! Tap anywhere on grid to place');
+        }
+      }
     }
 
     if (arState.isPlaced && arState.dancerGroup) {
