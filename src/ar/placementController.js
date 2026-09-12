@@ -293,6 +293,7 @@ let countdownInterval = null;
 let startDelayTimeout = null;
 
 export function clearVideoStartDelay() {
+  arState.isVideoCountdownActive = false;
   if (countdownInterval) {
     clearInterval(countdownInterval);
     countdownInterval = null;
@@ -342,21 +343,17 @@ export function spawnDancerInFrontOfCamera(distance = 1.9, startDelaySeconds = 0
   resumeAudioContext();
 
   if (startDelaySeconds > 0) {
-    // Prime video and audio in the user gesture context so subsequent play() is authorized on iOS/Firefox
+    arState.isVideoCountdownActive = true;
+
+    // Strictly ensure video and audio are paused and at start frame during the countdown
     if (dancerVideo) {
-      dancerVideo.play().then(() => {
-        dancerVideo.pause();
-        dancerVideo.currentTime = 0;
-      }).catch(() => {
-        dancerVideo.pause();
-        dancerVideo.currentTime = 0;
-      });
+      dancerVideo.pause();
+      dancerVideo.currentTime = 0;
+      if (arState.videoTex) arState.videoTex.needsUpdate = true;
     }
     if (audioEl) {
-      audioEl.play().then(() => {
-        audioEl.pause();
-        audioEl.currentTime = 0;
-      }).catch(() => {});
+      audioEl.pause();
+      audioEl.currentTime = 0;
     }
     stopPositionalAudio();
 
@@ -366,7 +363,11 @@ export function spawnDancerInFrontOfCamera(distance = 1.9, startDelaySeconds = 0
     countdownInterval = setInterval(() => {
       remaining -= 1;
       if (remaining > 0) {
-        setToast(`Get ready! MassKara Dancer starts in ${remaining}s...`);
+        setToast(`Get ready! MassKara Dancer starts in ${remaining}s...`, true);
+        if (dancerVideo && !dancerVideo.paused) {
+          dancerVideo.pause();
+          dancerVideo.currentTime = 0;
+        }
       } else {
         clearInterval(countdownInterval);
         countdownInterval = null;
@@ -377,17 +378,19 @@ export function spawnDancerInFrontOfCamera(distance = 1.9, startDelaySeconds = 0
       clearVideoStartDelay();
       if (!arState.arStarted || !arState.isPlaced) return;
 
+      // Only play video and audio after the countdown is completely done!
       if (dancerVideo) {
         dancerVideo.currentTime = 0;
         dancerVideo.play().catch(err => console.warn('Delayed video play error:', err));
       }
       if (audioEl && arState.isAudioReady && !arState.isAudioMuted) {
+        audioEl.currentTime = 0;
         audioEl.play().catch(err => console.warn('Delayed audio play error:', err));
       }
       if (arState.isAudioReady && !arState.isAudioMuted) {
         syncAudioToVideo(true);
       }
-      setToast('Enjoy the MassKara Festival Dance!');
+      setToast('Enjoy the MassKara Festival Dance!', true);
       setTimeout(() => {
         dom.toast?.classList.add('hidden');
         revealARControls();
@@ -395,6 +398,7 @@ export function spawnDancerInFrontOfCamera(distance = 1.9, startDelaySeconds = 0
     }, startDelaySeconds * 1000);
 
   } else {
+    arState.isVideoCountdownActive = false;
     // Immediate playback (e.g. on native WebXR or repositioning)
     if (dancerVideo) {
       if (dancerVideo.paused) {

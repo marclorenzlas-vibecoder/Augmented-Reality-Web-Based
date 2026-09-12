@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     dancerVideo.addEventListener('canplay', () => {
-      if (arState.arStarted && arState.isPlaced && arState.dancerGroup && arState.dancerGroup.visible) {
+      if (arState.arStarted && arState.isPlaced && arState.dancerGroup && arState.dancerGroup.visible && !arState.isVideoCountdownActive) {
         if (dancerVideo.paused) {
           dancerVideo.play().catch(() => { });
         }
@@ -206,7 +206,7 @@ document.addEventListener('visibilitychange', () => {
     if (arState.dancerVideo) arState.dancerVideo.pause();
     pausePositionalAudio();
   } else {
-    if (arState.arStarted && arState.isPlaced && arState.dancerGroup && arState.dancerGroup.visible && !arState.isAudioMuted) {
+    if (arState.arStarted && arState.isPlaced && arState.dancerGroup && arState.dancerGroup.visible && !arState.isAudioMuted && !arState.isVideoCountdownActive) {
       if (arState.dancerVideo) {
         arState.dancerVideo.play().catch(() => { });
       }
