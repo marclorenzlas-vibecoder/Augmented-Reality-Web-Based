@@ -147,6 +147,11 @@ export function handleFloorTap(screenX = null, screenY = null) {
     }
   }
 
+  if (!foundIntersection && arState.floorGridMesh?.visible && arState.lastHitPosition && arState.lastHitPosition.lengthSq() > 0) {
+    targetPoint.copy(arState.lastHitPosition);
+    foundIntersection = true;
+  }
+
   if (foundIntersection && arState.dancerGroup) {
     const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
     if (dancerVideo && dancerVideo.paused) {
@@ -165,7 +170,7 @@ export function handleFloorTap(screenX = null, screenY = null) {
     arState.dancerGroup.userData.baseRotY = angle;
     arState.dancerGroup.rotation.set(0, angle, 0);
 
-    placeDancer();
+    placeDancer('MassKara Dancer placed on floor');
   } else {
     setToast('Point camera at floor and tap directly on the floor grid to place');
   }
@@ -392,12 +397,62 @@ export function placeDancer(customToast = 'MassKara Dancer placed in front of yo
 }
 
 export function repositionDancer() {
-  arState.ignorePlacementUntil = performance.now() + 600;
-  spawnDancerInFrontOfCamera(1.9, 0);
-  setToast('Dancer repositioned in front of camera');
+  if (arState.isFallbackMode) {
+    arState.ignorePlacementUntil = performance.now() + 600;
+    spawnDancerInFrontOfCamera(1.9, 0);
+    setToast('Dancer repositioned in front of camera');
+    setTimeout(() => {
+      dom.toast?.classList.add('hidden');
+    }, 1800);
+    return;
+  }
+
+  // WebXR mode (Chrome): reset placement state so user can scan and re-place on floor
+  arState.ignorePlacementUntil = performance.now() + 800;
+  arState.isPlaced = false;
+  arState.isSurfaceDetected = false;
+  if (arState.dancerGroup) {
+    arState.dancerGroup.visible = false;
+    arState.dancerGroup.scale.set(1, 1, 1);
+  }
+  disablePlacementListener();
+
+  stopPositionalAudio();
+  const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
+  if (dancerVideo) {
+    dancerVideo.pause();
+    dancerVideo.currentTime = 0;
+  }
+
+  if (arState.floorGridMesh) {
+    arState.floorGridMesh.visible = true;
+    arState.floorGridMesh.traverse((child) => {
+      if (child.isMesh) child.visible = true;
+    });
+  }
+  if (arState.fallbackFloorGridMesh) {
+    arState.fallbackFloorGridMesh.visible = true;
+  }
+
+  dom.historyModal?.classList.add('hidden');
+  document.body.classList.remove('drawer-open');
+  dom.infoToggleBtn?.classList.add('hidden');
+  dom.captureBtn?.classList.add('hidden');
+  dom.recenterBtn?.classList.add('hidden');
+  dom.exitArBtn?.classList.add('hidden');
+  const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+  if (topBar) {
+    topBar.classList.add('hidden');
+    topBar.style.setProperty('display', 'none', 'important');
+  }
+
+  setToast('Point at floor plane and tap anywhere on grid to place');
+
   setTimeout(() => {
-    dom.toast?.classList.add('hidden');
-  }, 1800);
+    if (arState.arStarted && !arState.isPlaced) {
+      enablePlacementListener();
+    }
+  }, 600);
 }
 
 export function setupPlacementInputListeners() {

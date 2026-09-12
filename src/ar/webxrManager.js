@@ -8,8 +8,7 @@ import { updateUILayout, unpinARControls } from '../ui/orientationController.js'
 import {
   enablePlacementListener,
   resetArSessionState,
-  onSelect,
-  spawnDancerInFrontOfCamera
+  onSelect
 } from './placementController.js';
 import { stopPositionalAudio } from '../audio/audioController.js';
 import { startFallbackAR, stopFallbackAR, repositionFallbackDancer } from './fallbackArManager.js';
@@ -37,8 +36,8 @@ export function restoreArButtonContent() {
 
 export function handleSessionStart() {
   arState.arStarted = true;
-  arState.isPlaced = true;
-  arState.isSurfaceDetected = true;
+  arState.isPlaced = false;
+  arState.isSurfaceDetected = false;
   arState.hitTestSourceRequested = false;
   arState.hitTestSource = null;
   document.body.classList.add('ar-active');
@@ -61,18 +60,51 @@ export function handleSessionStart() {
     uiOverlayEl.style.pointerEvents = '';
   }
 
-  // 4. Hide floor grids and surface scanner reticle
+  // 4. Hide placed-only controls until dancer is placed (Exit, Reposition, Info, Shutter, TopBar)
+  dom.exitArBtn?.classList.add('hidden');
+  dom.recenterBtn?.classList.add('hidden');
+  dom.infoToggleBtn?.classList.add('hidden');
+  dom.captureBtn?.classList.add('hidden');
+  const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+  if (topBar) {
+    topBar.classList.add('hidden');
+    topBar.style.setProperty('display', 'none', 'important');
+  }
+
+  // 5. Hide dancer group and pause video
+  if (arState.dancerGroup) {
+    arState.dancerGroup.visible = false;
+  }
+  const dancerVideo = arState.dancerVideo || document.getElementById('dancer-video');
+  if (dancerVideo) {
+    dancerVideo.pause();
+    dancerVideo.currentTime = 0;
+  }
+  stopPositionalAudio();
+
+  // 6. Hide floor grid initially until surface is detected by SLAM hit-test / plane detection
   if (arState.floorGridMesh) arState.floorGridMesh.visible = false;
   if (arState.fallbackFloorGridMesh) arState.fallbackFloorGridMesh.visible = false;
   dom.surfaceScannerReticle?.classList.add('hidden');
 
-  // 5. Automatically spawn dancer directly in front of camera
-  spawnDancerInFrontOfCamera(1.9);
+  // 7. Show initial floor scanning prompt
+  setToast('Point camera at floor and move slowly to scan surface');
+  const toast = dom.toast || $('toast');
+  if (toast) {
+    toast.classList.remove('hidden');
+  }
 
-  // 6. Layout orientation
+  // 8. Layout orientation & enable placement listeners
   updateUILayout(null, true);
   requestAnimationFrame(() => updateUILayout(null, true));
   setTimeout(() => updateUILayout(null, true), 150);
+
+  enablePlacementListener();
+  setTimeout(() => {
+    if (arState.arStarted && !arState.isPlaced) {
+      enablePlacementListener();
+    }
+  }, 400);
 }
 
 export function handleSessionEndCleanup() {
