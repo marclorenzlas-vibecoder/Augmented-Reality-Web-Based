@@ -38,6 +38,7 @@ export function handleSessionStart() {
   arState.arStarted = true;
   arState.isPlaced = false;
   arState.isSurfaceDetected = false;
+  arState.uiControlsVisible = false;
   arState.hitTestSourceRequested = false;
   arState.hitTestSource = null;
   document.body.classList.add('ar-active');

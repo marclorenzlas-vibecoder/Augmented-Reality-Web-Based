@@ -8,12 +8,125 @@ import {
   stopPositionalAudio,
   syncAudioToVideo
 } from '../audio/audioController.js';
-import { applyOrientationClasses, getEffectiveOrientation } from '../ui/orientationController.js';
+import { applyOrientationClasses, getEffectiveOrientation, updateUILayout } from '../ui/orientationController.js';
+
+let uiControlsRevealTimeout = null;
+
+export function clearUiControlsRevealTimeout() {
+  if (uiControlsRevealTimeout) {
+    clearTimeout(uiControlsRevealTimeout);
+    uiControlsRevealTimeout = null;
+  }
+}
+
+export function hideARControls() {
+  arState.uiControlsVisible = false;
+
+  const captureBtn = dom.captureBtn || document.getElementById('capture-btn');
+  if (captureBtn) {
+    captureBtn.classList.add('hidden');
+    captureBtn.style.setProperty('display', 'none', 'important');
+    captureBtn.style.setProperty('visibility', 'hidden', 'important');
+    captureBtn.style.setProperty('opacity', '0', 'important');
+    captureBtn.style.setProperty('pointer-events', 'none', 'important');
+  }
+
+  const infoBtn = dom.infoToggleBtn || document.getElementById('info-toggle-btn');
+  if (infoBtn) {
+    infoBtn.classList.add('hidden');
+    infoBtn.style.setProperty('display', 'none', 'important');
+    infoBtn.style.setProperty('visibility', 'hidden', 'important');
+    infoBtn.style.setProperty('opacity', '0', 'important');
+    infoBtn.style.setProperty('pointer-events', 'none', 'important');
+  }
+
+  const recenterBtn = dom.recenterBtn || document.getElementById('recenter-btn');
+  if (recenterBtn) {
+    recenterBtn.classList.add('hidden');
+    recenterBtn.style.setProperty('display', 'none', 'important');
+    recenterBtn.style.setProperty('visibility', 'hidden', 'important');
+    recenterBtn.style.setProperty('opacity', '0', 'important');
+    recenterBtn.style.setProperty('pointer-events', 'none', 'important');
+  }
+
+  const exitBtn = dom.exitArBtn || document.getElementById('exit-ar-btn');
+  if (exitBtn) {
+    exitBtn.classList.add('hidden');
+    exitBtn.style.setProperty('display', 'none', 'important');
+    exitBtn.style.setProperty('visibility', 'hidden', 'important');
+    exitBtn.style.setProperty('opacity', '0', 'important');
+    exitBtn.style.setProperty('pointer-events', 'none', 'important');
+  }
+
+  const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+  if (topBar) {
+    topBar.classList.add('hidden');
+    topBar.style.setProperty('display', 'none', 'important');
+    topBar.style.setProperty('visibility', 'hidden', 'important');
+    topBar.style.setProperty('opacity', '0', 'important');
+    topBar.style.setProperty('pointer-events', 'none', 'important');
+  }
+}
+
+export function revealARControls() {
+  arState.uiControlsVisible = true;
+
+  const captureBtn = dom.captureBtn || document.getElementById('capture-btn');
+  if (captureBtn) {
+    captureBtn.classList.remove('hidden');
+    captureBtn.style.removeProperty('display');
+    captureBtn.style.removeProperty('visibility');
+    captureBtn.style.removeProperty('opacity');
+    captureBtn.style.removeProperty('pointer-events');
+  }
+
+  const infoBtn = dom.infoToggleBtn || document.getElementById('info-toggle-btn');
+  if (infoBtn) {
+    infoBtn.classList.remove('hidden');
+    infoBtn.style.removeProperty('display');
+    infoBtn.style.removeProperty('visibility');
+    infoBtn.style.removeProperty('opacity');
+    infoBtn.style.removeProperty('pointer-events');
+  }
+
+  const recenterBtn = dom.recenterBtn || document.getElementById('recenter-btn');
+  if (recenterBtn) {
+    recenterBtn.classList.remove('hidden');
+    recenterBtn.style.removeProperty('display');
+    recenterBtn.style.removeProperty('visibility');
+    recenterBtn.style.removeProperty('opacity');
+    recenterBtn.style.removeProperty('pointer-events');
+  }
+
+  const exitBtn = dom.exitArBtn || document.getElementById('exit-ar-btn');
+  if (exitBtn) {
+    exitBtn.classList.remove('hidden');
+    exitBtn.style.removeProperty('display');
+    exitBtn.style.removeProperty('visibility');
+    exitBtn.style.removeProperty('opacity');
+    exitBtn.style.removeProperty('pointer-events');
+  }
+
+  const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
+  if (topBar) {
+    topBar.classList.remove('hidden');
+    topBar.style.removeProperty('display');
+    topBar.style.removeProperty('visibility');
+    topBar.style.removeProperty('opacity');
+    topBar.style.removeProperty('pointer-events');
+  }
+
+  updateUILayout(null, true);
+  applyOrientationClasses(arState.currentOrientationState || getEffectiveOrientation());
+}
 
 export function resetArSessionState() {
+  clearUiControlsRevealTimeout();
   clearVideoStartDelay();
   arState.arStarted = false;
   arState.isPlaced = false;
+  arState.uiControlsVisible = false;
+  hideARControls();
   disablePlacementListener();
   arState.lastHitPoseMatrix = null;
   arState.detectedFloorHeight = null;
@@ -277,6 +390,7 @@ export function spawnDancerInFrontOfCamera(distance = 1.9, startDelaySeconds = 0
       setToast('Enjoy the MassKara Festival Dance!');
       setTimeout(() => {
         dom.toast?.classList.add('hidden');
+        revealARControls();
       }, 2000);
     }, startDelaySeconds * 1000);
 
@@ -296,6 +410,7 @@ export function placeDancer(customToast = 'MassKara Dancer placed in front of yo
   arState.isPlaced = true;
   arState.isSurfaceDetected = true;
   disablePlacementListener();
+  clearUiControlsRevealTimeout();
 
   if (arState.dancerGroup) {
     arState.dancerGroup.visible = true;
@@ -336,73 +451,33 @@ export function placeDancer(customToast = 'MassKara Dancer placed in front of yo
     }
   }
 
+  // Strictly hide UI controls initially so only the placement toast is visible
+  hideARControls();
+
+  // Show ONLY the placement toast text first
   setToast(customToast);
 
-  const captureBtn = dom.captureBtn || document.getElementById('capture-btn');
-  if (captureBtn) {
-    captureBtn.classList.remove('hidden');
-    captureBtn.style.removeProperty('display');
-    captureBtn.style.removeProperty('visibility');
-    captureBtn.style.removeProperty('opacity');
-    captureBtn.style.removeProperty('pointer-events');
-    captureBtn.style.setProperty('display', 'flex', 'important');
-    captureBtn.style.setProperty('visibility', 'visible', 'important');
-    captureBtn.style.setProperty('opacity', '1', 'important');
-    captureBtn.style.setProperty('pointer-events', 'auto', 'important');
-  }
-
-  const infoBtn = dom.infoToggleBtn || document.getElementById('info-toggle-btn');
-  if (infoBtn) {
-    infoBtn.classList.remove('hidden');
-    infoBtn.style.removeProperty('display');
-    infoBtn.style.removeProperty('visibility');
-    infoBtn.style.removeProperty('opacity');
-    infoBtn.style.removeProperty('pointer-events');
-  }
-
-  const recenterBtn = dom.recenterBtn || document.getElementById('recenter-btn');
-  if (recenterBtn) {
-    recenterBtn.classList.remove('hidden');
-    recenterBtn.style.removeProperty('display');
-    recenterBtn.style.removeProperty('visibility');
-    recenterBtn.style.removeProperty('opacity');
-    recenterBtn.style.removeProperty('pointer-events');
-  }
-
-  const exitBtn = dom.exitArBtn || document.getElementById('exit-ar-btn');
-  if (exitBtn) {
-    exitBtn.classList.remove('hidden');
-    exitBtn.style.removeProperty('display');
-    exitBtn.style.removeProperty('visibility');
-    exitBtn.style.removeProperty('opacity');
-    exitBtn.style.removeProperty('pointer-events');
-  }
-
-  const topBar = document.querySelector('.top-bar') || document.querySelector('.top-actions');
-  if (topBar) {
-    topBar.classList.remove('hidden');
-    topBar.style.removeProperty('display');
-    topBar.style.removeProperty('visibility');
-    topBar.style.removeProperty('opacity');
-    topBar.style.removeProperty('pointer-events');
-  }
-
-  applyOrientationClasses(arState.currentOrientationState || getEffectiveOrientation());
-
   if (autoPlayMedia) {
-    setTimeout(() => {
+    // Show only the toast for 2.5 seconds, then hide toast and reveal UI controls (camera, info pill, reposition, exit)
+    uiControlsRevealTimeout = setTimeout(() => {
+      if (!arState.arStarted || !arState.isPlaced) return;
       dom.toast?.classList.add('hidden');
-    }, 2200);
+      revealARControls();
+    }, 2500);
   }
 }
 
 export function repositionDancer() {
+  clearUiControlsRevealTimeout();
+  hideARControls();
+
   if (arState.isFallbackMode) {
     arState.ignorePlacementUntil = performance.now() + 600;
     spawnDancerInFrontOfCamera(1.9, 0);
     setToast('Dancer repositioned in front of camera');
     setTimeout(() => {
       dom.toast?.classList.add('hidden');
+      revealARControls();
     }, 1800);
     return;
   }
@@ -411,6 +486,7 @@ export function repositionDancer() {
   arState.ignorePlacementUntil = performance.now() + 800;
   arState.isPlaced = false;
   arState.isSurfaceDetected = false;
+  arState.uiControlsVisible = false;
   if (arState.dancerGroup) {
     arState.dancerGroup.visible = false;
     arState.dancerGroup.scale.set(1, 1, 1);

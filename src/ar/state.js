@@ -40,6 +40,7 @@ export const arState = {
 
   // Session and placement state
   isPlaced: false,
+  uiControlsVisible: false,
   arStarted: false,
   isSurfaceDetected: false,
   isThreeInitialized: false,

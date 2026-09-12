@@ -188,7 +188,7 @@ function _applyARControlsLandscape(deg) {
   const captureBtn = document.getElementById('capture-btn');
   const infoBtn = document.getElementById('info-toggle-btn');
 
-  if (arState.isPlaced) {
+  if (arState.isPlaced && arState.uiControlsVisible) {
     // 1) Top Bar: [Reposition] + [✕ Exit]
     if (topBar) {
       topBar.classList.remove('hidden');
@@ -439,7 +439,7 @@ function _unpinARControls() {
   }
 
   // If not placed yet, strictly re-enforce hidden state on placed-only controls
-  if (!arState.isPlaced) {
+  if (!arState.isPlaced || !arState.uiControlsVisible) {
     document.getElementById('exit-ar-btn')?.classList.add('hidden');
     document.getElementById('recenter-btn')?.classList.add('hidden');
     document.getElementById('info-toggle-btn')?.classList.add('hidden');
@@ -579,7 +579,7 @@ export function applyOrientationClasses(orientationInfo) {
     // Controls visibility in landscape: only show when placed
     const topBarEl = document.querySelector('.top-bar') || document.querySelector('.top-actions');
     const captureBtnEl = dom.captureBtn || document.getElementById('capture-btn');
-    if (arState.isPlaced) {
+    if (arState.isPlaced && arState.uiControlsVisible) {
       dom.exitArBtn?.classList.remove('hidden');
       dom.recenterBtn?.classList.remove('hidden');
       dom.infoToggleBtn?.classList.remove('hidden');
@@ -614,7 +614,7 @@ export function applyOrientationClasses(orientationInfo) {
     const topBarEl = document.querySelector('.top-bar') || document.querySelector('.top-actions');
     const captureBtnEl = dom.captureBtn || document.getElementById('capture-btn');
 
-    if (arState.isPlaced) {
+    if (arState.isPlaced && arState.uiControlsVisible) {
       dom.exitArBtn?.classList.remove('hidden');
       dom.recenterBtn?.classList.remove('hidden');
       dom.infoToggleBtn?.classList.remove('hidden');
@@ -701,17 +701,19 @@ export function updateUILayout(forcedOrientation = null, force = false) {
   const isFirstRun = arState.currentOrientationIsLandscape === null;
   const arStartedChanged = arState.arStarted !== arState._lastLayoutArStarted;
   const isPlacedChanged = arState.isPlaced !== arState._lastLayoutIsPlaced;
+  const uiControlsChanged = arState.uiControlsVisible !== arState._lastLayoutUiControls;
   const hasChanged = !isFirstRun && (
     target.isLandscape !== arState.currentOrientationIsLandscape ||
     (target.isLandscape && Math.abs((target.angle || 0) - (arState.currentOrientationState?.angle ?? 0)) > 45)
   );
 
-  if (!isFirstRun && !hasChanged && !force && !arStartedChanged && !isPlacedChanged) {
+  if (!isFirstRun && !hasChanged && !force && !arStartedChanged && !isPlacedChanged && !uiControlsChanged) {
     return;
   }
 
   arState._lastLayoutArStarted = arState.arStarted;
   arState._lastLayoutIsPlaced = arState.isPlaced;
+  arState._lastLayoutUiControls = arState.uiControlsVisible;
   arState.currentOrientationIsLandscape = target.isLandscape;
   arState.currentOrientationState = { isLandscape: target.isLandscape, angle: target.angle };
   arState.isTransitioningOrientation = false;

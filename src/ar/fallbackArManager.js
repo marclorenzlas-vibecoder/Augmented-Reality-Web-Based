@@ -4,7 +4,14 @@ import { dom, $ } from '../ui/domElements.js';
 import { setToast } from '../ui/toast.js';
 import { updateUILayout, unpinARControls } from '../ui/orientationController.js';
 import { stopPositionalAudio } from '../audio/audioController.js';
-import { enablePlacementListener, disablePlacementListener, spawnDancerInFrontOfCamera, clearVideoStartDelay } from './placementController.js';
+import {
+  enablePlacementListener,
+  disablePlacementListener,
+  spawnDancerInFrontOfCamera,
+  clearVideoStartDelay,
+  clearUiControlsRevealTimeout,
+  hideARControls
+} from './placementController.js';
 
 // Pre-allocated vectors & quaternions for device orientation
 const zee = new THREE.Vector3(0, 0, 1);
@@ -150,6 +157,7 @@ export async function startFallbackAR() {
     arState.arStarted = true;
     arState.isPlaced = true;
     arState.isSurfaceDetected = true;
+    arState.uiControlsVisible = false;
     arState.detectedFloorHeight = -1.25;
     document.body.classList.add('ar-active', 'ar-fallback-active');
 
@@ -210,11 +218,14 @@ export async function startFallbackAR() {
  * Clean up and exit fallback Camera AR mode
  */
 export function stopFallbackAR() {
+  clearUiControlsRevealTimeout();
   clearVideoStartDelay();
+  hideARControls();
   arState.isFallbackMode = false;
   arState.arStarted = false;
   arState.isPlaced = false;
   arState.isSurfaceDetected = false;
+  arState.uiControlsVisible = false;
   accumulatedScanTime = 0;
   lastPitch = null;
   lastYaw = null;
